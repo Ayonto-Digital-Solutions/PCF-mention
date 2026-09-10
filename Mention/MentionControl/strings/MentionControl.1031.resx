@@ -199,10 +199,10 @@
     <value>Benutzer werden gesucht</value>
   </data>
   <data name="Editor_SuggestionCount" xml:space="preserve">
-    <value>Vorschläge verfügbar</value>
+    <value>{0} Vorschläge verfügbar</value>
   </data>
   <data name="Editor_CharactersLeft" xml:space="preserve">
-    <value>Zeichen übrig</value>
+    <value>{0} Zeichen übrig</value>
   </data>
   <data name="Editor_NotificationFailed" xml:space="preserve">
     <value>Die Erwähnung wurde übernommen, die Benachrichtigung konnte aber nicht gesendet werden.</value>

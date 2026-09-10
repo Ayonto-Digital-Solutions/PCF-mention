@@ -5,7 +5,7 @@ export default defineConfig({
 		jsx: "transform",
 	},
 	test: {
-		environment: "jsdom",
+		environment: "happy-dom",
 		globals: false,
 		setupFiles: ["tests/setup.ts"],
 		include: ["tests/**/*.test.{ts,tsx}"],

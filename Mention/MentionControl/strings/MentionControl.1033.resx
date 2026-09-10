@@ -199,10 +199,10 @@
     <value>Searching users</value>
   </data>
   <data name="Editor_SuggestionCount" xml:space="preserve">
-    <value>suggestions available</value>
+    <value>{0} suggestions available</value>
   </data>
   <data name="Editor_CharactersLeft" xml:space="preserve">
-    <value>characters left</value>
+    <value>{0} characters left</value>
   </data>
   <data name="Editor_NotificationFailed" xml:space="preserve">
     <value>The mention was saved, but the notification could not be sent.</value>

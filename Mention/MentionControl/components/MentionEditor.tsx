@@ -40,6 +40,7 @@ export interface MentionEditorProps {
 	readonly formatNumber: (value: number) => string;
 	readonly searchUsers: (term: string) => Promise<UserSuggestion[]>;
 	readonly onChange: (value: string) => void;
+	readonly onEditingChange: (isEditing: boolean) => void;
 	readonly onMention: (user: UserSuggestion) => Promise<void>;
 }
 
@@ -94,7 +95,7 @@ const optionId = (index: number): string => `${LISTBOX_ID}-option-${index.toStri
 
 export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const styles = useStyles();
-	const { value, onChange, onMention, searchUsers, strings } = props;
+	const { value, onChange, onEditingChange, onMention, searchUsers, strings } = props;
 
 	const [text, setText] = React.useState(value);
 	const [trigger, setTrigger] = React.useState<MentionTrigger | null>(null);
@@ -298,11 +299,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					disabled={props.disabled}
 					onBlur={() => {
 						isFocused.current = false;
+						onEditingChange(false);
 						closeSuggestions();
 					}}
 					onChange={handleChange}
 					onFocus={() => {
 						isFocused.current = true;
+						onEditingChange(true);
 					}}
 					onKeyDown={handleKeyDown}
 					placeholder={strings.placeholder}

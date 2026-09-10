@@ -30,8 +30,9 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # Unit- und Komponententests
+npm test                              # 69 Tests
 npm run lint
+npm run typecheck
 npm run build                         # Debug-Build nach out/controls
 npm run build -- --buildMode production
 npm start watch                       # Test-Harness mit Hot Reload
@@ -131,7 +132,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 62 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung |
+| Keine Tests | 69 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung |
 
 Behobene Fehler aus 1.0:
 
@@ -173,10 +174,12 @@ Mention/
 │  ├─ services/UserSearchService.ts     Benutzersuche über context.webAPI
 │  ├─ services/EmailNotificationService.ts  E-Mail anlegen und senden
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
+│  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
    ├─ mentionText.test.ts               Reine Funktionen
+   ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
    ├─ EmailNotificationService.test.ts  Payload, Verknüpfung, Versand
-   └─ MentionEditor.test.tsx            Editor-Verhalten (jsdom)
+   └─ MentionEditor.test.tsx            Editor-Verhalten
 ```

@@ -22,6 +22,7 @@ const STRINGS: MentionEditorStrings = {
 
 function setup(overrides: Partial<MentionEditorProps> = {}) {
 	const onChange = vi.fn();
+	const onEditingChange = vi.fn();
 	const onMention = vi.fn().mockResolvedValue(undefined);
 	const searchUsers = vi.fn().mockResolvedValue(USERS);
 
@@ -33,22 +34,33 @@ function setup(overrides: Partial<MentionEditorProps> = {}) {
 		formatNumber: (value) => String(value),
 		searchUsers,
 		onChange,
+		onEditingChange,
 		onMention,
 		...overrides,
 	};
 
+	lastProps = props;
 	const utils = render(<MentionEditor {...props} />);
 	const textarea = utils.container.querySelector("textarea");
 	if (!textarea && !props.masked) {
 		throw new Error("textarea was not rendered");
 	}
-	return { ...utils, textarea: textarea as HTMLTextAreaElement, onChange, onMention, searchUsers };
+	return {
+		...utils,
+		textarea: textarea!,
+		onChange,
+		onEditingChange,
+		onMention,
+		searchUsers,
+	};
 }
 
 /** Types into the textarea and reports the caret, the way the browser would. */
 function type(textarea: HTMLTextAreaElement, value: string, caret = value.length) {
 	fireEvent.change(textarea, { target: { value, selectionStart: caret, selectionEnd: caret } });
 }
+
+let lastProps: MentionEditorProps | undefined;
 
 afterEach(cleanup);
 
@@ -203,6 +215,36 @@ describe("MentionEditor", () => {
 		await waitFor(() => {
 			expect(screen.getByText("The notification could not be sent.")).toBeTruthy();
 		});
+	});
+
+	it("tells the host when the editor is being used, so the value is not rolled back", () => {
+		const { textarea, onEditingChange } = setup();
+
+		fireEvent.focus(textarea);
+		expect(onEditingChange).toHaveBeenLastCalledWith(true);
+
+		fireEvent.blur(textarea);
+		expect(onEditingChange).toHaveBeenLastCalledWith(false);
+	});
+
+	it("keeps the typed text when the host repeats an older value mid-edit", () => {
+		const { textarea, rerender, container } = setup({ value: "old" });
+		fireEvent.focus(textarea);
+		type(textarea, "old and new");
+
+		rerender(<MentionEditor {...lastProps!} value="old" />);
+
+		expect(container.querySelector("textarea")!.value).toBe("old and new");
+	});
+
+	it("takes over a new host value once the editor is no longer focused", () => {
+		const { textarea, rerender, container } = setup({ value: "old" });
+		fireEvent.focus(textarea);
+		fireEvent.blur(textarea);
+
+		rerender(<MentionEditor {...lastProps!} value="from the platform" />);
+
+		expect(container.querySelector("textarea")!.value).toBe("from the platform");
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {

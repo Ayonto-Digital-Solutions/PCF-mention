@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Avatar, Text, makeStyles, shorthands, tokens } from "@fluentui/react-components";
+import { Avatar, Text, makeStyles, mergeClasses, shorthands, tokens } from "@fluentui/react-components";
 import type { UserSuggestion } from "../services/UserSearchService";
 
 export interface SuggestionListProps {
@@ -73,7 +73,7 @@ export const SuggestionList: React.FC<SuggestionListProps> = (props) => {
 			{props.suggestions.map((user, index) => (
 				<li
 					aria-selected={index === props.activeIndex}
-					className={`${styles.option} ${index === props.activeIndex ? styles.optionActive : ""}`}
+					className={mergeClasses(styles.option, index === props.activeIndex && styles.optionActive)}
 					id={props.optionId(index)}
 					key={user.id}
 					// The textarea keeps the focus, so the option is picked on mouse down
