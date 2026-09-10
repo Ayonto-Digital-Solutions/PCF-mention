@@ -155,6 +155,30 @@ describe("NotificationScheduler", () => {
 		expect(send).toHaveBeenCalledTimes(1);
 	});
 
+	it("drops what is still waiting when it is cancelled", async () => {
+		// A form closed without saving must not mail anyone about a mention it discarded.
+		const { scheduler, send } = makeScheduler({});
+		const pending = scheduler.schedule(item());
+
+		scheduler.cancelPending();
+		await vi.advanceTimersByTimeAsync(DELAY * 2);
+
+		expect(send).not.toHaveBeenCalled();
+		expect(scheduler.isPending("user-1")).toBe(false);
+		void pending;
+	});
+
+	it("leaves a notification that already went out alone when cancelled", async () => {
+		const { scheduler, send } = makeScheduler({});
+		const first = scheduler.schedule(item());
+		await vi.advanceTimersByTimeAsync(DELAY);
+		await first;
+
+		scheduler.cancelPending();
+
+		expect(send).toHaveBeenCalledTimes(1);
+	});
+
 	it("reports whether a recipient has something pending", async () => {
 		const { scheduler } = makeScheduler({});
 		expect(scheduler.isPending("user-1")).toBe(false);

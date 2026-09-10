@@ -15,7 +15,7 @@ Tooling und APIs, die es so nicht mehr gibt — siehe [Was sich geändert hat](#
 | Typ | `virtual` (React) |
 | Plattform-Bibliotheken | React 16.14.0, Fluent UI v9 (9.46.2) |
 | Unterstützte Apps | modellgesteuerte Apps |
-| Bundle | 14 KiB (Production-Build) |
+| Bundle | 22 KiB (Production-Build) |
 
 React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 ([platform libraries](https://learn.microsoft.com/power-apps/developer/component-framework/react-controls-platform-libraries)).
@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 128 Tests
+npm test                              # 143 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -134,6 +134,15 @@ Das Component blendet die Vorschlagsliste aus und sagt im UI warum, wenn:
 
 Getippt werden darf in beiden Fällen weiter; nur die Auswahlliste bleibt zu.
 
+### Wen die Suche vorschlägt
+
+Vorgeschlagen werden aktivierte Benutzer mit Postfach. Deaktivierte Benutzer, Anwendungsbenutzer
+(`applicationid`) sowie Support- und nicht-interaktive Konten (`accessmode` 3 und 4) filtert schon
+die Abfrage heraus — würde erst die geladene Seite bereinigt, bliebe die Liste kurz oder leer,
+sobald genug solcher Konten alphabetisch vorne stehen. Weist eine Umgebung diese Filter zurück,
+wird die Abfrage einmal ohne sie wiederholt und clientseitig gefiltert; die Suche fällt also nicht
+aus, die Liste kann dann nur kürzer ausfallen.
+
 Liefert die Suche mehr Treffer, als die Liste zeigt, weist ein Hinweis am Listenende darauf hin,
 dass die Suche eingegrenzt werden muss — statt stillschweigend abzuschneiden.
 
@@ -144,7 +153,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alt (1.0, August 2020) | Neu (2.0) |
 |---|---|
 | `pcf-scripts` 1.3.6 (Juli 2020), webpack 4, TypeScript 3.9 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
-| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (14 KiB) |
+| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (22 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
 | `Xrm.Page.data.entity.getId()` / `getEntityName()` | Manifest-Eigenschaften `entityId` / `entityName` |
 | `Xrm.Page.context.getClientUrl()` / `getUserId()` | `orgUrl`-Eigenschaft bzw. `context.userSettings.userId` |
@@ -153,7 +162,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 128 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 143 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 

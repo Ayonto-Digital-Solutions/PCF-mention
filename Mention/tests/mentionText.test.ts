@@ -71,7 +71,15 @@ describe("applyMention", () => {
 
 	it("does not add a second space when one is already there", () => {
 		const trigger = findMentionTrigger("hi @An bye", 6);
-		expect(applyMention("hi @An bye", trigger!, "Ann Smith")).toEqual({ text: "hi @Ann Smith bye", caret: 13 });
+		// The caret goes behind that space, not in front of it: typing on from there has to
+		// continue the sentence rather than run into the name.
+		expect(applyMention("hi @An bye", trigger!, "Ann Smith")).toEqual({ text: "hi @Ann Smith bye", caret: 14 });
+	});
+
+	it("leaves the caret behind the space it wrote itself", () => {
+		const trigger = findMentionTrigger("hi @An", 6);
+		const result = applyMention("hi @An", trigger!, "Ann Smith");
+		expect(result.text.slice(0, result.caret)).toBe("hi @Ann Smith ");
 	});
 });
 
@@ -86,6 +94,24 @@ describe("containsMention", () => {
 
 	it("is false for a partly deleted mention", () => {
 		expect(containsMention("hi @Ann, thanks", "Ann Smith")).toBe(false);
+	});
+
+	it("does not read a longer name as a mention of the shorter one", () => {
+		// The predicate decides whether a pending notification still applies, so a prefix match
+		// would mail someone who was never mentioned.
+		expect(containsMention("cc @Anna Meier-Schulz", "Anna Meier")).toBe(false);
+		expect(containsMention("cc @Jan Petersen", "Jan Peters")).toBe(false);
+	});
+
+	it("still finds the shorter name when it is the one written", () => {
+		expect(containsMention("cc @Anna Meier and @Anna Meier-Schulz", "Anna Meier")).toBe(true);
+		expect(containsMention("cc @Anna Meier-Schulz and @Anna Meier", "Anna Meier")).toBe(true);
+	});
+
+	it("accepts the punctuation that normally follows a mention", () => {
+		for (const text of ["hi @Ann Smith", "hi @Ann Smith.", "hi @Ann Smith, ok", "(@Ann Smith)"]) {
+			expect(containsMention(text, "Ann Smith")).toBe(true);
+		}
 	});
 
 	it("needs the @: the bare name in a sentence is not a mention", () => {

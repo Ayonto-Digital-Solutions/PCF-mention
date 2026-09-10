@@ -69,20 +69,51 @@ export interface MentionInsertResult {
 /**
  * Replaces the triggering "@query" with "@Display Name " and reports where the caret
  * has to be placed afterwards.
+ *
+ * The caret always ends up behind the single space that follows the name — behind the one this
+ * writes, or behind the one that was already there. Leaving it in front of an existing space
+ * would put the next keystroke inside the name and break the mention.
  */
 export function applyMention(text: string, trigger: MentionTrigger, displayName: string): MentionInsertResult {
 	const mention = `@${displayName.trim()}`;
 	const tail = text.slice(trigger.end);
-	const separator = tail.startsWith(" ") ? "" : " ";
-	const head = `${text.slice(0, trigger.start)}${mention}${separator}`;
+	const reusesExistingSpace = tail.startsWith(" ");
+	const head = `${text.slice(0, trigger.start)}${mention}${reusesExistingSpace ? "" : " "}`;
 
-	return { text: `${head}${tail}`, caret: head.length };
+	return { text: `${head}${tail}`, caret: head.length + (reusesExistingSpace ? 1 : 0) };
 }
 
-/** True when the text still carries the mention for the given display name. */
+/**
+ * Characters that end a mention. Anything else — a letter, a digit, a hyphen — continues the
+ * name, so "@Anna Meier-Schulz" does not count as a mention of "Anna Meier".
+ */
+const MENTION_END = /[\s,.;:!?()[\]{}"]/;
+
+/**
+ * True when the text still carries the mention for the given display name.
+ *
+ * A plain substring test would report one name as mentioned whenever a longer name starting with
+ * it is in the text, and this predicate decides whether a pending notification still applies —
+ * so it would mail someone who was never mentioned and stay quiet for someone who was.
+ *
+ * Names hold spaces, so a space has to end a mention. "@Tom Braun (Fabrikam)" therefore still
+ * counts as a mention of "Tom Braun"; plain text cannot tell those two apart.
+ */
 export function containsMention(text: string, displayName: string): boolean {
 	const name = displayName.trim();
-	return name.length > 0 && text.includes(`@${name}`);
+	if (name.length === 0) {
+		return false;
+	}
+
+	const mention = `@${name}`;
+	for (let at = text.indexOf(mention); at !== -1; at = text.indexOf(mention, at + 1)) {
+		const following = text[at + mention.length];
+		if (following === undefined || MENTION_END.test(following)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /** Escapes a value so it can be embedded in an OData string literal. */

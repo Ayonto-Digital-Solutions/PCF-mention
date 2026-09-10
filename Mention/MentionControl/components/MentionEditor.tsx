@@ -105,18 +105,36 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 
 	const [text, setText] = React.useState(value);
 	const [trigger, setTrigger] = React.useState<MentionTrigger | null>(null);
-	const [suggestions, setSuggestions] = React.useState<readonly UserSuggestion[]>([]);
-	const [hasMoreResults, setHasMoreResults] = React.useState(false);
+	// Results carry the query they answered: during the debounce plus the round trip the list
+	// would otherwise still show — and Enter would still pick from — the previous query's matches.
+	const [results, setResults] = React.useState<{ query: string; users: readonly UserSuggestion[]; hasMore: boolean }>(
+		{ query: "", users: [], hasMore: false }
+	);
 	const [activeIndex, setActiveIndex] = React.useState(0);
 	const [isSearching, setIsSearching] = React.useState(false);
 	const [hasLookupFailed, setHasLookupFailed] = React.useState(false);
 	const [message, setMessage] = React.useState<string | undefined>(undefined);
 
+	// Only results that answer the query the caret is on may be shown or picked: during the
+	// debounce and the round trip that follows it, the previous query's matches are still in hand.
+	const answersCurrentQuery = trigger !== null && results.query === trigger.query;
+	// Memoized so the empty case keeps one identity: the callbacks below depend on it.
+	const suggestions = React.useMemo(
+		() => (answersCurrentQuery ? results.users : []),
+		[answersCurrentQuery, results.users]
+	);
+	const hasMoreResults = answersCurrentQuery && results.hasMore;
+
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-	/** Names this editor already wrote, so typing on past one does not look like a new query. */
-	const insertedNames = React.useRef(new Set<string>());
+	/** Where this editor wrote a mention, so typing on past one does not look like a new query. */
+	const insertedMentions = React.useRef<{ start: number; name: string }[]>([]);
 	const isFocused = React.useRef(false);
 	const pendingCaret = React.useRef<number | null>(null);
+	/** The grace period outlives a form that closes, so nothing is set on a gone component. */
+	const isMounted = React.useRef(true);
+	React.useEffect(() => () => {
+		isMounted.current = false;
+	}, []);
 
 	// The platform can push a new value at any time. Adopting it while the user is typing would
 	// move the caret, so incoming values are only taken over when the component is not focused.
@@ -138,7 +156,6 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const query = props.notice === undefined ? (trigger?.query ?? null) : null;
 	React.useEffect(() => {
 		if (query === null) {
-			setSuggestions([]);
 			setIsSearching(false);
 			return undefined;
 		}
@@ -150,16 +167,14 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				try {
 					const result = await searchUsers(query);
 					if (!cancelled) {
-						setSuggestions(result.users);
-						setHasMoreResults(result.hasMore);
+						setResults({ query, users: result.users, hasMore: result.hasMore });
 						setActiveIndex(0);
 						setHasLookupFailed(false);
 						setMessage(undefined);
 					}
 				} catch (error) {
 					if (!cancelled) {
-						setSuggestions([]);
-						setHasMoreResults(false);
+						setResults({ query, users: [], hasMore: false });
 						setHasLookupFailed(true);
 						setMessage(strings.lookupFailed);
 						console.error("[MentionControl] user lookup failed", error);
@@ -180,8 +195,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 
 	const closeSuggestions = React.useCallback(() => {
 		setTrigger(null);
-		setSuggestions([]);
-		setHasMoreResults(false);
+		setResults({ query: "", users: [], hasMore: false });
 		setActiveIndex(0);
 		setHasLookupFailed(false);
 		setMessage(undefined);
@@ -207,15 +221,25 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		const found = findMentionTrigger(nextText, caret);
 		// A query may hold a space because names do, so continuing the sentence after a one-word
 		// mention ("@Bob thanks") still looks like a query. It is not: the name is already there.
-		const next =
-			found && [...insertedNames.current].some((name) => found.query.startsWith(`${name} `))
-				? null
-				: found;
+		// Only the mention that was written at that exact spot counts — a later "@Bob Schmidt"
+		// typed somewhere else is a query like any other, and must still open the list.
+		const continuesInsertedMention =
+			found !== null &&
+			insertedMentions.current.some(
+				(mention) => mention.start === found.start && found.query.startsWith(`${mention.name} `)
+			);
+		const next = continuesInsertedMention ? null : found;
 		setTrigger((current) => {
 			if (current === null) {
 				return mayOpen ? next : null;
 			}
 			if (next === null) {
+				return null;
+			}
+			// A caret move may follow the mention it is already on, never jump to another one.
+			// Landing inside a finished mention elsewhere in the text would re-aim the picker at
+			// it, and the next Enter would overwrite that mention and notify the wrong person.
+			if (!mayOpen && next.start !== current.start) {
 				return null;
 			}
 			if (current.start === next.start && current.end === next.end && current.query === next.query) {
@@ -258,7 +282,10 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				return;
 			}
 
-			insertedNames.current.add(user.name.trim());
+			insertedMentions.current = [
+				...insertedMentions.current.filter((mention) => mention.start !== trigger.start),
+				{ start: trigger.start, name: user.name.trim() },
+			];
 			pendingCaret.current = result.caret;
 			commit(result.text);
 			closeSuggestions();
@@ -268,7 +295,9 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				try {
 					await onMention(user);
 				} catch (error) {
-					setMessage(strings.notificationFailed);
+					if (isMounted.current) {
+						setMessage(strings.notificationFailed);
+					}
 					console.error("[MentionControl] notification failed", error);
 				}
 			})();
@@ -317,8 +346,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	);
 
 	const isOpen = trigger !== null && !props.disabled && !hasLookupFailed && props.notice === undefined;
-	// While the first result is still on its way the popup is a spinner, not the list.
-	const isSuggestionListRendered = isOpen && !(isSearching && suggestions.length === 0);
+	// Until the answer for the current query is in, the popup is a spinner, not the list.
+	const isSuggestionListRendered = isOpen && suggestions.length > 0;
 	const remaining = props.maxLength !== undefined ? props.maxLength - text.length : undefined;
 
 	if (props.masked) {

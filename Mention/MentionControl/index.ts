@@ -72,7 +72,12 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		const incoming = field.raw ?? "";
 		if (incoming === this.value) {
 			this.staleValue = undefined;
-		} else if (incoming !== this.staleValue && (!this.isEditing || context.mode.isControlDisabled)) {
+		} else if (incoming === this.staleValue) {
+			// The platform is allowed to be one update behind, not to be overruled for good: a
+			// business rule or a discarded form can legitimately put that same text back, and the
+			// next update carrying it is taken.
+			this.staleValue = undefined;
+		} else if (!this.isEditing || context.mode.isControlDisabled) {
 			this.value = incoming;
 			this.staleValue = undefined;
 		}
@@ -101,9 +106,10 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	}
 
 	public destroy(): void {
-		// Notifications already on their way are deliberately left to run: the mention is in the
-		// column, and the delay is a grace period, not a reason to drop one when a form closes.
 		this.isDisposed = true;
+		// A form that closes without saving is precisely what the grace period is for: the
+		// mention never reached the record, so nobody should hear about it.
+		this.scheduler.cancelPending();
 	}
 
 	private readonly onChange = (value: string): void => {

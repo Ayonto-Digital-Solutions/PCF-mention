@@ -180,6 +180,70 @@ describe("MentionEditor", () => {
 		expect(textarea.getAttribute("aria-controls")).toBeNull();
 	});
 
+	it("does not let Enter pick a match that answered an earlier query", async () => {
+		// Between the debounce and the round trip the previous query's results are still in hand;
+		// committing them would insert someone the user is no longer looking at.
+		let resolveSecond: ((value: { users: typeof USERS; hasMore: boolean }) => void) | undefined;
+		const searchUsers = vi
+			.fn()
+			.mockResolvedValueOnce({ users: [USERS[0]], hasMore: false })
+			.mockImplementationOnce(
+				() => new Promise((resolve) => { resolveSecond = resolve; })
+			);
+
+		const { textarea, onMention } = setup({ searchUsers });
+		type(textarea, "cc @Bo");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+
+		// The user finishes the word; the answer for it is still outstanding.
+		type(textarea, "cc @Bob");
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledTimes(2));
+
+		// The earlier query's match must not be on offer any more.
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(onMention).not.toHaveBeenCalled();
+
+		// Once the answer for the current query lands, the list comes back.
+		resolveSecond?.({ users: USERS, hasMore: false });
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+	});
+
+	it("closes rather than re-aiming when the caret lands on a different mention", async () => {
+		// With the picker open on a fresh query, clicking inside a finished mention earlier in the
+		// text used to re-anchor the trigger there — and the next Enter overwrote that mention and
+		// notified whoever the new query matched.
+		const { textarea, onChange, onMention } = setup({ value: "hi @Andreas Klein and " });
+		type(textarea, "hi @Andreas Klein and @ne", 25);
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		textarea.selectionStart = 6;
+		textarea.selectionEnd = 6;
+		fireEvent.click(textarea);
+
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+
+		const callsBefore = onChange.mock.calls.length;
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		expect(onChange.mock.calls).toHaveLength(callsBefore);
+		expect(onMention).not.toHaveBeenCalled();
+	});
+
+	it("still narrows the mention it is already on when the caret moves inside it", async () => {
+		const { textarea, searchUsers } = setup();
+		type(textarea, "hi @Ann");
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("Ann"));
+
+		// ArrowLeft inside the same mention shortens the query rather than closing the list.
+		textarea.selectionStart = 6;
+		textarea.selectionEnd = 6;
+		fireEvent.keyUp(textarea, { key: "ArrowLeft" });
+
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("An"));
+		expect(screen.getAllByRole("option")).toHaveLength(2);
+	});
+
 	it("stays closed after Escape even when the caret moves inside the mention", async () => {
 		const { textarea } = setup();
 		type(textarea, "hi @An");
@@ -359,6 +423,62 @@ describe("MentionEditor", () => {
 		await new Promise((resolve) => setTimeout(resolve, 400));
 		expect(searchUsers).not.toHaveBeenCalled();
 		expect(screen.queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("does not query again when the sentence continues after a one-word mention", async () => {
+		const searchUsers = vi.fn().mockResolvedValue({ users: [{ id: "u3", name: "Bob" }], hasMore: false });
+		const { textarea } = setup({ searchUsers });
+		type(textarea, "hi @Bo");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		searchUsers.mockClear();
+
+		type(textarea, "hi @Bob thanks");
+
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
+	});
+
+	it("still opens the list for a new mention that starts with a name already written", async () => {
+		// The sentence carrying on after "@Bob" is not a query, but "@Bob Schmidt" typed further
+		// along is one — for somebody else, whose name simply starts the same way.
+		const searchUsers = vi.fn().mockResolvedValue({ users: [{ id: "u3", name: "Bob" }], hasMore: false });
+		const { textarea } = setup({ searchUsers });
+		type(textarea, "hi @Bo");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		searchUsers.mockClear();
+
+		type(textarea, "hi @Bob cc @Bob Schmidt");
+
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("Bob Schmidt"));
+	});
+
+	it("says nothing about a failed notification once the form has closed", async () => {
+		// The grace period outlives the editor, so the answer can arrive after it is gone.
+		let fail: (error: Error) => void = () => undefined;
+		const onMention = vi.fn(
+			() =>
+				new Promise<void>((_resolve, reject) => {
+					fail = reject;
+				})
+		);
+		const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		try {
+			const { textarea, unmount } = setup({ onMention });
+			type(textarea, "hi @An");
+			await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+			fireEvent.keyDown(textarea, { key: "Enter" });
+
+			unmount();
+			fail(new Error("boom"));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			const warnings = errors.mock.calls.map((call) => String(call[0]));
+			expect(warnings.some((warning) => warning.includes("unmounted"))).toBe(false);
+		} finally {
+			errors.mockRestore();
+		}
 	});
 
 	it("puts the caret after the inserted mention, not at the end of the text", async () => {

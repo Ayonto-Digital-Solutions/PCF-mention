@@ -25,7 +25,7 @@ interface SystemUserRecord {
 const SELECT = "systemuserid,fullname,internalemailaddress,jobtitle,applicationid,accessmode";
 
 /** Access modes that cannot hold a mailbox: 3 = Support User, 4 = Non-interactive. */
-const UNMAILABLE_ACCESS_MODES = new Set([3, 4]);
+const UNMAILABLE_ACCESS_MODES = [3, 4];
 
 /**
  * Looks up enabled Dataverse users through the supported context.webAPI surface.
@@ -53,11 +53,29 @@ export class UserSearchService {
 			filters.push(`contains(fullname,'${literal}')`);
 		}
 
-		// One more than the page size, so a full page can be told apart from a truncated result.
-		// Application (service) users are filtered out on the client, which keeps the OData query
-		// limited to columns that are guaranteed to be filterable, so the surplus is doubled to
-		// leave room for the ones that drop out.
-		const limit = this.pageSize * 2 + 1;
+		// Application (service) users and the built-in support accounts have no mailbox to write
+		// to. They are excluded by the server rather than by the loop below, because dropping them
+		// from a page that is already full leaves the list short — or empty — as soon as enough of
+		// them sort to the front of the alphabet.
+		const mailable = [
+			"applicationid eq null",
+			...UNMAILABLE_ACCESS_MODES.map((mode) => `accessmode ne ${mode.toString()}`),
+		];
+
+		try {
+			// One more than the page size, so a full page can be told apart from a truncated result.
+			return await this.query([...filters, ...mailable], this.pageSize + 1);
+		} catch (error) {
+			// An organisation that will not filter on those columns must not lose the lookup
+			// altogether. The same query without them still works and the check in the loop still
+			// keeps the accounts out of the list — it can only leave the list short, so the surplus
+			// is doubled to leave room for the ones that drop out.
+			console.warn("[MentionControl] user query without service accounts failed, retrying", error);
+			return this.query(filters, this.pageSize * 2 + 1);
+		}
+	}
+
+	private async query(filters: readonly string[], limit: number): Promise<UserSearchResult> {
 		const query =
 			`?$select=${SELECT}` +
 			`&$filter=${filters.join(" and ")}` +
@@ -74,7 +92,7 @@ export class UserSearchService {
 			const name = entity.fullname;
 
 			// Application users and the built-in system accounts have no mailbox to write to.
-			if (!id || !name || entity.applicationid || UNMAILABLE_ACCESS_MODES.has(entity.accessmode ?? 0)) {
+			if (!id || !name || entity.applicationid || UNMAILABLE_ACCESS_MODES.includes(entity.accessmode ?? 0)) {
 				continue;
 			}
 

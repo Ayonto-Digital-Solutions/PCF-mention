@@ -169,8 +169,50 @@ describe("UserSearchService", () => {
 		const recorded: Recorded[] = [];
 		await new UserSearchService(makeWebApi([], recorded), 10).search("Ann");
 
-		expect(recorded[0].options).toContain("$top=21");
-		expect(recorded[0].maxPageSize).toBe(21);
+		expect(recorded[0].options).toContain("$top=11");
+		expect(recorded[0].maxPageSize).toBe(11);
+	});
+
+	it("has the server leave out the accounts without a mailbox", async () => {
+		// Dropping them from a full page afterwards is what leaves the list short, so the query
+		// asks for a page that does not hold them in the first place.
+		const recorded: Recorded[] = [];
+		await new UserSearchService(makeWebApi([], recorded)).search("Ann");
+
+		expect(recorded[0].options).toContain("applicationid eq null");
+		expect(recorded[0].options).toContain("accessmode ne 3");
+		expect(recorded[0].options).toContain("accessmode ne 4");
+	});
+
+	it("still finds users on an organisation that refuses to filter on those columns", async () => {
+		const recorded: Recorded[] = [];
+		const records = [USER(), USER({ systemuserid: "app", applicationid: "app-1" })];
+		const webAPI = {
+			retrieveMultipleRecords: vi.fn((entity: string, options: string, maxPageSize?: number) => {
+				recorded.push({ entity, options, maxPageSize });
+				return options.includes("applicationid eq null")
+					? Promise.reject(new Error("Could not find a property named 'applicationid'"))
+					: Promise.resolve({ entities: records, nextLink: "" });
+			}),
+		} as unknown as ComponentFramework.WebApi;
+
+		const { users } = await new UserSearchService(webAPI, 10).search("Ann");
+
+		// The second query carries neither exclusion, and asks for the wider page that leaves
+		// room for what the loop then drops.
+		expect(recorded).toHaveLength(2);
+		expect(recorded[1].options).not.toContain("applicationid eq null");
+		expect(recorded[1].options).not.toContain("accessmode ne");
+		expect(recorded[1].options).toContain("$top=21");
+		expect(users.map((user) => user.id)).toEqual(["u1"]);
+	});
+
+	it("reports a lookup that fails both ways rather than returning nothing", async () => {
+		const webAPI = {
+			retrieveMultipleRecords: vi.fn(() => Promise.reject(new Error("Access denied"))),
+		} as unknown as ComponentFramework.WebApi;
+
+		await expect(new UserSearchService(webAPI).search("Ann")).rejects.toThrow("Access denied");
 	});
 
 	it("reports a missing job title as absent rather than empty", async () => {

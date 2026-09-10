@@ -79,6 +79,19 @@ export class NotificationScheduler<TPayload> {
 	}
 
 	/**
+	 * Drops everything still waiting. Used when the component goes away: the grace period exists
+	 * so a mention the author did not keep never turns into a mail, and closing a form without
+	 * saving is exactly that case. The cost is that picking a mention and saving within the grace
+	 * period sends nothing — recoverable by mentioning again, unlike a mail that already went out.
+	 */
+	public cancelPending(): void {
+		for (const handle of this.waiting.values()) {
+			clearTimeout(handle);
+		}
+		this.waiting.clear();
+	}
+
+	/**
 	 * Forgets recipients whose mention is no longer in the text, so making the mention again
 	 * notifies them again.
 	 */
