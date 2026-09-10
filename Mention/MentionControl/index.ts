@@ -15,7 +15,7 @@ import {
 } from "./services/UserSearchService";
 import { mentionBlocker } from "./utils/availability";
 import { interpolate } from "./utils/format";
-import { buildRecordUrl, containsMention, normalizeGuid } from "./utils/mentionText";
+import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
 
 /** Value of the sendEmail choice that switches notifications on. */
 const SEND_EMAIL_ENABLED = "0";
@@ -45,6 +45,13 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	/** True while the editor has the focus, which is exactly when it owns the text. */
 	private isEditing = false;
+
+	/**
+	 * Who the text mentions right now, as the editor reports it — by user id, because a display
+	 * name does not identify a person. A pending notification applies only while its recipient
+	 * is in here.
+	 */
+	private writtenMentions = new Set<string>();
 
 	/**
 	 * The record the component sits on, as the host reports it.
@@ -91,7 +98,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.scheduler = new NotificationScheduler(
 			NOTIFICATION_DELAY_MS,
 			async (request: MentionRequest) => this.mentions.write(request),
-			(mentionName: string) => containsMention(this.value, mentionName)
+			(userId: string) => this.writtenMentions.has(userId)
 		);
 	}
 
@@ -131,6 +138,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			onChange: this.onChange,
 			onEditingChange: this.onEditingChange,
 			onMention: this.onMention,
+			onWrittenMentionsChange: this.onWrittenMentionsChange,
 			recordKey: `${this.recordEntityName ?? ""}:${this.recordId}`,
 			loadMentions: this.loadMentions,
 			onOpenUser: this.onOpenUser,
@@ -157,13 +165,17 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		// from a genuinely new value.
 		this.staleValue ??= this.value;
 		this.value = value;
-		// A mention that was deleted can be made again, and should notify again.
-		this.scheduler.dropWithdrawn();
 		this.notifyOutputChanged();
 	};
 
 	private readonly onEditingChange = (isEditing: boolean): void => {
 		this.isEditing = isEditing;
+	};
+
+	private readonly onWrittenMentionsChange = (userIds: readonly string[]): void => {
+		this.writtenMentions = new Set(userIds.map((id) => normalizeGuid(id)));
+		// A mention that was taken back can be made again, and should notify again.
+		this.scheduler.dropWithdrawn();
 	};
 
 	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
@@ -240,7 +252,6 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		// follows only decides whether to send it.
 		await this.scheduler.schedule({
 			key: recipientId,
-			mentionName: user.name,
 			payload: this.buildRequest(user, recipientId),
 		});
 	};

@@ -11,15 +11,15 @@ function makeScheduler(options: {
 	mentioned?: string[];
 	send?: (payload: Payload) => Promise<void>;
 }) {
-	const mentioned = new Set(options.mentioned ?? ["Anna Berger"]);
+	// Who the text mentions, by user id — the editor reports exactly this.
+	const mentioned = new Set(options.mentioned ?? ["user-1"]);
 	const send = options.send ?? vi.fn<(payload: Payload) => Promise<void>>().mockResolvedValue(undefined);
-	const scheduler = new NotificationScheduler<Payload>(DELAY, send, (name) => mentioned.has(name));
+	const scheduler = new NotificationScheduler<Payload>(DELAY, send, (key) => mentioned.has(key));
 	return { scheduler, send, mentioned };
 }
 
-const item = (over: Partial<{ key: string; mentionName: string; payload: Payload }> = {}) => ({
+const item = (over: Partial<{ key: string; payload: Payload }> = {}) => ({
 	key: "user-1",
-	mentionName: "Anna Berger",
 	payload: { to: "user-1" },
 	...over,
 });
@@ -60,7 +60,7 @@ describe("NotificationScheduler", () => {
 		const { scheduler, send, mentioned } = makeScheduler({});
 		const pending = scheduler.schedule(item());
 
-		mentioned.delete("Anna Berger");
+		mentioned.delete("user-1");
 		await vi.advanceTimersByTimeAsync(DELAY);
 		await expect(pending).resolves.toBeUndefined();
 
@@ -92,9 +92,9 @@ describe("NotificationScheduler", () => {
 
 	it("notifies two different recipients", async () => {
 		const { scheduler, send, mentioned } = makeScheduler({});
-		mentioned.add("Bert Klein");
+		mentioned.add("user-2");
 		const first = scheduler.schedule(item());
-		const second = scheduler.schedule(item({ key: "user-2", mentionName: "Bert Klein" }));
+		const second = scheduler.schedule(item({ key: "user-2" }));
 
 		await vi.advanceTimersByTimeAsync(DELAY);
 		await Promise.all([first, second]);
@@ -130,11 +130,11 @@ describe("NotificationScheduler", () => {
 		await first;
 
 		// The user deletes the mention; the editor reports the change.
-		mentioned.delete("Anna Berger");
+		mentioned.delete("user-1");
 		scheduler.dropWithdrawn();
 
 		// ...and mentions the same person again.
-		mentioned.add("Anna Berger");
+		mentioned.add("user-1");
 		const second = scheduler.schedule(item());
 		await vi.advanceTimersByTimeAsync(DELAY);
 		await second;
@@ -171,7 +171,7 @@ describe("NotificationScheduler", () => {
 	it("still drops a withdrawn mention when it is flushed", async () => {
 		const { scheduler, send, mentioned } = makeScheduler({});
 		const pending = scheduler.schedule(item());
-		mentioned.delete("Anna Berger");
+		mentioned.delete("user-1");
 
 		scheduler.flushPending();
 		await pending;

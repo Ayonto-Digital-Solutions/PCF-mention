@@ -168,23 +168,23 @@ describe("buildRecordUrl", () => {
 
 describe("reanchorMentions", () => {
 	it("moves a mention along when text is inserted in front of it", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi there @Bob ")).toEqual([
-			{ start: 9, name: "Bob" },
+		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi there @Bob ")).toEqual([
+			{ start: 9, name: "Bob", userId: "u-bob" },
 		]);
 	});
 
 	it("leaves a mention that did not move where it is", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi @Bob thanks")).toEqual([
-			{ start: 3, name: "Bob" },
+		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi @Bob thanks")).toEqual([
+			{ start: 3, name: "Bob", userId: "u-bob" },
 		]);
 	});
 
 	it("forgets a mention that is no longer in the text", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi thanks")).toEqual([]);
+		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi thanks")).toEqual([]);
 	});
 
 	it("does not mistake a longer name for the one it is looking for", () => {
-		expect(reanchorMentions([{ start: 0, name: "Bob" }], "@Bobbie Jones ")).toEqual([]);
+		expect(reanchorMentions([{ start: 0, name: "Bob", userId: "u-bob" }], "@Bobbie Jones ")).toEqual([]);
 	});
 
 	it("keeps two mentions of the same person apart when one edit moves both", () => {
@@ -193,8 +193,8 @@ describe("reanchorMentions", () => {
 		// mention unguarded — the picker reopens over it and Enter overwrites it.
 		const anchored = reanchorMentions(
 			[
-				{ start: 3, name: "Bob" },
-				{ start: 8, name: "Bob" },
+				{ start: 3, name: "Bob", userId: "u-bob" },
+				{ start: 8, name: "Bob", userId: "u-bob" },
 			],
 			"@Anna Berger @Bob @Bob "
 		);
@@ -206,30 +206,30 @@ describe("reanchorMentions", () => {
 		// "@Bob Schmidt" also reads as a mention of "Bob" followed by a space.
 		const anchored = reanchorMentions(
 			[
-				{ start: 0, name: "Bob Schmidt" },
-				{ start: 13, name: "Bob" },
+				{ start: 0, name: "Bob Schmidt", userId: "u-bob" },
+				{ start: 13, name: "Bob", userId: "u-bob" },
 			],
 			"@Anna Berger @Bob Schmidt @Bob "
 		);
 
 		expect(anchored).toEqual([
-			{ start: 13, name: "Bob Schmidt" },
-			{ start: 26, name: "Bob" },
+			{ start: 13, name: "Bob Schmidt", userId: "u-bob" },
+			{ start: 26, name: "Bob", userId: "u-bob" },
 		]);
 	});
 
 	it("keeps two mentions of the same person apart", () => {
 		const anchored = reanchorMentions(
 			[
-				{ start: 0, name: "Bob" },
-				{ start: 9, name: "Bob" },
+				{ start: 0, name: "Bob", userId: "u-bob" },
+				{ start: 9, name: "Bob", userId: "u-bob" },
 			],
 			"cc @Bob and @Bob "
 		);
 
 		expect(anchored).toEqual([
-			{ start: 3, name: "Bob" },
-			{ start: 12, name: "Bob" },
+			{ start: 3, name: "Bob", userId: "u-bob" },
+			{ start: 12, name: "Bob", userId: "u-bob" },
 		]);
 	});
 });

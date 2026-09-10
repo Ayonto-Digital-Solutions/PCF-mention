@@ -10,27 +10,29 @@
  * exercised directly.
  */
 export interface ScheduledNotification<TPayload> {
-	/** Identifies the recipient; a second notification for the same key is ignored. */
+	/**
+	 * Identifies the person. A second notification for the same key is ignored, and this — not
+	 * the display name — is what decides whether the notification still applies: two people can
+	 * be called the same, and one deleted mention would otherwise vouch for the other.
+	 */
 	readonly key: string;
-	/** The name whose presence in the text decides whether the mail still applies. */
-	readonly mentionName: string;
 	readonly payload: TPayload;
 }
 
 export class NotificationScheduler<TPayload> {
 	private readonly delayMs: number;
 	private readonly send: (payload: TPayload) => Promise<void>;
-	private readonly isStillMentioned: (mentionName: string) => boolean;
+	private readonly isStillMentioned: (key: string) => boolean;
 
-	/** Recipients whose notification went out, by key, with the name it used. */
-	private readonly sent = new Map<string, string>();
+	/** Recipients whose notification went out. */
+	private readonly sent = new Set<string>();
 	/** Notifications waiting out the delay, by key, each with the way to let it go now. */
 	private readonly waiting = new Map<string, { handle: ReturnType<typeof setTimeout>; fire: () => void }>();
 
 	constructor(
 		delayMs: number,
 		send: (payload: TPayload) => Promise<void>,
-		isStillMentioned: (mentionName: string) => boolean
+		isStillMentioned: (key: string) => boolean
 	) {
 		this.delayMs = delayMs;
 		this.send = send;
@@ -59,13 +61,13 @@ export class NotificationScheduler<TPayload> {
 					this.waiting.delete(item.key);
 				}
 
-				if (!this.isStillMentioned(item.mentionName)) {
+				if (!this.isStillMentioned(item.key)) {
 					resolve();
 					return;
 				}
 
 				// Claim the recipient before sending, so a second mention cannot race it.
-				this.sent.set(item.key, item.mentionName);
+				this.sent.add(item.key);
 				void (async () => {
 					try {
 						await this.send(item.payload);
@@ -103,8 +105,8 @@ export class NotificationScheduler<TPayload> {
 	 * notifies them again.
 	 */
 	public dropWithdrawn(): void {
-		for (const [key, mentionName] of this.sent) {
-			if (!this.isStillMentioned(mentionName)) {
+		for (const key of this.sent) {
+			if (!this.isStillMentioned(key)) {
 				this.sent.delete(key);
 			}
 		}
