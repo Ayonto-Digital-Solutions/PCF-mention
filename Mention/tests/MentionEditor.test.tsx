@@ -12,6 +12,7 @@ const USERS: UserSuggestion[] = [
 const STRINGS: MentionEditorStrings = {
 	placeholder: "Type @ to mention someone",
 	noResults: "No users found",
+	mentionTooLong: "The mention does not fit in the remaining characters.",
 	moreResults: "More matches — narrow your search",
 	searching: "Searching users",
 	suggestionCount: (count) => `${count} suggestions available`,
@@ -160,16 +161,40 @@ describe("MentionEditor", () => {
 		expect(textarea.getAttribute("aria-controls")).toBeNull();
 	});
 
-	it("reopens the list when the caret moves back into a mention", async () => {
-		const { textarea } = setup();
-		type(textarea, "hi @An and more", 15);
-		expect(screen.queryByRole("option")).toBeNull();
+	it("does not open the list when the caret merely moves into existing text", async () => {
+		// A saved note already contains a mention. Clicking behind it must not arm the picker:
+		// the next Enter would overwrite the mention and notify whoever is first in the list.
+		const { textarea, searchUsers } = setup({ value: "agreed with @Bob" });
+		textarea.selectionStart = 16;
+		textarea.selectionEnd = 16;
+		fireEvent.click(textarea);
 
-		textarea.selectionStart = 6;
-		textarea.selectionEnd = 6;
+		await waitFor(() => expect(searchUsers).not.toHaveBeenCalled());
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+		expect(textarea.getAttribute("aria-controls")).toBeNull();
+	});
+
+	it("stays closed after Escape even when the caret moves inside the mention", async () => {
+		const { textarea } = setup();
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		fireEvent.keyDown(textarea, { key: "Escape" });
+		textarea.selectionStart = 5;
+		textarea.selectionEnd = 5;
 		fireEvent.keyUp(textarea, { key: "ArrowLeft" });
 
-		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("re-runs the search when the query is replaced without moving the caret", async () => {
+		const { textarea, searchUsers } = setup();
+		type(textarea, "hi @ab");
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("ab"));
+
+		// Same caret position, different query — a paste over a selection.
+		type(textarea, "hi @cd");
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("cd"));
 	});
 
 	it("closes the list on Escape without changing the text", async () => {
@@ -281,6 +306,34 @@ describe("MentionEditor", () => {
 		type(textarea, "still editable");
 
 		expect(onChange).toHaveBeenCalledWith("still editable");
+	});
+
+	it("refuses a mention that would overflow the column instead of writing past its limit", async () => {
+		const { textarea, onChange, onMention } = setup({ maxLength: 20 });
+		type(textarea, "0123456789012 @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		const callsBefore = onChange.mock.calls.length;
+
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		expect(onChange.mock.calls).toHaveLength(callsBefore);
+		expect(onMention).not.toHaveBeenCalled();
+		expect(screen.getByText("The mention does not fit in the remaining characters.")).toBeTruthy();
+	});
+
+	it("names the textarea with the column label", () => {
+		const { textarea } = setup({ label: "Internal note" });
+		expect(textarea.getAttribute("aria-label")).toBe("Internal note");
+	});
+
+	it("clears a stale lookup warning once the mention is closed", async () => {
+		const { textarea } = setup({ searchUsers: vi.fn().mockRejectedValue(new Error("boom")) });
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getByText("Users could not be loaded.")).toBeTruthy());
+
+		fireEvent.keyDown(textarea, { key: "Escape" });
+
+		expect(screen.queryByText("Users could not be loaded.")).toBeNull();
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {

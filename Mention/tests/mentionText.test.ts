@@ -3,6 +3,7 @@ import {
 	MAX_QUERY_LENGTH,
 	applyMention,
 	buildRecordUrl,
+	containsMention,
 	escapeHtml,
 	escapeODataLiteral,
 	findMentionTrigger,
@@ -71,6 +72,24 @@ describe("applyMention", () => {
 	it("does not add a second space when one is already there", () => {
 		const trigger = findMentionTrigger("hi @An bye", 6);
 		expect(applyMention("hi @An bye", trigger!, "Ann Smith")).toEqual({ text: "hi @Ann Smith bye", caret: 13 });
+	});
+});
+
+describe("containsMention", () => {
+	it("is true while the mention is in the text", () => {
+		expect(containsMention("hi @Ann Smith, thanks", "Ann Smith")).toBe(true);
+	});
+
+	it("is false once the mention was deleted", () => {
+		expect(containsMention("hi , thanks", "Ann Smith")).toBe(false);
+	});
+
+	it("is false for a partly deleted mention", () => {
+		expect(containsMention("hi @Ann, thanks", "Ann Smith")).toBe(false);
+	});
+
+	it("is false for a blank name", () => {
+		expect(containsMention("hi @", "  ")).toBe(false);
 	});
 });
 

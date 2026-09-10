@@ -67,10 +67,15 @@ const useStyles = makeStyles({
 
 export const SuggestionList: React.FC<SuggestionListProps> = (props) => {
 	const styles = useStyles();
+	const activeRef = React.useRef<HTMLLIElement | null>(null);
+
+	React.useEffect(() => {
+		activeRef.current?.scrollIntoView({ block: "nearest" });
+	}, [props.activeIndex, props.suggestions]);
 
 	if (props.suggestions.length === 0) {
 		return (
-			<div className={styles.list} id={props.id} role="status">
+			<div className={styles.list} id={props.id}>
 				<Text className={styles.empty} size={200}>
 					{props.emptyLabel}
 				</Text>
@@ -79,7 +84,16 @@ export const SuggestionList: React.FC<SuggestionListProps> = (props) => {
 	}
 
 	return (
-		<ul className={styles.list} id={props.id} role="listbox">
+		<ul
+			className={styles.list}
+			id={props.id}
+			// A mousedown on the padding or the scrollbar would blur the textarea and close the
+			// list before the click can land.
+			onMouseDown={(event) => {
+				event.preventDefault();
+			}}
+			role="listbox"
+		>
 			{props.suggestions.map((user, index) => (
 				<li
 					aria-selected={index === props.activeIndex}
@@ -95,9 +109,11 @@ export const SuggestionList: React.FC<SuggestionListProps> = (props) => {
 					onMouseEnter={() => {
 						props.onHover(index);
 					}}
+					ref={index === props.activeIndex ? activeRef : undefined}
 					role="option"
 				>
-					<Avatar color="colorful" name={user.name} size={28} />
+					{/* Decorative: the name is already the option's accessible name. */}
+					<Avatar aria-hidden color="colorful" name={user.name} size={28} />
 					<span className={styles.optionText}>
 						<Text size={300} truncate wrap={false}>
 							{user.name}

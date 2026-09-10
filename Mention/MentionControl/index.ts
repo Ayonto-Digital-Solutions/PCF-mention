@@ -2,7 +2,11 @@ import * as React from "react";
 import type { Theme } from "@fluentui/react-components";
 import type { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "./components/MentionEditor";
-import { EmailNotificationService } from "./services/EmailNotificationService";
+import {
+	EmailNotificationService,
+	type NotificationRequest,
+} from "./services/EmailNotificationService";
+import { NotificationScheduler } from "./services/NotificationScheduler";
 import {
 	UserSearchService,
 	type UserSearchResult,
@@ -10,7 +14,7 @@ import {
 } from "./services/UserSearchService";
 import { mentionBlocker } from "./utils/availability";
 import { interpolate } from "./utils/format";
-import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
+import { buildRecordUrl, containsMention, normalizeGuid } from "./utils/mentionText";
 
 /** Value of the sendEmail choice that switches notifications on. */
 const SEND_EMAIL_ENABLED = "0";
@@ -18,15 +22,25 @@ const SEND_EMAIL_ENABLED = "0";
 const DEFAULT_SUBJECT_KEY = "Notification_DefaultSubject";
 const DEFAULT_BODY_KEY = "Notification_DefaultBody";
 
+/**
+ * How long a notification waits before it goes out.
+ *
+ * A mention is sent the moment it is picked, but the mail is not: picking one entry off the list
+ * happens, and a mail saying "you were mentioned" cannot be taken back. The wait is long enough to
+ * delete a wrong pick and short enough that nobody notices it.
+ */
+const NOTIFICATION_DELAY_MS = 5000;
+
 export class MentionControl implements ComponentFramework.ReactControl<IInputs, IOutputs> {
 	private notifyOutputChanged: () => void;
 	private context: ComponentFramework.Context<IInputs>;
 	private userSearch: UserSearchService;
 	private notifications: EmailNotificationService;
 
-	/** Users already notified for this record in this session, so a re-mention does not spam them. */
-	private readonly notified = new Set<string>();
+	private scheduler: NotificationScheduler<NotificationRequest>;
 	private value = "";
+	/** The value handed to the platform that it has not echoed back yet. */
+	private pendingValue: string | undefined;
 
 	/** True while the editor has the focus, which is exactly when it owns the text. */
 	private isEditing = false;
@@ -39,6 +53,11 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.value = context.parameters.field.raw ?? "";
 		this.userSearch = new UserSearchService(context.webAPI);
 		this.notifications = new EmailNotificationService(context.webAPI, context.utils);
+		this.scheduler = new NotificationScheduler(
+			NOTIFICATION_DELAY_MS,
+			async (request: NotificationRequest) => this.notifications.notify(request),
+			(mentionName: string) => containsMention(this.value, mentionName)
+		);
 		context.mode.trackContainerResize(true);
 	}
 
@@ -47,12 +66,17 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 		const field = context.parameters.field;
 
-		// While the editor has the focus it owns the text, and the platform may still be carrying
-		// a value that predates the last keystroke. Adopting that would roll the column back, so
-		// incoming values are only taken over between edits — the same rule the editor applies to
-		// its own state, so the two never disagree.
-		if (!this.isEditing) {
-			this.value = field.raw ?? "";
+		// The platform reports the column asynchronously, so an updateView can still carry a value
+		// that predates the last edit. Incoming values are ignored until the platform echoes back
+		// the one that was handed to it; only then is it caught up and safe to follow again.
+		// Editing is a second reason to ignore: while the editor has the focus it owns the text.
+		const incoming = field.raw ?? "";
+		if (this.pendingValue !== undefined) {
+			if (incoming === this.pendingValue) {
+				this.pendingValue = undefined;
+			}
+		} else if (!this.isEditing || context.mode.isControlDisabled) {
+			this.value = incoming;
 		}
 
 		const props: MentionEditorProps = {
@@ -60,6 +84,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			disabled: context.mode.isControlDisabled || field.security?.editable === false,
 			masked: field.security?.readable === false,
 			maxLength: field.attributes?.MaxLength,
+			label: context.mode.label,
 			notice: this.mentionNotice(context),
 			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
 			strings: this.getStrings(),
@@ -78,12 +103,16 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	}
 
 	public destroy(): void {
+		// Notifications already on their way are deliberately left to run: the mention is in the
+		// column, and the delay is a grace period, not a reason to drop one when a form closes.
 		this.isDisposed = true;
-		this.notified.clear();
 	}
 
 	private readonly onChange = (value: string): void => {
 		this.value = value;
+		this.pendingValue = value;
+		// A mention that was deleted can be made again, and should notify again.
+		this.scheduler.dropWithdrawn();
 		this.notifyOutputChanged();
 	};
 
@@ -138,40 +167,42 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		if (this.mentionNotice(this.context) !== undefined) {
 			return;
 		}
+
 		const recipientId = normalizeGuid(user.id);
-		if (this.notified.has(recipientId)) {
+		if (recipientId.length === 0 || this.scheduler.isPending(recipientId)) {
 			return;
 		}
 
+		// Everything the mail needs is read now, while the context is current. The wait that
+		// follows only decides whether to send it.
+		await this.scheduler.schedule({
+			key: recipientId,
+			mentionName: user.name,
+			payload: this.buildRequest(user, recipientId),
+		});
+	};
+
+	private buildRequest(user: UserSuggestion, recipientId: string): NotificationRequest {
 		const parameters = this.context.parameters;
 		const entityName = parameters.entityName.raw ?? undefined;
 		const entityId = parameters.entityId.raw ?? undefined;
 
-		// Reserve the recipient before awaiting, so two quick mentions cannot both pass the check.
-		this.notified.add(recipientId);
-		try {
-			await this.notifications.notify({
-				recipient: user,
-				senderUserId: normalizeGuid(parameters.senderUserId.raw) || normalizeGuid(this.context.userSettings.userId),
-				subject: this.configured(parameters.emailSubject.raw) ?? this.resource(DEFAULT_SUBJECT_KEY),
-				body: this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY),
-				recordUrl: buildRecordUrl({
-					orgUrl: parameters.orgUrl.raw,
-					entityName,
-					entityId,
-					appId: parameters.appId.raw,
-				}),
-				recordLinkLabel: this.resource("Notification_OpenRecord"),
+		return {
+			recipient: { ...user, id: recipientId },
+			senderUserId: normalizeGuid(parameters.senderUserId.raw) || normalizeGuid(this.context.userSettings.userId),
+			subject: this.configured(parameters.emailSubject.raw) ?? this.resource(DEFAULT_SUBJECT_KEY),
+			body: this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY),
+			recordUrl: buildRecordUrl({
+				orgUrl: parameters.orgUrl.raw,
 				entityName,
 				entityId,
-			});
-		} catch (error) {
-			// The guard exists to prevent duplicate deliveries, not to swallow failed ones, so a
-			// recipient that was not reached stays eligible for the next attempt.
-			this.notified.delete(recipientId);
-			throw error;
-		}
-	};
+				appId: parameters.appId.raw,
+			}),
+			recordLinkLabel: this.resource("Notification_OpenRecord"),
+			entityName,
+			entityId,
+		};
+	}
 
 	private resource(key: string): string {
 		return this.context.resources.getString(key);
@@ -188,6 +219,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.strings ??= {
 			placeholder: this.resource("Editor_Placeholder"),
 			noResults: this.resource("Editor_NoResults"),
+			mentionTooLong: this.resource("Editor_MentionTooLong"),
 			moreResults: this.resource("Editor_MoreResults"),
 			searching: this.resource("Editor_Searching"),
 			suggestionCount: (count: string) => interpolate(this.resource("Editor_SuggestionCount"), count),

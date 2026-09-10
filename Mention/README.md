@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 83 Tests
+npm test                              # 102 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -113,8 +113,13 @@ erscheint ein Hinweis. Wer den direkten Versand nicht möchte, setzt `sendEmail`
 lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen der E-Mail reagieren — das
 Anlegen selbst ist unabhängig vom Versand.
 
-Jede Person wird pro Sitzung nur einmal benachrichtigt. Schlägt der Versand fehl, bleibt die
-Person für einen erneuten Versuch freigeschaltet.
+Zwischen Auswahl und Versand liegen **5 Sekunden**. Wird die Erwähnung in dieser Zeit wieder
+gelöscht — ein Fehlgriff in der Liste, oder ein Formular, das verworfen wird — geht keine Mail
+raus. Eine Mail „Sie wurden erwähnt" lässt sich nicht zurückholen; die Erwähnung selbst schon.
+
+Jede Person wird einmal pro Erwähnung benachrichtigt. Wird die Erwähnung gelöscht und später
+erneut gesetzt, wird wieder benachrichtigt. Schlägt der Versand fehl, bleibt die Person für einen
+erneuten Versuch freigeschaltet.
 
 ### Wann Erwähnen nicht verfügbar ist
 
@@ -148,7 +153,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 83 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung, Verfügbarkeit |
+| Keine Tests | 102 Tests über Logik, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
@@ -189,6 +194,7 @@ Mention/
 │  ├─ components/SuggestionList.tsx     Vorschlagsliste (role="listbox")
 │  ├─ services/UserSearchService.ts     Benutzersuche über context.webAPI
 │  ├─ services/EmailNotificationService.ts  E-Mail anlegen und senden
+│  ├─ services/NotificationScheduler.ts Karenzzeit und Entdopplung
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
 │  ├─ utils/availability.ts             Wann Erwähnen verfügbar ist
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
@@ -196,6 +202,7 @@ Mention/
 └─ tests/
    ├─ mentionText.test.ts               Reine Funktionen
    ├─ availability.test.ts              Wahrheitstabelle der Verfügbarkeit
+   ├─ NotificationScheduler.test.ts     Karenzzeit, Rücknahme, Entdopplung
    ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
    ├─ EmailNotificationService.test.ts  Payload, Verknüpfung, Versand

@@ -22,6 +22,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 export interface MentionEditorStrings {
 	readonly placeholder: string;
 	readonly noResults: string;
+	readonly mentionTooLong: string;
 	readonly moreResults: string;
 	readonly searching: string;
 	readonly suggestionCount: (count: string) => string;
@@ -36,6 +37,8 @@ export interface MentionEditorProps {
 	readonly disabled: boolean;
 	readonly masked: boolean;
 	readonly maxLength?: number;
+	/** The column label, so the textarea has a name a screen reader can announce. */
+	readonly label?: string;
 	/** Set when mentioning is unavailable; explains why, and keeps the picker closed. */
 	readonly notice?: string;
 	readonly theme?: Theme;
@@ -179,6 +182,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		setHasMoreResults(false);
 		setActiveIndex(0);
 		setHasLookupFailed(false);
+		setMessage(undefined);
 	}, []);
 
 	const commit = React.useCallback(
@@ -189,15 +193,24 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		[onChange]
 	);
 
-	// Keeps the open mention in step with the caret. Called for edits and for plain caret moves,
-	// because a click or an arrow key can carry the caret out of the mention that opened the list.
-	const syncTrigger = React.useCallback((nextText: string, caret: number) => {
+	/**
+	 * Keeps the open mention in step with the caret.
+	 *
+	 * `mayOpen` is false for plain caret moves. Letting a click or an arrow key open the list on
+	 * text that is already there turns a perfectly ordinary Enter into an overwrite of an existing
+	 * mention — and into a notification for whoever happened to be first in the list. Moving the
+	 * caret can therefore only ever close the list; typing is what opens it.
+	 */
+	const syncTrigger = React.useCallback((nextText: string, caret: number, mayOpen: boolean) => {
 		const next = findMentionTrigger(nextText, caret);
 		setTrigger((current) => {
-			if (current === null && next === null) {
-				return current;
+			if (current === null) {
+				return mayOpen ? next : null;
 			}
-			if (current && next && current.start === next.start && current.end === next.end) {
+			if (next === null) {
+				return null;
+			}
+			if (current.start === next.start && current.end === next.end && current.query === next.query) {
 				return current;
 			}
 			return next;
@@ -208,7 +221,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		(event: React.ChangeEvent<HTMLTextAreaElement>, data: { value: string }) => {
 			const caret = event.target.selectionStart ?? data.value.length;
 			commit(data.value);
-			syncTrigger(data.value, caret);
+			syncTrigger(data.value, caret, true);
 		},
 		[commit, syncTrigger]
 	);
@@ -218,7 +231,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const handleCaretMove = React.useCallback(
 		(event: React.SyntheticEvent<HTMLTextAreaElement>) => {
 			const element = event.currentTarget;
-			syncTrigger(element.value, element.selectionStart ?? element.value.length);
+			syncTrigger(element.value, element.selectionStart ?? element.value.length, false);
 		},
 		[syncTrigger]
 	);
@@ -230,6 +243,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			}
 
 			const result = applyMention(text, trigger, user.name);
+			if (props.maxLength !== undefined && result.text.length > props.maxLength) {
+				// Closing clears any standing message, so the reason is set after it.
+				closeSuggestions();
+				setMessage(strings.mentionTooLong);
+				return;
+			}
+
 			pendingCaret.current = result.caret;
 			commit(result.text);
 			closeSuggestions();
@@ -244,12 +264,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				}
 			})();
 		},
-		[closeSuggestions, commit, onMention, strings.notificationFailed, text, trigger]
+		[closeSuggestions, commit, onMention, props.maxLength, strings.mentionTooLong, strings.notificationFailed, text, trigger]
 	);
 
 	const handleKeyDown = React.useCallback(
 		(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-			if (!trigger) {
+			// The Enter that commits an IME candidate must not pick a suggestion.
+			if (!trigger || event.nativeEvent.isComposing) {
 				return;
 			}
 
@@ -287,6 +308,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	);
 
 	const isOpen = trigger !== null && !props.disabled && !hasLookupFailed && props.notice === undefined;
+	// While the first result is still on its way the popup is a spinner, not the list.
+	const isSuggestionListRendered = isOpen && !(isSearching && suggestions.length === 0);
 	const remaining = props.maxLength !== undefined ? props.maxLength - text.length : undefined;
 
 	if (props.masked) {
@@ -324,7 +347,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 						// announced through the live region below instead.
 						"aria-activedescendant": isOpen && suggestions.length > 0 ? optionId(activeIndex) : undefined,
 						"aria-autocomplete": "list",
-						"aria-controls": isOpen ? LISTBOX_ID : undefined,
+						"aria-label": props.label,
+						"aria-controls": isSuggestionListRendered ? LISTBOX_ID : undefined,
 						maxLength: props.maxLength,
 						onClick: handleCaretMove,
 						onKeyUp: handleCaretMove,

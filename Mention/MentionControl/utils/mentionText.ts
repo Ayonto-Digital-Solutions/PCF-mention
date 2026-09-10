@@ -79,6 +79,12 @@ export function applyMention(text: string, trigger: MentionTrigger, displayName:
 	return { text: `${head}${tail}`, caret: head.length };
 }
 
+/** True when the text still carries the mention for the given display name. */
+export function containsMention(text: string, displayName: string): boolean {
+	const name = displayName.trim();
+	return name.length > 0 && text.includes(`@${name}`);
+}
+
 /** Escapes a value so it can be embedded in an OData string literal. */
 export function escapeODataLiteral(value: string): string {
 	return value.replace(/'/g, "''");

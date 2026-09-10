@@ -192,6 +192,9 @@
   <data name="Editor_Placeholder" xml:space="preserve">
     <value>Mit @ jemanden erwähnen</value>
   </data>
+  <data name="Editor_MentionTooLong" xml:space="preserve">
+    <value>Die Erwähnung passt nicht mehr in die verbleibenden Zeichen.</value>
+  </data>
   <data name="Editor_MoreResults" xml:space="preserve">
     <value>Weitere Treffer — Suche eingrenzen</value>
   </data>
