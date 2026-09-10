@@ -69,8 +69,34 @@ jobs:
       - name: Check the solution source
         run: python3 .github/scripts/check-solution.py
 
+      # TEMPORARY: SolutionPackager throws a NullReferenceException on the entity, and the
+      # message says nothing about which part it choked on. Packing several shapes in one run
+      # is cheaper than one push per guess.
+      - name: Find the shape the packer accepts
+        run: |
+          set +e
+          for variant in full no-savedqueries no-ribbon bare; do
+            rm -rf "/tmp/${variant}"
+            cp -r solution "/tmp/${variant}"
+            case "${variant}" in
+              no-savedqueries) rm -rf "/tmp/${variant}/src/Entities/ayonto_Mention/SavedQueries" ;;
+              no-ribbon)       rm -f  "/tmp/${variant}/src/Entities/ayonto_Mention/RibbonDiff.xml" ;;
+              bare)            rm -rf "/tmp/${variant}/src/Entities/ayonto_Mention/SavedQueries" \
+                                      "/tmp/${variant}/src/Entities/ayonto_Mention/RibbonDiff.xml" ;;
+            esac
+            out=$(cd "/tmp/${variant}" && dotnet build -c Release 2>&1)
+            if [ $? -eq 0 ]; then
+              echo "::notice::${variant}: PACKS"
+            else
+              echo "::warning::${variant}: FAILS"
+              echo "${out}" | grep -E "error|Processing Component|^ - " | head -8
+            fi
+          done
+          set -e
+
       - name: Pack it
         run: |
+          rm -rf /tmp/pack
           cp -r solution /tmp/pack
           cd /tmp/pack
           dotnet build -c Release
