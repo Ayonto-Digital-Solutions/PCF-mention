@@ -20,7 +20,7 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 
 ```bash
 npm install
-npm test                              # 54 Tests
+npm test                              # 61 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -43,6 +43,9 @@ siehe [../Mention/README.md](../Mention/README.md#in-eine-umgebung-deployen).
 **Gruppieren.** Die Auswahl einer Spalte sortiert das Dataset serverseitig nach dieser Spalte und
 fasst anschließend aufeinanderfolgende Zeilen mit gleichem Wert zu Gruppen zusammen. Ohne die
 serverseitige Sortierung würde derselbe Wert über Seitengrenzen hinweg in mehreren Gruppen landen.
+Gruppiert wird deshalb nur, solange das Dataset auch tatsächlich nach dieser Spalte sortiert ist
+und die Spalte noch Teil der Ansicht ist — sonst fällt die Liste auf die flache Darstellung
+zurück, statt falsche Gruppen zu zeigen. Angeboten werden nur sortierbare Spalten.
 
 **Sortieren.** Ein Klick auf eine Spaltenüberschrift setzt die Sortierung des Datasets und lädt
 neu — es wird also die gesamte Ansicht sortiert, nicht nur die geladene Seite. Ist eine
@@ -74,7 +77,7 @@ die Liste würde mit jeder Seite weiterwachsen, statt umzublättern.
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 54 Tests |
+| Keine Tests | 61 Tests |
 
 Behobene Fehler aus 1.0:
 

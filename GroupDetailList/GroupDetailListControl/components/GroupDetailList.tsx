@@ -13,6 +13,7 @@ import {
 	mergeClasses,
 	shorthands,
 	tokens,
+	useId,
 	webLightTheme,
 	type Theme,
 } from "@fluentui/react-components";
@@ -106,8 +107,21 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 		() => new Set(props.initialSelectedIds)
 	);
 	const [groupColumnKey, setGroupColumnKey] = React.useState<string | undefined>(undefined);
+	// Two of these controls can sit on one form, so the label id has to be unique per instance.
+	const groupByLabelId = useId("group-by-label");
 
 	const reportedFor = React.useRef<readonly GridRow[] | undefined>(undefined);
+	const selectionSeeded = React.useRef(props.initialSelectedIds.length > 0);
+
+	// The first updateView usually arrives while the dataset is still loading, so what the
+	// platform already had selected only shows up on a later one.
+	React.useEffect(() => {
+		if (selectionSeeded.current || props.initialSelectedIds.length === 0) {
+			return;
+		}
+		selectionSeeded.current = true;
+		setSelected(new Set(props.initialSelectedIds));
+	}, [props.initialSelectedIds]);
 
 	// Two things happen when a new set of rows arrives. Records that left the page cannot stay
 	// selected, or the header checkbox and the count would describe rows nobody can see. And a
@@ -130,6 +144,8 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 
 	const commitSelection = React.useCallback(
 		(next: ReadonlySet<string>) => {
+			// From the first click on, the user's choice outranks whatever the dataset had.
+			selectionSeeded.current = true;
 			setSelected(next);
 			onSelectionChange([...next]);
 		},
@@ -160,13 +176,18 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 		[onGroupColumnChange]
 	);
 
+	const groupColumn = columns.find((column) => column.key === groupColumnKey);
+	// Chunking consecutive rows only produces real groups while the dataset is sorted by that
+	// column, and the column can disappear when the view changes under the control.
+	const activeGroupKey =
+		groupColumn && props.sortOf(groupColumn.key) !== undefined ? groupColumn.key : undefined;
+
 	const groups = React.useMemo(
-		() => (props.groupingEnabled ? groupRows(rows, groupColumnKey) : undefined),
-		[props.groupingEnabled, rows, groupColumnKey]
+		() => (props.groupingEnabled ? groupRows(rows, activeGroupKey) : undefined),
+		[props.groupingEnabled, rows, activeGroupKey]
 	);
 
-	const selectedGroupLabel =
-		columns.find((column) => column.key === groupColumnKey)?.label ?? strings.noGrouping;
+	const selectedGroupLabel = groupColumn?.label ?? strings.noGrouping;
 
 	const body = () => {
 		if (props.isLoading && rows.length === 0) {
@@ -203,13 +224,13 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 
 				{props.groupingEnabled ? (
 					<Toolbar className={styles.toolbar}>
-						<Caption1 id="group-by-label">{strings.groupBy}</Caption1>
+						<Caption1 id={groupByLabelId}>{strings.groupBy}</Caption1>
 						<Dropdown
-							aria-labelledby="group-by-label"
+							aria-labelledby={groupByLabelId}
 							onOptionSelect={(_event, data) => {
 								changeGroupColumn(data.optionValue === NO_GROUPING ? undefined : data.optionValue);
 							}}
-							selectedOptions={[groupColumnKey ?? NO_GROUPING]}
+							selectedOptions={[groupColumn?.key ?? NO_GROUPING]}
 							value={selectedGroupLabel}
 						>
 							<Option key={NO_GROUPING} value={NO_GROUPING}>

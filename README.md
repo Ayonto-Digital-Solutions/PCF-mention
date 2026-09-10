@@ -22,7 +22,7 @@ jeweiligen README unter „Was sich geändert hat".
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
 | Bundle jetzt | 14 KiB | 10 KiB |
-| Tests | 109 | 54 |
+| Tests | 109 | 61 |
 
 ## Voraussetzungen
 

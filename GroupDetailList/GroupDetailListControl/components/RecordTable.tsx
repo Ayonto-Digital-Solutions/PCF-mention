@@ -35,6 +35,16 @@ export interface RecordTableProps {
 	readonly onOpenReference: (rowId: string, columnKey: string) => void;
 }
 
+/**
+ * A phone column is free text, so it routinely holds an extension or a second number.
+ * Stripping everything but digits would glue those onto the subscriber number and dial something
+ * else, so anything that is not one plain number is left as text.
+ */
+function toDialableNumber(value: string): string | undefined {
+	const withoutSeparators = value.replace(/[\s\-.()/]/g, "");
+	return /^\+?\d{3,20}$/.test(withoutSeparators) ? withoutSeparators : undefined;
+}
+
 const useStyles = makeStyles({
 	table: {
 		minWidth: "100%",
@@ -72,13 +82,28 @@ export const RecordTable: React.FC<RecordTableProps> = (props) => {
 			return null;
 		}
 
+		// The row opens the record on a double click and these cells open something on a single
+		// click, so one gesture would otherwise reach both. The cell keeps its events to itself,
+		// and ignores the second click of a double click.
+		const openFromCell = (open: () => void) => ({
+			onClick: (event: React.MouseEvent) => {
+				event.stopPropagation();
+				if (event.detail <= 1) {
+					open();
+				}
+			},
+			onDoubleClick: (event: React.MouseEvent) => {
+				event.stopPropagation();
+			},
+		});
+
 		switch (column.kind) {
 			case "record":
 				return (
 					<Link
-						onClick={() => {
+						{...openFromCell(() => {
 							props.onOpenRecord(row.id);
-						}}
+						})}
 					>
 						{value}
 					</Link>
@@ -86,17 +111,21 @@ export const RecordTable: React.FC<RecordTableProps> = (props) => {
 			case "reference":
 				return (
 					<Link
-						onClick={() => {
+						{...openFromCell(() => {
 							props.onOpenReference(row.id, column.key);
-						}}
+						})}
 					>
 						{value}
 					</Link>
 				);
 			case "email":
-				return <Link href={`mailto:${encodeURIComponent(value)}`}>{value}</Link>;
-			case "phone":
-				return <Link href={`tel:${value.replace(/[^+\d]/g, "")}`}>{value}</Link>;
+				// RFC 6068 keeps the "@" that separates local part from domain, so the address is
+				// encoded without swallowing its own delimiter.
+				return <Link href={`mailto:${encodeURI(value)}`}>{value}</Link>;
+			case "phone": {
+				const dialable = toDialableNumber(value);
+				return dialable ? <Link href={`tel:${dialable}`}>{value}</Link> : value;
+			}
 			default:
 				return value;
 		}
@@ -114,8 +143,12 @@ export const RecordTable: React.FC<RecordTableProps> = (props) => {
 				aria-label={strings.selectRow}
 				checked={selected.has(row.id)}
 				checkboxIndicator={{ "aria-label": strings.selectRow }}
-				onClick={() => {
+				onClick={(event) => {
+					event.stopPropagation();
 					props.onToggleRow(row.id);
+				}}
+				onDoubleClick={(event) => {
+					event.stopPropagation();
 				}}
 			/>
 			{columns.map((column) => (
@@ -151,7 +184,8 @@ export const RecordTable: React.FC<RecordTableProps> = (props) => {
 						const direction = props.sortOf(column.key);
 						return (
 							<TableHeaderCell
-								aria-sort={direction ?? "none"}
+								// A column the view forbids sorting must not look sortable either.
+								aria-sort={column.sortable ? (direction ?? "none") : undefined}
 								className={styles.headerCell}
 								key={column.key}
 								onClick={
@@ -161,7 +195,8 @@ export const RecordTable: React.FC<RecordTableProps> = (props) => {
 											}
 										: undefined
 								}
-								sortDirection={direction}
+								sortable={column.sortable}
+								sortDirection={column.sortable ? direction : undefined}
 								style={{ width: `${column.widthFactor.toString()}px` }}
 							>
 								{column.label}
