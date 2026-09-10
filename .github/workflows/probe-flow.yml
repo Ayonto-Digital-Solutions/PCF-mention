@@ -67,3 +67,18 @@ jobs:
 
           python3 .github/probe/add-connectionreference.py /tmp/C2 inline
           try C2
+
+      - name: Does pac understand them, or only copy them
+        run: |
+          set +e
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          for candidate in base E2 C1 C2; do
+            zip=$(find "/tmp/$candidate/bin/Release" -name '*.zip' 2>/dev/null | head -1)
+            [ -n "$zip" ] || continue
+            echo "############ $candidate ############"
+            rm -rf "/tmp/$candidate-x"
+            pac solution unpack --zipfile "$zip" --folder "/tmp/$candidate-x" --packagetype Managed 2>&1 \
+              | grep -E "Processing Component|Error|error|Warning" 
+            echo "--- geschriebene Dateien ---"
+            ( cd "/tmp/$candidate-x" 2>/dev/null && find . -type f | sort ) || echo "(nichts entpackt)"
+          done
