@@ -58,6 +58,15 @@ def main() -> None:
         if (ROOT / "src/Entities" / folder / "RibbonDiff.xml").is_file():
             fail(f"Entities/{folder}/RibbonDiff.xml — the packer cannot read a hand-written one; leave it out")
 
+        # A SavedQueries folder is read by nothing: the packer takes views from <SavedQueries>
+        # inside Entity.xml, packs without a word, and ships a table with no view at all. That
+        # cost a release, so a folder here is refused rather than ignored a second time.
+        if (ROOT / "src/Entities" / folder / "SavedQueries").is_dir():
+            fail(
+                f"Entities/{folder}/SavedQueries — the packer never reads this folder; "
+                "the views belong in <SavedQueries> inside Entity.xml"
+            )
+
     for orphan in sorted(declared):
         fail(f"Solution.xml claims the table '{orphan}', but src/Entities has no folder for it")
 

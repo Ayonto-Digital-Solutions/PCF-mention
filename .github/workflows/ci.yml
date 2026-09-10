@@ -80,10 +80,42 @@ jobs:
             exit 1
           fi
 
-      - name: Pack it
+          # Same for the folder the packer reads nothing out of.
+          rm -rf /tmp/guard2
+          cp -r solution /tmp/guard2
+          mkdir -p /tmp/guard2/src/Entities/ayonto_Mention/SavedQueries
+          printf '<?xml version="1.0"?>\n<savedqueries />\n' \
+            > /tmp/guard2/src/Entities/ayonto_Mention/SavedQueries/view.xml
+          if SOLUTION_ROOT=/tmp/guard2 python3 .github/scripts/check-solution.py; then
+            echo "::error::check-solution.py accepted a SavedQueries folder the packer ignores"
+            exit 1
+          fi
+
+      - name: Pack it and check what came out
         run: |
           rm -rf /tmp/pack
           cp -r solution /tmp/pack
-          cd /tmp/pack
-          dotnet build -c Release
-          find bin -name '*.zip' -print
+          ( cd /tmp/pack && dotnet build -c Release )
+          zip=$(find /tmp/pack/bin -name '*.zip' | head -1)
+          echo "$zip"
+          python3 .github/scripts/check-package.py "$zip"
+
+          # And prove that guard guards, the way it actually failed: pack a source whose view
+          # the packer drops, then hold the real source against it. That is what shipped in 2.2.0.
+          rm -rf /tmp/pack-guard
+          cp -r solution /tmp/pack-guard
+          python3 - <<'GUARD'
+          from pathlib import Path
+
+          entity = Path("/tmp/pack-guard/src/Entities/ayonto_Mention/Entity.xml")
+          text = entity.read_text(encoding="utf-8")
+          head, marker, _ = text.partition("  <SavedQueries>")
+          assert marker, "the source no longer has a view to take away"
+          entity.write_text(head + "</Entity>\n", encoding="utf-8")
+          GUARD
+          ( cd /tmp/pack-guard && dotnet build -c Release )
+          viewless=$(find /tmp/pack-guard/bin -name '*.zip' | head -1)
+          if python3 .github/scripts/check-package.py "$viewless"; then
+            echo "::error::check-package.py did not notice the view missing from the package"
+            exit 1
+          fi
