@@ -259,12 +259,14 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					}
 					break;
 				case "Enter":
-				case "Tab":
-					if (suggestions.length > 0) {
+				case "Tab": {
+					const active = suggestions[activeIndex] as UserSuggestion | undefined;
+					if (active) {
 						event.preventDefault();
-						select(suggestions[activeIndex]);
+						select(active);
 					}
 					break;
+				}
 				case "Escape":
 					event.preventDefault();
 					closeSuggestions();
