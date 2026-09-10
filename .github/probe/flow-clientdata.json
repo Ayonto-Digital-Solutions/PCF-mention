@@ -1,0 +1,53 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_commondataserviceforapps": {
+        "runtimeSource": "embedded",
+        "connection": { "connectionReferenceLogicalName": "ayonto_sharedcommondataserviceforapps" },
+        "api": { "name": "shared_commondataserviceforapps" }
+      },
+      "shared_sendgrid": {
+        "runtimeSource": "embedded",
+        "connection": { "connectionReferenceLogicalName": "ayonto_sharedsendgrid" },
+        "api": { "name": "shared_sendgrid" }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": { "defaultValue": {}, "type": "Object" },
+        "$authentication": { "defaultValue": {}, "type": "SecureObject" }
+      },
+      "triggers": {
+        "When_a_mention_row_is_added": {
+          "type": "OpenApiConnectionWebhook",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "SubscribeWebhookTrigger",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+            },
+            "parameters": {
+              "subscriptionRequest/message": 1,
+              "subscriptionRequest/entityname": "ayonto_mention",
+              "subscriptionRequest/scope": 4,
+              "subscriptionRequest/filteringattributes": "ayonto_deliverystatus"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Only_pending_notifications": {
+          "type": "If",
+          "expression": {
+            "equals": [ "@triggerOutputs()?['body/ayonto_deliverystatus']", "New" ]
+          },
+          "actions": {}
+        }
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}
