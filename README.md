@@ -4,7 +4,7 @@ Zwei Power Apps Component Framework (PCF) Code-Components für modellgesteuerte 
 
 | Ordner | Component | Zweck |
 |---|---|---|
-| [`Mention/`](Mention) | `Ayonto.MentionControl` | `@`-Erwähnung von Dataverse-Benutzern in einer Textspalte, mit E-Mail-Benachrichtigung |
+| [`Mention/`](Mention) | `Ayonto.MentionControl` | `@`-Erwähnung von Dataverse-Benutzern in einer Textspalte, benachrichtigt über eine Tabellenzeile und einen Flow |
 | [`GroupDetailList/`](GroupDetailList) | `Ayonto.GroupDetailListControl` | Dataverse-Ansicht als gruppierbare, sortierbare Liste |
 
 Beide sind virtuelle React-Components auf Fluent UI v9. React und Fluent kommen als
@@ -22,7 +22,7 @@ jeweiligen README unter „Was sich geändert hat".
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
 | Bundle jetzt | 25 KiB | 14 KiB |
-| Tests | 160 | 85 |
+| Tests | 156 | 85 |
 
 ## Voraussetzungen
 
@@ -95,6 +95,33 @@ Für ein Solution-Paket siehe [Mention/README.md](Mention/README.md#in-eine-umge
 Fertige `.zip`-Dateien liegen bewusst nicht im Repository: die früheren waren an eine fremde
 Umgebung und einen Platzhalter-Publisher gebunden und ließen sich aus dem Quellstand nicht
 reproduzieren.
+
+## Abhängigkeiten und Sicherheit
+
+`npm audit` meldet in beiden Komponenten Befunde. Der Stand, geprüft am 10. September 2026:
+
+| | |
+|---|---|
+| `npm audit` | 11 (4 hoch, 7 mittel) — je Komponente dieselben |
+| `npm audit --omit=dev` | **0** |
+
+**Nichts davon steckt im ausgelieferten Bundle.** Beide Components sind
+`control-type="virtual"` und beziehen React und Fluent als Plattform-Bibliothek; webpack behandelt
+sie als Externals. Was übrig bleibt, ist der eigene Quellcode — 25 KiB bzw. 15 KiB, ohne eine
+einzige fremde Bibliothek. Alle Befunde liegen in Build- und Testwerkzeug: `pcf-scripts`,
+`pcf-start`, `vitest`.
+
+**Die verbleibenden 11 lassen sich hier nicht beheben.** `pcf-scripts` und `pcf-start` 1.51.1 —
+die aktuellen Versionen — pinnen `applicationinsights@^2` und `browser-sync@^3`, und die
+Korrekturen liegen jeweils in der nächsten Hauptversion. `npm audit` behauptet bei neun Befunden
+„fix available via `npm audit fix`"; das trifft nicht zu, der Dry-Run ändert nichts. Es braucht ein
+Release von Microsoft. Was behebbar war, ist behoben: `happy-dom` 15 → 20 hat den einzigen
+kritischen Befund (VM-Context-Escape) ausgeräumt. Der letzte behebbare — Pfad-Traversierung in
+`@vitest/mocker`, mittel — hängt an `vitest` 3 → 4; npm 10.9.7 bricht beim Auflösen mit
+`Cannot read properties of null (reading 'edgesOut')` ab, und die Umgehung würde `vite` als
+zusätzliche Abhängigkeit und ein Lockfile mit `--legacy-peer-deps` erfordern. Das ist für eine
+Lücke, die nur greift, wenn jemand die Testdateien dieses Repositories kontrolliert, der
+schlechtere Tausch. Bleibt offen, bis npm oder vitest nachziehen.
 
 ## Lizenz
 

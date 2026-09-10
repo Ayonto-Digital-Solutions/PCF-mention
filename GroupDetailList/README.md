@@ -27,7 +27,7 @@ npm run build -- --buildMode production
 npm start watch                       # Test-Harness mit Beispieldaten
 ```
 
-Deployment wie beim Mention-Control (`pac pcf push` bzw. `pac solution init` + `dotnet build`) —
+Deployment wie beim Mention-Control (`pac pcf push` bzw. das Solution-Projekt unter `solution/` + `dotnet build`) —
 siehe [../Mention/README.md](../Mention/README.md#in-eine-umgebung-deployen).
 
 ## Konfiguration

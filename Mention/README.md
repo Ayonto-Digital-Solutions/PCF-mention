@@ -2,7 +2,8 @@
 
 Ein Power Apps Component Framework (PCF) Code-Component für modellgesteuerte Apps: Man tippt `@`
 in einer Textspalte, wählt eine Dataverse-Benutzerin oder einen Dataverse-Benutzer aus der
-Vorschlagsliste und die erwähnte Person wird per E-Mail benachrichtigt.
+Vorschlagsliste und die erwähnte Person wird benachrichtigt: Das Component schreibt eine Zeile in
+die Tabelle `ayonto_mention`, ein Cloud-Flow verschickt sie.
 
 Version 2.0.0 ist eine vollständige Neuimplementierung. Der Stand von 2020 lief auf
 Tooling und APIs, die es so nicht mehr gibt — siehe [Was sich geändert hat](#was-sich-geändert-hat).
@@ -30,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 160 Tests
+npm test                              # 156 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -38,8 +39,8 @@ npm run build -- --buildMode production
 npm start watch                       # Test-Harness mit Hot Reload
 ```
 
-Der Test-Harness hat keine Dataverse-Verbindung. Die Benutzersuche und der E-Mail-Versand
-brauchen `context.webAPI` und laufen deshalb nur in einer echten Umgebung.
+Der Test-Harness hat keine Dataverse-Verbindung. Die Benutzersuche und das Schreiben der
+Erwähnungszeile brauchen `context.webAPI` und laufen deshalb nur in einer echten Umgebung.
 
 ### In eine Umgebung deployen
 
@@ -50,18 +51,23 @@ pac auth create --url https://<org>.crm4.dynamics.com
 pac pcf push --publisher-prefix <prefix>
 ```
 
-Für ein Solution-Paket (ALM):
+Für ein Solution-Paket (ALM), im Wurzelverzeichnis des Repositories — dieselben Schritte, die
+[`release.yml`](../.github/workflows/release.yml) ausführt:
 
 ```bash
-mkdir Solutions && cd Solutions
-pac solution init --publisher-name <name> --publisher-prefix <prefix>
-pac solution add-reference --path ..
+cp -r solution AyontoPcfControls && cd AyontoPcfControls
+pac solution add-reference --path ../Mention
+pac solution add-reference --path ../GroupDetailList
 dotnet build -c Release          # managed;  -c Debug erzeugt unmanaged
 ```
 
-Das Ergebnis liegt in `Solutions/bin/Release`. Fertige `.zip`-Dateien liegen bewusst **nicht**
-mehr im Repository: sie waren an eine fremde Umgebung und einen Platzhalter-Publisher (`xyz`)
-gebunden und lassen sich aus diesem Quellstand nicht reproduzieren.
+Das Solution-Projekt liegt fertig unter [`solution/`](../solution) — es enthält die Tabelle
+`ayonto_mention`. `pac solution init` legt stattdessen ein leeres Projekt an: das paketiert und
+importiert anstandslos, nur ohne Tabelle, und dann scheitert jede Erwähnung erst zur Laufzeit.
+
+Das Ergebnis liegt in `AyontoPcfControls/bin/Release`. Fertige `.zip`-Dateien liegen bewusst
+**nicht** mehr im Repository: sie waren an eine fremde Umgebung und einen Platzhalter-Publisher
+(`xyz`) gebunden und lassen sich aus diesem Quellstand nicht reproduzieren.
 
 ## Konfiguration
 
@@ -70,9 +76,9 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | Eigenschaft | Pflicht | Bedeutung |
 |---|---|---|
 | `field` | ja | Die gebundene Textspalte. `SingleLine.Text`, `SingleLine.TextArea` oder `Multiple`. |
-| `entityId` | nein | An die Primärschlüsselspalte der Tabelle binden (z. B. `accountid`). |
-| `entityName` | nein | Logischer Tabellenname, z. B. `account`. Als statischer Wert setzbar. |
-| `sendEmail` | ja | `Ja` (Standard) schreibt für jede Erwähnung eine Zeile in die Benachrichtigungstabelle, `Nein` schreibt nur den Text. |
+| `entityId` | für den Datensatzbezug | **An die Primärschlüsselspalte der Tabelle binden** (z. B. `accountid`). |
+| `entityName` | für den Datensatzbezug | Logischer Tabellenname, z. B. `account`. Als statischer Wert setzbar oder an `entitylogicalname` gebunden. |
+| `sendEmail` | ja | `Ja` (Standard) schreibt je erwähnter Person eine Zeile in die Benachrichtigungstabelle, `Nein` schreibt nur den Text. |
 | `senderUserId` | nein | GUID des absendenden Benutzers. Ohne Angabe der angemeldete Benutzer. |
 | `emailSubject` | nein | Betreff der Benachrichtigung. |
 | `emailContent` | nein | Text der Benachrichtigung. Der Datensatz-Link wird angehängt. |
@@ -80,32 +86,51 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
 
-**Den Datensatz muss man in der Regel nicht konfigurieren.** In modellgesteuerten Apps meldet der
-Host den Datensatz selbst (`context.mode.contextInfo`), und das Component nimmt ihn von dort. Die
-beiden Eigenschaften bleiben als Übersteuerung: Wo sie gesetzt sind, gewinnen sie — nützlich für
-Hosts, die nichts melden, und für einen bewusst abweichenden Bezug. Der Formular-Designer bietet
-für eine Texteigenschaft ohnehin keine Primärschlüsselspalte an, weshalb die Eigenschaften allein
-kein gangbarer Weg waren.
+**Den Datensatz muss man konfigurieren.** Ein Code-Component hat keinen Formularkontext, deshalb
+ist der dokumentierte Weg, ihm den Datensatz als Eigenschaft zu übergeben: `entityId` an die
+Primärschlüsselspalte binden, `entityName` auf den logischen Tabellennamen setzen. So steht es in
+der [FAQ zum Component Framework][faq], und der Formular-Designer bietet die Primärschlüsselspalte
+dafür an.
 
-Ohne Datensatzbezug — weder vom Host noch konfiguriert — funktioniert das Component weiter, die
-Benachrichtigung wird dann nur nicht mit dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen
-Deep-Link.
+Zusätzlich liest das Component `context.mode.contextInfo`, falls die beiden Eigenschaften leer
+sind. Das steht in **keiner** offiziellen Referenz — weder in der
+[Context-Dokumentation][context] noch in den Typen von `@types/powerapps-component-framework`
+1.3.18, weshalb es im Code einen Cast braucht. Es ist ein Notnagel für Hosts, die es trotzdem
+melden, keine unterstützte Konfiguration: Wer sich darauf verlässt, hat keine Zusage, dass es in
+der nächsten Version noch da ist. Was im Panel steht, gewinnt ohnehin.
+
+Ohne Datensatzbezug funktioniert das Component weiter, die Benachrichtigung wird dann nur nicht mit
+dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-Link.
+
+[faq]: https://learn.microsoft.com/power-apps/developer/component-framework/faq#how-can-i-access-the-record-id-or-table-name
+[context]: https://learn.microsoft.com/power-apps/developer/component-framework/reference/context
 
 ## Wie die Benachrichtigung funktioniert
 
 1. Eine Person wird aus der Vorschlagsliste gewählt; `@Vorname Nachname` wird in den Text geschrieben.
-2. Nach der Karenzzeit legt das Component über `context.webAPI.createRecord` eine Zeile in der
-   Tabelle **`ayonto_mention`** an — mit Empfänger, Absender, Betreff, Text, dem Datensatz und
-   einem fertigen Link darauf.
+2. Nach der Karenzzeit legt das Component über `context.webAPI.createRecord` eine Zeile **je
+   erwähnter Person** in der Tabelle **`ayonto_mention`** an — mit Empfänger, Absender, Betreff,
+   Text, dem Datensatz und einem fertigen Link darauf.
 3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
    auf `Sent` oder `Failed` zurück.
 
 Benachrichtigt wird die Person, die in der Vorschlagsliste gewählt wurde — nicht der Name, der
 dabei in den Text geschrieben wird. Das Component merkt sich zu jeder eingefügten Erwähnung deren
-Benutzer-ID und führt sie beim Tippen mit. Zwei gleichnamige Personen sind damit zwei Erwähnungen:
-wer eine davon vor Ablauf der Karenzzeit wieder löscht, verhindert genau ihre Zeile, die des
-Namensvetters bleibt.
+Benutzer-ID und führt sie beim Tippen mit.
+
+**Entdoppelt wird über die Person, nicht über das Vorkommen im Text.** Wer im selben Text dreimal
+erwähnt wird, bekommt eine Zeile, nicht drei; eine der drei Erwähnungen zu löschen ändert nichts.
+Eine zweite Zeile entsteht erst, wenn kein Vorkommen dieser Person mehr im Text steht und sie
+danach erneut gewählt wird. Das gilt, **solange das Formular geöffnet ist** — die Entdopplung lebt
+im Component, nicht in der Tabelle. Wer den Datensatz neu lädt und dieselbe Person noch einmal
+erwähnt, erzeugt eine zweite Zeile; ein Flow, der doppelte Benachrichtigungen ausschließen muss,
+prüft das selbst.
+
+Zwei gleichnamige Personen sind zwei verschiedene Empfänger, auch wenn im Text zweimal dasselbe
+steht: Wer eine der beiden Erwähnungen löscht, verhindert genau deren Zeile, die des Namensvetters
+bleibt. Welche der beiden gelöscht wurde, liest das Component an der Änderung ab — der Text danach
+sieht in beiden Fällen gleich aus.
 
 Dataverse wird bewusst **nicht** gebeten zu senden. Eine Umgebung, deren Postfächer nicht auf
 serverseitige Synchronisierung eingerichtet sind, würde nur Entwürfe ansammeln, und die meisten
@@ -161,9 +186,11 @@ Das Component blendet die Vorschlagsliste aus und sagt im UI warum, wenn:
 * **keine Verbindung besteht** (`context.client.isOffline()` bzw. `isNetworkAvailable()`) — die
   Benutzersuche braucht Dataverse;
 * **der Datensatz noch nie gespeichert wurde** und Benachrichtigungen aktiv sind. Ohne
-  Datensatz-ID zeigt die Mail ins Leere, und die Erwähnung selbst ist noch nicht gespeichert.
-  Das greift nur, wenn `entityName` gebunden ist — sind beide Datensatz-Eigenschaften leer, ist
-  das eine bewusste Konfiguration ohne Datensatzbezug und Benachrichtigungen laufen weiter.
+  Datensatz-ID führt der Link in der Benachrichtigung ins Leere, und die Erwähnung selbst ist noch
+  nicht gespeichert. Das greift nur, wenn `entityName` gebunden ist — sind beide
+  Datensatz-Eigenschaften leer, kann das Component den Fall nicht erkennen und benachrichtigt
+  weiter. Das ist fast immer ein Konfigurationsfehler und keine Absicht: Es bedeutet, dass der
+  Hinweis ausbleibt, der genau darauf hinweisen würde.
 
 Getippt werden darf in beiden Fällen weiter; nur die Auswahlliste bleibt zu.
 
@@ -188,14 +215,14 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | `pcf-scripts` 1.3.6 (Juli 2020), webpack 4, TypeScript 3.9 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
 | `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (25 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
-| `Xrm.Page.data.entity.getId()` / `getEntityName()` | `context.mode.contextInfo`, mit `entityId` / `entityName` als Übersteuerung |
+| `Xrm.Page.data.entity.getId()` / `getEntityName()` | gebundene `entityId` / `entityName`; `context.mode.contextInfo` nur als undokumentierter Notnagel |
 | `Xrm.Page.context.getClientUrl()` / `getUserId()` | `orgUrl`-Eigenschaft bzw. `context.userSettings.userId` |
 | `Xrm.WebApi.online.retrieveMultipleRecords` / `.execute` | `context.webAPI` + `<uses-feature name="WebAPI">`; benachrichtigt wird über eine Tabellenzeile und einen Flow |
 | `Xrm.Utility.alertDialog` | Inline-Hinweis im Component |
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 160 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 156 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
@@ -223,8 +250,14 @@ ein neuer Component-Name erforderlich. Bestehende Formulare müssen also neu kon
 * Erwähnungen werden als Klartext `@Vorname Nachname` gespeichert, nicht als Referenz. Wer
   benachrichtigt wird, steht deshalb nur so lange fest, wie das Feld offen ist; nach dem Neuladen
   lässt sich ein Name, den sich zwei Personen teilen, nicht mehr auflösen und bleibt ohne Link.
-* Die Benachrichtigung wird beim Einfügen der Erwähnung ausgelöst, nicht beim Speichern des
-  Datensatzes. Ein Code-Component erfährt nichts vom Speichervorgang des Formulars.
+* Zwei gleichnamige Erwähnungen, die **unmittelbar nebeneinander** stehen, sind der eine Fall, den
+  nichts entscheiden kann: Es ist dieselbe Änderung, ob man die erste oder die zweite löscht. Dann
+  gilt die spätere als die gelöschte.
+* Die Benachrichtigung wird beim **ersten** Einfügen einer Erwähnung dieser Person ausgelöst, nicht
+  beim Speichern des Datensatzes und nicht bei jedem weiteren Vorkommen. Ein Code-Component erfährt
+  nichts vom Speichervorgang des Formulars — auch nicht davon, dass er abgebrochen wurde: Ein
+  Formular, das innerhalb der Karenzzeit verworfen wird, schickt die Benachrichtigung trotzdem.
+  Nur die Erwähnung aus dem Text zu löschen verhindert sie.
 
 ## Aufbau
 
@@ -233,22 +266,22 @@ Mention/
 ├─ MentionControl/
 │  ├─ index.ts                          ReactControl-Lebenszyklus, Verdrahtung
 │  ├─ ControlManifest.Input.xml
-│  ├─ components/MentionEditor.tsx      Textarea, @-Erkennung, Tastatursteuerung
+│  ├─ components/MentionEditor.tsx      Textarea, @-Erkennung, Tastatur, Link-Overlay
 │  ├─ components/SuggestionList.tsx     Vorschlagsliste (role="listbox")
 │  ├─ services/UserSearchService.ts     Benutzersuche über context.webAPI
-│  ├─ services/EmailNotificationService.ts  E-Mail anlegen und senden
+│  ├─ services/MentionLogService.ts     Erwähnungszeile schreiben, Erwähnungen lesen
 │  ├─ services/NotificationScheduler.ts Karenzzeit und Entdopplung
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
 │  ├─ utils/availability.ts             Wann Erwähnen verfügbar ist
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
-   ├─ MentionControl.test.ts            Wertabgleich und Verfügbarkeit am Control
+   ├─ MentionControl.test.ts            Wert, Verfügbarkeit, Datensatzbezug, Identität
    ├─ mentionText.test.ts               Reine Funktionen
    ├─ availability.test.ts              Wahrheitstabelle der Verfügbarkeit
    ├─ NotificationScheduler.test.ts     Karenzzeit, Rücknahme, Entdopplung
    ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
-   ├─ EmailNotificationService.test.ts  Payload, Verknüpfung, Versand
+   ├─ MentionLogService.test.ts         Zeileninhalt, Spaltenpräfix, Rücklesen
    └─ MentionEditor.test.tsx            Editor-Verhalten
 ```
