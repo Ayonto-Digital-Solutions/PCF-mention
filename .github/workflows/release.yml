@@ -1,0 +1,163 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Solution version, for example 2.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PUBLISHER_NAME: Ayonto
+  PUBLISHER_PREFIX: ayonto
+  SOLUTION_DIR: AyontoPcfControls
+
+jobs:
+  solution:
+    name: Build and publish the Dataverse solution
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The pac CLI ships as a .NET 10 tool.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Work out the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          case "${version}" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "expected a version like 2.0.0, got '${version}'" >&2; exit 1 ;;
+          esac
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Building solution version ${version}"
+
+      - name: Install the Power Platform CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # Dataverse only picks up a changed component when the component's own version moves;
+      # bumping the solution alone leaves the old bundle in place.
+      - name: Stamp the component versions
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - "$VERSION" Mention/MentionControl/ControlManifest.Input.xml \
+            GroupDetailList/GroupDetailListControl/ControlManifest.Input.xml <<'PY'
+          import re, sys
+          version, *paths = sys.argv[1:]
+          for path in paths:
+              text = open(path, encoding="utf-8").read()
+              patched, count = re.subn(
+                  r'(<control\b[^>]*?\bversion=")[^"]*(")',
+                  lambda m: m.group(1) + version + m.group(2),
+                  text,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit(f"no control version attribute in {path}")
+              open(path, "w", encoding="utf-8").write(patched)
+              print(f"{path}: control version set to {version}")
+          PY
+
+      # A tag push does not run ci.yml, so the same gates run here: a release must never be cut
+      # from a commit that would have failed the pull request build.
+      - name: Check and build the code components
+        run: |
+          for control in Mention GroupDetailList; do
+            echo "::group::${control}"
+            (
+              cd "${control}"
+              npm ci
+              npm run refreshTypes
+              npm run lint
+              npm run typecheck
+              npm test
+              npm run build -- --buildMode production
+            )
+            echo "::endgroup::"
+          done
+
+      - name: Create the solution project
+        run: |
+          mkdir -p "${SOLUTION_DIR}"
+          cd "${SOLUTION_DIR}"
+          pac solution init --publisher-name "${PUBLISHER_NAME}" --publisher-prefix "${PUBLISHER_PREFIX}"
+          pac solution add-reference --path ../Mention
+          pac solution add-reference --path ../GroupDetailList
+
+      # pac solution version only moves build and revision, so the release version is written
+      # into the generated Solution.xml directly.
+      - name: Stamp the solution version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - "$SOLUTION_DIR/src/Other/Solution.xml" "${VERSION}.0" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          path, version = sys.argv[1], sys.argv[2]
+          tree = ET.parse(path)
+          node = tree.find(".//Version")
+          if node is None:
+              raise SystemExit(f"no <Version> element in {path}")
+          node.text = version
+          tree.write(path, encoding="utf-8", xml_declaration=True)
+          print(f"{path}: version set to {version}")
+          PY
+
+      - name: Pack the solution
+        run: |
+          cd "${SOLUTION_DIR}"
+          dotnet build -c Release   # managed
+          dotnet build -c Debug     # unmanaged
+
+      - name: Collect the artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          version="${VERSION}"
+          mkdir -p dist
+          managed=$(find "${SOLUTION_DIR}/bin/Release" -name '*.zip' | head -1)
+          unmanaged=$(find "${SOLUTION_DIR}/bin/Debug" -name '*.zip' | head -1)
+          if [ -z "${managed}" ] || [ -z "${unmanaged}" ]; then
+            echo "solution zips were not produced" >&2
+            find "${SOLUTION_DIR}/bin" -type f >&2 || true
+            exit 1
+          fi
+          cp "${managed}"   "dist/AyontoPcfControls_${version}_managed.zip"
+          cp "${unmanaged}" "dist/AyontoPcfControls_${version}.zip"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solution-${{ steps.version.outputs.version }}
+          path: dist/*.zip
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/*.zip --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/*.zip \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi

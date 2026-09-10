@@ -1,21 +1,57 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="xyz" constructor="GroupDetailListControl" version="0.0.1" display-name-key="GroupDetailListControl" description-key="GroupDetailListControl description" control-type="standard">
-    <data-set name="listDataSet" display-name-key="List Dataset" cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFindSearch:true">
+  <!--
+    Virtual (React) dataset component. React and Fluent come from the platform through the
+    platform-library nodes, so they are not part of the bundle.
+    https://learn.microsoft.com/power-apps/developer/component-framework/react-controls-platform-libraries
+  -->
+  <control namespace="Ayonto"
+           constructor="GroupDetailListControl"
+           version="2.0.0"
+           display-name-key="GroupDetailList_Name"
+           description-key="GroupDetailList_Desc"
+           control-type="virtual">
+
+    <external-service-usage enabled="false">
+    </external-service-usage>
+
+    <data-set name="listDataSet"
+              display-name-key="DataSet_Name"
+              description-key="DataSet_Desc"
+              cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true">
     </data-set>
+
+    <property name="pageSize"
+              display-name-key="PageSize_Name"
+              description-key="PageSize_Desc"
+              of-type="Whole.None"
+              usage="input"
+              required="false"
+              default-value="50" />
+
+    <property name="enableGrouping"
+              display-name-key="EnableGrouping_Name"
+              description-key="EnableGrouping_Desc"
+              of-type="Enum"
+              usage="input"
+              required="true"
+              default-value="0">
+      <value name="Yes" display-name-key="EnableGrouping_Yes" description-key="EnableGrouping_Yes_Desc">0</value>
+      <value name="No" display-name-key="EnableGrouping_No" description-key="EnableGrouping_No_Desc">1</value>
+    </property>
+
     <resources>
       <code path="index.ts" order="1" />
-      <css path="css/ListControl.css" order="1" />
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
+      <resx path="strings/GroupDetailListControl.1033.resx" version="2.0.0" />
+      <resx path="strings/GroupDetailListControl.1031.resx" version="2.0.0" />
     </resources>
-    <feature-usage>
-      <uses-feature name="Device.captureAudio" required="true" />
-      <uses-feature name="Device.captureImage" required="true" />
-      <uses-feature name="Device.captureVideo" required="true" />
-      <uses-feature name="Device.getBarcodeValue" required="true" />
-      <uses-feature name="Device.getCurrentPosition" required="true" />
-      <uses-feature name="Device.pickFile" required="true" />
-      <uses-feature name="Utility" required="true" />
-      <uses-feature name="WebAPI" required="true" />
-    </feature-usage>
+
+    <!--
+      No feature-usage element: the component reads its data through the dataset property and
+      navigates with the dataset's own openDatasetItem. It needs neither the WebAPI nor any
+      device capability, and declaring features it does not use would ask users for nothing.
+    -->
   </control>
 </manifest>

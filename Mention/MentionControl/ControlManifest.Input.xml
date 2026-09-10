@@ -1,25 +1,120 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="xyz" constructor="MentionControl" version="0.0.1" display-name-key="Mention Control" description-key="Use @ to Mention People" control-type="standard">
-    <!-- property node identifies a specific, configurable piece of data that the control expects from CDS -->
-    <property name="field" display-name-key="Field" description-key="CRM Field Logical Name" of-type-group="text" usage="bound" required="true" /> 
-    <property name="sendEmail" display-name-key="Send Email?" description-key="Notify Mentioned User through Email." of-type="Enum" usage="input" required="true" default-value="0">
-      <value name="Yes" display-name-key="Yes" description-key="Yes,Notify User">0</value>
-      <value name="No" display-name-key="No" description-key="Do Not Notify User">1</value>
+  <!--
+    Virtual (React) code component. The React and Fluent runtimes are supplied by the
+    platform through the platform-library nodes below, so they are not part of the bundle.
+    https://learn.microsoft.com/power-apps/developer/component-framework/react-controls-platform-libraries
+  -->
+  <control namespace="Ayonto"
+           constructor="MentionControl"
+           version="2.0.0"
+           display-name-key="MentionControl_Name"
+           description-key="MentionControl_Desc"
+           control-type="virtual">
+
+    <!--
+      The component only talks to the Dataverse Web API of its own environment,
+      so no external domains are used and the component is not classified as premium.
+    -->
+    <external-service-usage enabled="false">
+    </external-service-usage>
+
+    <!-- The text column the component is bound to. -->
+    <property name="field"
+              display-name-key="Field_Name"
+              description-key="Field_Desc"
+              of-type-group="text"
+              usage="bound"
+              required="true" />
+
+    <!--
+      Code components have no access to the form context, so the record they sit on has to be
+      handed to them as configuration. Bind entityId to the primary key column of the table and
+      entityName to a static value (or to the entitylogicalname column).
+      https://learn.microsoft.com/power-apps/developer/component-framework/faq#how-can-i-access-the-record-id-or-table-name
+    -->
+    <property name="entityId"
+              display-name-key="EntityId_Name"
+              description-key="EntityId_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+    <property name="entityName"
+              display-name-key="EntityName_Name"
+              description-key="EntityName_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="sendEmail"
+              display-name-key="SendEmail_Name"
+              description-key="SendEmail_Desc"
+              of-type="Enum"
+              usage="input"
+              required="true"
+              default-value="0">
+      <value name="Yes" display-name-key="SendEmail_Yes" description-key="SendEmail_Yes_Desc">0</value>
+      <value name="No" display-name-key="SendEmail_No" description-key="SendEmail_No_Desc">1</value>
     </property>
-    <property name="emailFromUserGuid" display-name-key="From Email User Guid" description-key="Provide GUID of the User of which Email will be sent,if not provided, Email will be sent through Logged in User" of-type-group="text" usage="input" required="false"/>
-    <property name="emailSubject" display-name-key="Subject" description-key="Provide Subject of the Email" of-type-group="text" usage="input" required="false"/>
-    <property name="emailContent" display-name-key="Description" description-key="Provide Description of the Email, record URL will be suffixed at the end" of-type-group="text" usage="input" required="false"/>
+
+    <property name="senderUserId"
+              display-name-key="SenderUserId_Name"
+              description-key="SenderUserId_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="emailSubject"
+              display-name-key="EmailSubject_Name"
+              description-key="EmailSubject_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="emailContent"
+              display-name-key="EmailContent_Name"
+              description-key="EmailContent_Desc"
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!--
+      Base URL of the environment, used to build the deep link to the record inside the
+      notification e-mail. Accessing the browser Window object from a code component is not
+      supported, so the URL cannot be derived at runtime and has to be configured.
+      https://learn.microsoft.com/power-apps/developer/component-framework/faq#can-i-access-window-object-from-the-component
+    -->
+    <property name="orgUrl"
+              display-name-key="OrgUrl_Name"
+              description-key="OrgUrl_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="appId"
+              display-name-key="AppId_Name"
+              description-key="AppId_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <type-group name="text">
       <type>Multiple</type>
       <type>SingleLine.Text</type>
       <type>SingleLine.TextArea</type>
     </type-group>
+
     <resources>
-      <code path="index.ts" order="1"/>
+      <code path="index.ts" order="1" />
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.46.2" />
+      <resx path="strings/MentionControl.1033.resx" version="2.0.0" />
+      <resx path="strings/MentionControl.1031.resx" version="2.0.0" />
     </resources>
+
     <feature-usage>
       <uses-feature name="WebAPI" required="true" />
-    </feature-usage>  
+      <uses-feature name="Utility" required="true" />
+    </feature-usage>
   </control>
 </manifest>

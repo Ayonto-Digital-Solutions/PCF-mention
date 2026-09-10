@@ -12,3 +12,8 @@
 # msbuild output directories
 /bin
 /obj
+*.binlog
+
+# editors / os
+/.vs
+.DS_Store
