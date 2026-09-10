@@ -33,6 +33,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 	private columns: GridColumn[] = [];
 	private rows: GridRow[] = [];
 	private initialSelectedIds: string[] = [];
+	private groupColumnKey: string | undefined;
 	private appliedPageSize = 0;
 	private isDisposed = false;
 
@@ -122,7 +123,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 			return;
 		}
 		const dataset = this.dataset;
-		const sorting = nextSorting(dataset.sorting, columnKey);
+		const sorting = nextSorting(dataset.sorting, columnKey, this.groupColumnKey);
 		if (Array.isArray(dataset.sorting)) {
 			// The framework watches the array it handed out, so it is replaced in place.
 			dataset.sorting.length = 0;
@@ -141,6 +142,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		if (this.isDisposed) {
 			return;
 		}
+		this.groupColumnKey = columnKey;
 		if (columnKey && sortDirectionOf(this.dataset.sorting, columnKey) === undefined) {
 			this.onSort(columnKey);
 		}
@@ -176,12 +178,14 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		}
 	};
 
+	// Both take loadOnlyNewPage: without it the framework returns the whole range it has loaded
+	// so far, so the grid would accumulate every page instead of turning to the next one.
 	private readonly onPreviousPage = (): void => {
-		this.dataset.paging?.loadPreviousPage();
+		this.dataset.paging?.loadPreviousPage(true);
 	};
 
 	private readonly onNextPage = (): void => {
-		this.dataset.paging?.loadNextPage();
+		this.dataset.paging?.loadNextPage(true);
 	};
 
 	private resource(key: string): string {

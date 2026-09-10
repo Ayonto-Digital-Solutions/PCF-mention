@@ -164,10 +164,23 @@ export class EmailNotificationService {
 		);
 
 		if (!response.ok) {
+			// Dataverse explains the refusal in the body — an unapproved mailbox, a missing
+			// "Send Email as Another User" privilege. Without it the status alone says nothing.
+			const detail = await this.readError(response);
 			throw new NotificationError(
-				`SendEmail failed with HTTP ${response.status.toString()} ${response.statusText}`,
+				`SendEmail failed with HTTP ${response.status.toString()} ${response.statusText}${detail}`,
 				emailId
 			);
+		}
+	}
+
+	private async readError(response: Response): Promise<string> {
+		try {
+			const body = (await response.json()) as { error?: { message?: string } };
+			const message = body.error?.message;
+			return message ? `: ${message}` : "";
+		} catch {
+			return "";
 		}
 	}
 }

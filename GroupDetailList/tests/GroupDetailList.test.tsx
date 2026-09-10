@@ -191,6 +191,29 @@ describe("GroupDetailList", () => {
 		expect(onSelectionChange).toHaveBeenLastCalledWith(["1"]);
 	});
 
+	it("hands the selection back to the dataset after a refresh clears it", () => {
+		// Every sort and page turn goes through refresh(), which wipes the dataset's own
+		// selection. Without re-reporting, the command bar greys out while ticks remain.
+		const { rerender, onSelectionChange } = setup({ initialSelectedIds: ["1"] });
+		onSelectionChange.mockClear();
+
+		// Same records, new array — what a refresh looks like from here.
+		rerender(<GroupDetailList {...lastProps!} rows={[...ROWS]} />);
+
+		expect(onSelectionChange).toHaveBeenCalledWith(["1"]);
+		expect(screen.getByText("1 selected")).toBeTruthy();
+	});
+
+	it("does not offer a column for grouping that the view forbids sorting", () => {
+		// Grouping sorts by the column, so an unsortable column cannot be grouped either.
+		setup();
+		fireEvent.click(screen.getByRole("combobox"));
+
+		const offered = screen.getAllByRole("option").map((option) => option.textContent);
+		expect(offered).not.toContain("E-mail");
+		expect(offered).toContain("City");
+	});
+
 	it("pages forward and backward only where the dataset allows it", () => {
 		const { onNextPage, onPreviousPage } = setup();
 		const previous = screen.getByRole("button", { name: "Previous" });
@@ -251,7 +274,7 @@ describe("GroupDetailList", () => {
 
 		expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
 			"No grouping",
-			...COLUMNS.map((column) => column.label),
+			...COLUMNS.filter((column) => column.sortable).map((column) => column.label),
 		]);
 	});
 });

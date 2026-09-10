@@ -154,6 +154,11 @@ describe("sorting", () => {
 		expect(sortDirectionOf(ascending, "name")).toBeUndefined();
 	});
 
+	it("treats the framework's 'None' direction as unsorted, not as ascending", () => {
+		const none = [{ name: "city", sortDirection: -1 }] as unknown as SortStatus[];
+		expect(sortDirectionOf(none, "city")).toBeUndefined();
+	});
+
 	it("flips the direction of the column that is already sorted", () => {
 		expect(nextSorting(ascending, "city")).toEqual([{ name: "city", sortDirection: 1 }]);
 		expect(nextSorting(descending, "city")).toEqual([{ name: "city", sortDirection: 0 }]);
@@ -165,6 +170,25 @@ describe("sorting", () => {
 
 	it("replaces the sort rather than adding to it", () => {
 		expect(nextSorting([...ascending, { name: "name", sortDirection: 0 }], "city")).toHaveLength(1);
+	});
+
+	it("keeps the group column leading when another column is sorted", () => {
+		// Grouping chunks consecutive rows, so the group column has to stay the primary sort.
+		expect(nextSorting(ascending, "name", "city")).toEqual([
+			{ name: "city", sortDirection: 0 },
+			{ name: "name", sortDirection: 0 },
+		]);
+	});
+
+	it("keeps the group column's own direction while sorting another column", () => {
+		expect(nextSorting(descending, "name", "city")).toEqual([
+			{ name: "city", sortDirection: 1 },
+			{ name: "name", sortDirection: 0 },
+		]);
+	});
+
+	it("does not repeat the group column when it is the one being sorted", () => {
+		expect(nextSorting(ascending, "city", "city")).toEqual([{ name: "city", sortDirection: 1 }]);
 	});
 });
 

@@ -191,8 +191,42 @@ describe("EmailNotificationService", () => {
 		expect(JSON.parse(init.body as string)).toEqual({ IssueSend: true });
 	});
 
+	it("puts the reason Dataverse gave into the error", async () => {
+		fetchMock.mockResolvedValue({
+			ok: false,
+			status: 403,
+			statusText: "Forbidden",
+			json: () => Promise.resolve({ error: { message: "The mailbox is not approved." } }),
+		});
+
+		await new EmailNotificationService(makeWebApi(), makeUtils())
+			.notify(baseRequest)
+			.catch((error: NotificationError) => {
+				expect(error.message).toContain("The mailbox is not approved.");
+			});
+		expect.assertions(1);
+	});
+
+	it("still reports the failure when the body cannot be read", async () => {
+		fetchMock.mockResolvedValue({
+			ok: false,
+			status: 500,
+			statusText: "Server Error",
+			json: () => Promise.reject(new Error("not json")),
+		});
+
+		await expect(
+			new EmailNotificationService(makeWebApi(), makeUtils()).notify(baseRequest)
+		).rejects.toThrow("500");
+	});
+
 	it("reports a rejected send together with the id of the draft it left behind", async () => {
-		fetchMock.mockResolvedValue({ ok: false, status: 403, statusText: "Forbidden" });
+		fetchMock.mockResolvedValue({
+			ok: false,
+			status: 403,
+			statusText: "Forbidden",
+			json: () => Promise.resolve({}),
+		});
 
 		await expect(
 			new EmailNotificationService(makeWebApi(), makeUtils()).notify(baseRequest)

@@ -19,9 +19,13 @@ interface SystemUserRecord {
 	internalemailaddress?: string;
 	jobtitle?: string;
 	applicationid?: string | null;
+	accessmode?: number | null;
 }
 
-const SELECT = "systemuserid,fullname,internalemailaddress,jobtitle,applicationid";
+const SELECT = "systemuserid,fullname,internalemailaddress,jobtitle,applicationid,accessmode";
+
+/** Access modes that cannot hold a mailbox: 3 = Support User, 4 = Non-interactive. */
+const UNMAILABLE_ACCESS_MODES = new Set([3, 4]);
 
 /**
  * Looks up enabled Dataverse users through the supported context.webAPI surface.
@@ -42,7 +46,11 @@ export class UserSearchService {
 		const filters = ["isdisabled eq false"];
 		const trimmed = term.trim();
 		if (trimmed.length > 0) {
-			filters.push(`contains(fullname,'${escapeODataLiteral(trimmed)}')`);
+			// The literal is escaped for OData and then encoded for the URL. Without the encoding
+			// an "&" or a "?" in a name would cut the query string in half, and a typed "%27"
+			// would survive as a quote and undo the escaping.
+			const literal = encodeURIComponent(escapeODataLiteral(trimmed));
+			filters.push(`contains(fullname,'${literal}')`);
 		}
 
 		// One more than the page size, so a full page can be told apart from a truncated result.
@@ -65,8 +73,8 @@ export class UserSearchService {
 			const id = entity.systemuserid;
 			const name = entity.fullname;
 
-			// Application (service) users have an applicationid and cannot receive mail.
-			if (!id || !name || entity.applicationid) {
+			// Application users and the built-in system accounts have no mailbox to write to.
+			if (!id || !name || entity.applicationid || UNMAILABLE_ACCESS_MODES.has(entity.accessmode ?? 0)) {
 				continue;
 			}
 

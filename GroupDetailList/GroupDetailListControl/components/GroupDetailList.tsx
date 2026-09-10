@@ -107,15 +107,25 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	);
 	const [groupColumnKey, setGroupColumnKey] = React.useState<string | undefined>(undefined);
 
-	// Records that left the loaded page cannot stay selected, or the header checkbox and the
-	// count would describe rows nobody can see.
+	const reportedFor = React.useRef<readonly GridRow[] | undefined>(undefined);
+
+	// Two things happen when a new set of rows arrives. Records that left the page cannot stay
+	// selected, or the header checkbox and the count would describe rows nobody can see. And a
+	// refresh — which every sort and page turn goes through — clears the dataset's own selection,
+	// so what survives has to be handed back to it or the command bar goes grey while the grid
+	// still shows ticks.
 	React.useEffect(() => {
+		if (reportedFor.current === rows) {
+			return;
+		}
+		reportedFor.current = rows;
+
 		const onPage = new Set(rows.map((row) => row.id));
 		const kept = [...selected].filter((id) => onPage.has(id));
 		if (kept.length !== selected.size) {
 			setSelected(new Set(kept));
-			onSelectionChange(kept);
 		}
+		onSelectionChange(kept);
 	}, [rows, selected, onSelectionChange]);
 
 	const commitSelection = React.useCallback(
@@ -205,11 +215,13 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 							<Option key={NO_GROUPING} value={NO_GROUPING}>
 								{strings.noGrouping}
 							</Option>
-							{columns.map((column) => (
-								<Option key={column.key} value={column.key}>
-									{column.label}
-								</Option>
-							))}
+							{columns
+								.filter((column) => column.sortable)
+								.map((column) => (
+									<Option key={column.key} value={column.key}>
+										{column.label}
+									</Option>
+								))}
 						</Dropdown>
 						{props.isLoading && rows.length > 0 ? <Spinner size="tiny" /> : null}
 					</Toolbar>

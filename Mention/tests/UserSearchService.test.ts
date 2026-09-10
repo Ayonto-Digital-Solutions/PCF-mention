@@ -49,7 +49,35 @@ describe("UserSearchService", () => {
 		const recorded: Recorded[] = [];
 		await new UserSearchService(makeWebApi([], recorded)).search("O'Brien");
 
+		// Doubling is the OData escape; encodeURIComponent deliberately leaves a quote alone,
+		// and a doubled quote inside the literal is unambiguous.
 		expect(recorded[0].options).toContain("contains(fullname,'O''Brien')");
+	});
+
+	const filterLiteral = (options: string) =>
+		/contains\(fullname,'([^']*(?:''[^']*)*)'\)/.exec(options)?.[1] ?? "";
+
+	it("encodes a term that would otherwise cut the query string in half", async () => {
+		const recorded: Recorded[] = [];
+		await new UserSearchService(makeWebApi([], recorded)).search("Anna &");
+
+		// A raw "&" would start a new query parameter and truncate the filter.
+		expect(filterLiteral(recorded[0].options)).toBe("Anna%20%26");
+	});
+
+	it("encodes characters that would otherwise be read as query syntax", async () => {
+		const recorded: Recorded[] = [];
+		await new UserSearchService(makeWebApi([], recorded)).search("a?b=c");
+
+		expect(filterLiteral(recorded[0].options)).toBe("a%3Fb%3Dc");
+	});
+
+	it("does not let a typed percent sequence turn back into a quote", async () => {
+		const recorded: Recorded[] = [];
+		await new UserSearchService(makeWebApi([], recorded)).search("%27 or 1 eq 1");
+
+		// %2527 decodes to the text "%27", not to a quote that would end the literal.
+		expect(filterLiteral(recorded[0].options)).toBe("%2527%20or%201%20eq%201");
 	});
 
 	it("omits the filter for an empty term, listing the first users instead", async () => {
@@ -66,6 +94,26 @@ describe("UserSearchService", () => {
 		expect(users).toEqual([
 			{ id: "u1", name: "Anna Berger", email: "anna@contoso.com", jobTitle: "Sales Manager" },
 		]);
+	});
+
+	it("leaves out the built-in accounts that have no mailbox", async () => {
+		const { users } = await new UserSearchService(
+			makeWebApi([
+				USER(),
+				USER({ systemuserid: "sup", fullname: "SUPPORT USER", accessmode: 3 }),
+				USER({ systemuserid: "int", fullname: "INTEGRATION", accessmode: 4 }),
+			])
+		).search("");
+
+		expect(users.map((user) => user.id)).toEqual(["u1"]);
+	});
+
+	it("keeps ordinary and administrative users", async () => {
+		const { users } = await new UserSearchService(
+			makeWebApi([USER({ accessmode: 0 }), USER({ systemuserid: "u2", accessmode: 1 })])
+		).search("");
+
+		expect(users.map((user) => user.id)).toEqual(["u1", "u2"]);
 	});
 
 	it("leaves out application users, which cannot receive mail", async () => {

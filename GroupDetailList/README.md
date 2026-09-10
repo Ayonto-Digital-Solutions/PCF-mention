@@ -20,7 +20,7 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 
 ```bash
 npm install
-npm test                              # 48 Tests
+npm test                              # 54 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -45,7 +45,9 @@ fasst anschließend aufeinanderfolgende Zeilen mit gleichem Wert zu Gruppen zusa
 serverseitige Sortierung würde derselbe Wert über Seitengrenzen hinweg in mehreren Gruppen landen.
 
 **Sortieren.** Ein Klick auf eine Spaltenüberschrift setzt die Sortierung des Datasets und lädt
-neu — es wird also die gesamte Ansicht sortiert, nicht nur die geladene Seite.
+neu — es wird also die gesamte Ansicht sortiert, nicht nur die geladene Seite. Ist eine
+Gruppierung aktiv, bleibt die Gruppenspalte dabei führende Sortierspalte; sonst würden die
+Gruppen beim Sortieren nach einer anderen Spalte auseinanderfallen.
 
 **Auswählen.** Die Auswahl gehört der Komponente und wird über `setSelectedRecordIds` an das
 Dataset gemeldet, damit Befehle in der Command-Bar dieselbe Menge sehen. Datensätze, die beim
@@ -56,7 +58,9 @@ Datensatz über `openDatasetItem` — das respektiert einen eventuell vorhandene
 `Mscrm.OpenRecordItem`-Befehl. Ein Lookup-Feld öffnet den *referenzierten* Datensatz,
 E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:`.
 
-**Blättern.** Vor/Zurück laden die jeweilige Seite über die Paging-API des Datasets.
+**Blättern.** Vor/Zurück laden die jeweilige Seite über die Paging-API des Datasets — mit
+`loadOnlyNewPage`, sonst liefert das Framework den gesamten bisher geladenen Bereich zurück und
+die Liste würde mit jeder Seite weiterwachsen, statt umzublättern.
 
 ## Was sich geändert hat
 
@@ -70,7 +74,7 @@ E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:`.
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 48 Tests |
+| Keine Tests | 54 Tests |
 
 Behobene Fehler aus 1.0:
 

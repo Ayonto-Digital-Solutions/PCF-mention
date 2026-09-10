@@ -34,7 +34,8 @@ export interface RowGroup {
 
 export type SortDirection = "ascending" | "descending";
 
-/** Dataverse reports ascending as 0 and descending as 1. */
+/** Dataverse reports ascending as 0 and descending as 1; -1 means the column is not sorted. */
+const ASCENDING = 0;
 const DESCENDING = 1;
 
 function kindOf(column: Column): CellKind {
@@ -137,17 +138,40 @@ export function sortDirectionOf(
 	columnKey: string
 ): SortDirection | undefined {
 	const status = sorting?.find((entry) => entry.name === columnKey);
-	if (!status) {
-		return undefined;
+	switch (status?.sortDirection) {
+		case ASCENDING:
+			return "ascending";
+		case DESCENDING:
+			return "descending";
+		default:
+			// Absent, or the typings' "None" (-1): the column carries no sort to show.
+			return undefined;
 	}
-	return status.sortDirection === DESCENDING ? "descending" : "ascending";
 }
 
-/** Clicking a sorted column flips it; clicking any other column sorts it ascending. */
-export function nextSorting(sorting: readonly SortStatus[] | undefined, columnKey: string): SortStatus[] {
+/**
+ * Clicking a sorted column flips it; clicking any other column sorts it ascending.
+ *
+ * While a group column is active it stays the leading sort, because grouping chunks consecutive
+ * rows: sorting by something else alone would scatter one value across several group headers.
+ */
+export function nextSorting(
+	sorting: readonly SortStatus[] | undefined,
+	columnKey: string,
+	groupColumnKey?: string
+): SortStatus[] {
 	const current = sortDirectionOf(sorting, columnKey);
-	const sortDirection = current === "ascending" ? DESCENDING : 0;
-	return [{ name: columnKey, sortDirection: sortDirection as SortStatus["sortDirection"] }];
+	const direction = (current === "ascending" ? DESCENDING : ASCENDING) as SortStatus["sortDirection"];
+	const clicked: SortStatus = { name: columnKey, sortDirection: direction };
+
+	if (!groupColumnKey || groupColumnKey === columnKey) {
+		return [clicked];
+	}
+
+	const groupDirection = (sortDirectionOf(sorting, groupColumnKey) === "descending"
+		? DESCENDING
+		: ASCENDING) as SortStatus["sortDirection"];
+	return [{ name: groupColumnKey, sortDirection: groupDirection }, clicked];
 }
 
 /**
