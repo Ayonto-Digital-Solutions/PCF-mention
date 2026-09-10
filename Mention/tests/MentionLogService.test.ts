@@ -55,10 +55,10 @@ describe("MentionLogService", () => {
 
 	it("takes the column prefix from the table it is pointed at", async () => {
 		const recorded: Recorded[] = [];
-		await new MentionLogService(makeWebApi(recorded), "eo_mention").write(REQUEST);
+		await new MentionLogService(makeWebApi(recorded), "contoso_mention").write(REQUEST);
 
-		expect(recorded[0].table).toBe("eo_mention");
-		expect(Object.keys(recorded[0].row).every((key) => key.startsWith("eo_"))).toBe(true);
+		expect(recorded[0].table).toBe("contoso_mention");
+		expect(Object.keys(recorded[0].row).every((key) => key.startsWith("contoso_"))).toBe(true);
 	});
 
 	it("leaves out what it does not have, rather than writing empty columns", async () => {

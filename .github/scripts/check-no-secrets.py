@@ -40,6 +40,22 @@ SUSPECTS: list[tuple[str, re.Pattern[str]]] = [
 SKIP_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".woff", ".woff2")
 SKIP_PATHS = ("package-lock.json", "LICENSE")
 
+# A Dataverse logical name carries its publisher's prefix, so one from somebody else's tenant
+# names their organisation as surely as the organisation itself would. Only this project's own
+# prefix, the platform's, and the prefixes Microsoft's own documentation uses for examples belong
+# in a public repository. The list says which prefixes are allowed — it never names a customer.
+OWN_PREFIXES = frozenset(
+    {
+        "ayonto",  # this project
+        "shared",  # connector ids, e.g. shared_sendgrid
+        "msdyn", "mscrm", "msdynce", "adx",  # Microsoft first-party
+        "contoso", "fabrikam", "sample", "example", "test", "demo",  # documentation placeholders
+    }
+)
+LOGICAL_NAME = re.compile(r"[\"']([a-z][a-z0-9]{1,7})_([a-z][a-z0-9_]*)[\"']")
+# Only where Dataverse logical names actually live. Elsewhere an underscore is just an underscore.
+NAMED_PLACES = ("solution/", "Mention/", "GroupDetailList/", ".github/solution-contract.json")
+
 
 def tracked_files() -> list[Path]:
     listed = subprocess.run(
@@ -66,6 +82,19 @@ def main() -> None:
                         continue
                     shown = hit.group(0)[:60]
                     findings.append(f"{path}:{number} looks like {what}: {shown}")
+
+            if not str(path).startswith(NAMED_PLACES):
+                continue
+            for hit in LOGICAL_NAME.finditer(line):
+                name = hit.group(0)
+                # A system relationship carries the table it belongs to further along its name,
+                # as in "business_unit_ayonto_mention" — the leading word is the platform's.
+                if hit.group(1) in OWN_PREFIXES or any(f"{own}_" in name for own in OWN_PREFIXES):
+                    continue
+                findings.append(
+                    f"{path}:{number} carries the publisher prefix '{hit.group(1)}_' — "
+                    f"if that is somebody's tenant, it does not belong here: {name[:60]}"
+                )
 
     if findings:
         print("public repository: found what must not be here", file=sys.stderr)
