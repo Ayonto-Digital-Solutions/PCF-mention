@@ -131,6 +131,34 @@ describe("MentionEditor", () => {
 		expect(onMention).toHaveBeenCalledWith(USERS[1]);
 	});
 
+	it("closes the list when the caret leaves the mention", async () => {
+		const { textarea } = setup();
+		type(textarea, "hi @An and more", 6);
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		// The user clicks to the end of the line; the caret is no longer inside the mention.
+		textarea.selectionStart = 15;
+		textarea.selectionEnd = 15;
+		fireEvent.click(textarea);
+
+		await waitFor(() => {
+			expect(screen.queryAllByRole("option")).toHaveLength(0);
+		});
+		expect(textarea.getAttribute("aria-controls")).toBeNull();
+	});
+
+	it("reopens the list when the caret moves back into a mention", async () => {
+		const { textarea } = setup();
+		type(textarea, "hi @An and more", 15);
+		expect(screen.queryByRole("option")).toBeNull();
+
+		textarea.selectionStart = 6;
+		textarea.selectionEnd = 6;
+		fireEvent.keyUp(textarea, { key: "ArrowLeft" });
+
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+	});
+
 	it("closes the list on Escape without changing the text", async () => {
 		const { textarea, onChange } = setup();
 		type(textarea, "hi @An");

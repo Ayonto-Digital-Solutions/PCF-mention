@@ -181,13 +181,38 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		[onChange]
 	);
 
+	// Keeps the open mention in step with the caret. Called for edits and for plain caret moves,
+	// because a click or an arrow key can carry the caret out of the mention that opened the list.
+	const syncTrigger = React.useCallback((nextText: string, caret: number) => {
+		const next = findMentionTrigger(nextText, caret);
+		setTrigger((current) => {
+			if (current === null && next === null) {
+				return current;
+			}
+			if (current && next && current.start === next.start && current.end === next.end) {
+				return current;
+			}
+			return next;
+		});
+	}, []);
+
 	const handleChange = React.useCallback(
 		(event: React.ChangeEvent<HTMLTextAreaElement>, data: { value: string }) => {
 			const caret = event.target.selectionStart ?? data.value.length;
 			commit(data.value);
-			setTrigger(findMentionTrigger(data.value, caret));
+			syncTrigger(data.value, caret);
 		},
-		[commit]
+		[commit, syncTrigger]
+	);
+
+	// React derives onSelect from its own heuristics, so the caret is read from the plain events
+	// that always fire when it can move: releasing a key and clicking into the text.
+	const handleCaretMove = React.useCallback(
+		(event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+			const element = event.currentTarget;
+			syncTrigger(element.value, element.selectionStart ?? element.value.length);
+		},
+		[syncTrigger]
 	);
 
 	const select = React.useCallback(
@@ -289,6 +314,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 						"aria-autocomplete": "list",
 						"aria-controls": isOpen ? LISTBOX_ID : undefined,
 						maxLength: props.maxLength,
+						onClick: handleCaretMove,
+						onKeyUp: handleCaretMove,
 						ref: textareaRef,
 					}}
 					value={text}

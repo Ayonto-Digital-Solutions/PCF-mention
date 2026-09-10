@@ -25,8 +25,10 @@ export interface MentionTrigger {
  * Finds the mention the caret currently sits in, or null when the caret is not inside one.
  *
  * A mention starts at an "@" that is either at the beginning of the text or preceded by
- * whitespace or an opening bracket. Because user names contain spaces, the query may contain
- * spaces as well, but it never crosses a line break and never grows past MAX_QUERY_LENGTH.
+ * whitespace or an opening bracket. User names contain a space, so the query may hold one too —
+ * but not more, and not a trailing one. Without that bound the query would keep swallowing the
+ * rest of the sentence and every further keystroke would trigger another lookup. The query also
+ * never crosses a line break and never grows past MAX_QUERY_LENGTH.
  */
 export function findMentionTrigger(text: string, caret: number): MentionTrigger | null {
 	if (caret < 0 || caret > text.length) {
@@ -46,7 +48,13 @@ export function findMentionTrigger(text: string, caret: number): MentionTrigger 
 			if (previous !== undefined && !MENTION_BOUNDARY.test(previous)) {
 				return null;
 			}
-			return { start: i, end: caret, query: text.slice(i + 1, caret) };
+
+			const query = text.slice(i + 1, caret);
+			if (query.endsWith(" ") || query.split(" ").length > 2) {
+				return null;
+			}
+
+			return { start: i, end: caret, query };
 		}
 	}
 

@@ -18,8 +18,16 @@ describe("findMentionTrigger", () => {
 		expect(findMentionTrigger("hi @Ann", 7)).toEqual({ start: 3, end: 7, query: "Ann" });
 	});
 
-	it("allows spaces inside the query, because user names contain them", () => {
+	it("allows one space inside the query, because user names contain one", () => {
 		expect(findMentionTrigger("cc @Ann Smi", 11)).toEqual({ start: 3, end: 11, query: "Ann Smi" });
+	});
+
+	it("stops at a second space, so the query cannot swallow the sentence", () => {
+		expect(findMentionTrigger("cc @Ann and please look", 23)).toBeNull();
+	});
+
+	it("closes on a trailing space, so a finished mention stops searching", () => {
+		expect(findMentionTrigger("cc @Ann Smith ", 14)).toBeNull();
 	});
 
 	it("ignores an @ that is glued to a word, so e-mail addresses do not trigger it", () => {
