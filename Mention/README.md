@@ -137,8 +137,12 @@ serverseitige Synchronisierung eingerichtet sind, würde nur Entwürfe ansammeln
 Organisationen versenden ohnehin über einen Flow mit ihrem eigenen Absender, ihren Vorlagen und
 ihrem BCC.
 
-Die Tabelle kommt mit der Lösung: `solution/src/Entities/ayonto_Mention` beschreibt sie, der
-Import legt sie an. Wer sie woanders haben will, trägt den logischen Namen in die Eigenschaft
+Die Tabelle kommt mit der Lösung: `solution/src/Entities/ayonto_Mention/Entity.xml` beschreibt
+sie samt ihrer Ansicht, der Import legt sie an. Die Ansicht steht bewusst **in** dieser Datei,
+unter `<SavedQueries>` — ein Ordner `SavedQueries/` daneben wird von SolutionPackager nicht
+gelesen: er paketiert kommentarlos und liefert eine Tabelle ohne Ansicht aus. Genau das ist in
+2.2.0 passiert, weshalb `check-solution.py` einen solchen Ordner jetzt zurückweist und
+`check-package.py` das fertige Paket dagegenhält. Wer sie woanders haben will, trägt den logischen Namen in die Eigenschaft
 `mentionTable` ein — die Spaltennamen leiten sich dann vom Präfix dieser Tabelle ab, es braucht
 also eine Tabelle mit denselben Spalten hinter dem Präfix.
 

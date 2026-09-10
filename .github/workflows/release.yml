@@ -125,9 +125,18 @@ jobs:
 
       - name: Pack the solution
         run: |
-          cd "${SOLUTION_DIR}"
-          dotnet build -c Release   # managed
-          dotnet build -c Debug     # unmanaged
+          ( cd "${SOLUTION_DIR}" && dotnet build -c Release )   # managed
+          ( cd "${SOLUTION_DIR}" && dotnet build -c Debug )     # unmanaged
+
+      # 2.2.0 shipped a table without its view: the packer took the SavedQueries folder and said
+      # nothing. Nothing goes out again without reading the package that is about to go out.
+      - name: Check what is about to be published
+        run: |
+          for config in Release Debug; do
+            zip=$(find "${SOLUTION_DIR}/bin/${config}" -name '*.zip' | head -1)
+            echo "== ${config}: ${zip}"
+            SOLUTION_ROOT="${SOLUTION_DIR}" python3 .github/scripts/check-package.py "$zip"
+          done
 
       - name: Collect the artifacts
         env:
