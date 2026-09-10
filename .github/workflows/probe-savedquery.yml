@@ -1,7 +1,9 @@
-# Temporary: the packer drops solution/src/Entities/ayonto_Mention/SavedQueries silently, and three
-# candidate file layouts all produced zero <savedquery> in the pack. So this asks the other way
-# round: build a solution that provably CONTAINS the view, then let pac unpack it and show where
-# the tool itself puts the file.
+# Temporary. The official XSD (customization-solutions-file-schema) puts <SavedQueries> inside
+# <Entity>, next to <EntityInfo>, and wraps the queries twice:
+#   <SavedQueries><savedqueries><savedquery>…
+# The source carried only the inner wrapper, in a SavedQueries folder the packer ignored. This
+# tries both places with the shape the schema prescribes, and unpacks whatever works so the
+# canonical layout is on record.
 name: Probe saved query
 
 on:
@@ -11,7 +13,7 @@ on:
 
 jobs:
   probe:
-    name: Where does the tool put a view
+    name: Where does a view belong
     runs-on: ubuntu-latest
 
     steps:
@@ -20,42 +22,63 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build a package that carries the view
+      - name: Pack both candidates
         run: |
-          set -euo pipefail
-          curl -sSL -o managed.zip \
-            "https://github.com/Ayonto-Digital-Solutions/PCF-mention/releases/download/v2.2.0/AyontoPcfControls_2.2.0_managed.zip"
-          mkdir -p m && unzip -q managed.zip -d m
+          set -uo pipefail
           python3 - <<'PY'
-          import zipfile
+          import shutil
           from pathlib import Path
 
-          query = Path("solution/src/Entities/ayonto_Mention/SavedQueries/{6f3a1c24-8d5b-4d0e-9a41-2c7b5e0f9d11}.xml").read_text(encoding="utf-8")
-          inner = query.split("?>", 1)[1].strip().replace("savedqueries", "SavedQueries")
+          guid = "{6f3a1c24-8d5b-4d0e-9a41-2c7b5e0f9d11}"
+          src = Path("solution")
+          query = (src / f"src/Entities/ayonto_Mention/SavedQueries/{guid}.xml").read_text(encoding="utf-8")
+          inner = query.split("?>", 1)[1].strip()          # <savedqueries>…</savedqueries>
+          wrapped = f"<SavedQueries>\n{inner}\n</SavedQueries>"
 
-          cust = Path("m/customizations.xml").read_text(encoding="utf-8-sig")
-          patched = cust.replace("</EntityInfo>\n    </Entity>",
-                                 "</EntityInfo>\n      " + inner + "\n    </Entity>", 1)
-          assert patched != cust, "anchor not found"
-          Path("m/customizations.xml").write_text(patched, encoding="utf-8")
+          # D: inside Entity.xml, as the schema places it
+          d = Path("/tmp/D")
+          shutil.rmtree(d, ignore_errors=True); shutil.copytree(src, d)
+          shutil.rmtree(d / "src/Entities/ayonto_Mention/SavedQueries")
+          entity = d / "src/Entities/ayonto_Mention/Entity.xml"
+          text = entity.read_text(encoding="utf-8")
+          assert "</EntityInfo>\n</Entity>" in text
+          entity.write_text(text.replace("</EntityInfo>\n</Entity>",
+                                         "</EntityInfo>\n  " + wrapped.replace("\n", "\n  ") + "\n</Entity>", 1),
+                            encoding="utf-8")
 
-          with zipfile.ZipFile("managed.zip") as old, zipfile.ZipFile("withview.zip", "w", zipfile.ZIP_DEFLATED) as new:
-              for item in old.infolist():
-                  new.writestr(item, (Path("m") / item.filename).read_bytes())
+          # E: still the folder, but carrying the full shape the schema prescribes
+          e = Path("/tmp/E")
+          shutil.rmtree(e, ignore_errors=True); shutil.copytree(src, e)
+          (e / f"src/Entities/ayonto_Mention/SavedQueries/{guid}.xml").write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n' + wrapped + "\n", encoding="utf-8")
+          print("prepared D and E")
           PY
-          grep -c '<savedquery>' m/customizations.xml
 
-      - name: Let pac unpack it and show the layout
+          for v in D E; do
+            echo "===== $v ====="
+            ( cd "/tmp/$v" && dotnet build -c Release >"/tmp/$v.log" 2>&1 ) \
+              && echo "PACK OK" || { echo "PACK FAILED"; tail -25 "/tmp/$v.log"; continue; }
+            zip=$(find "/tmp/$v/bin/Release" -name '*.zip' | head -1)
+            rm -rf "/tmp/$v-out"; mkdir -p "/tmp/$v-out"
+            unzip -q -o "$zip" -d "/tmp/$v-out"
+            n=$(grep -o '<savedquery>' "/tmp/$v-out/customizations.xml" | wc -l)
+            echo "::notice::$v -> $n <savedquery> im Paket"
+            echo "RESULT $v = $n"
+          done
+
+      - name: Unpack whichever carried the view
         run: |
           set -uo pipefail
           dotnet tool install --global Microsoft.PowerApps.CLI.Tool >/dev/null 2>&1 || true
           export PATH="$PATH:$HOME/.dotnet/tools"
-          pac solution unpack --zipfile withview.zip --folder extracted --packagetype Managed
-          echo "===== Was der Packer schreibt ====="
-          find extracted -type f | sort
-          echo "===== Inhalt jeder Datei unter einem Ansichts-Pfad ====="
-          find extracted -type f \( -ipath '*savedquer*' -o -ipath '*view*' \) -exec sh -c 'echo "--- {} ---"; cat "{}"' \;
-          echo "===== Entity.xml Kopf, falls die Ansicht dort steckt ====="
-          head -40 extracted/Entities/*/Entity.xml
-          echo "===== steht savedquery irgendwo in der Entity.xml? ====="
-          grep -c -i savedquery extracted/Entities/*/Entity.xml || echo "nein"
+          for v in D E; do
+            grep -q '<savedquery>' "/tmp/$v-out/customizations.xml" 2>/dev/null || continue
+            zip=$(find "/tmp/$v/bin/Release" -name '*.zip' | head -1)
+            echo "===== $v: so schreibt der Packer es zurück ====="
+            rm -rf "/tmp/$v-x"
+            pac solution unpack --zipfile "$zip" --folder "/tmp/$v-x" --packagetype Managed || continue
+            find "/tmp/$v-x" -type f | sort
+            echo "--- Ansicht im Rückschrieb ---"
+            grep -rl -i savedquery "/tmp/$v-x" | while read -r f; do echo "### $f"; head -20 "$f"; done
+            break
+          done
