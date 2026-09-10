@@ -47,6 +47,29 @@ npm start watch     # lokaler Test-Harness
 CI führt für beide Components und für Node 20 und 22 `lint`, `typecheck`, `test` und einen
 Production-Build aus (siehe [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
+## Release
+
+Ein Tag `vX.Y.Z` baut beide Components, erzeugt daraus über die Power Platform CLI eine
+Dataverse-Solution und hängt sie an das GitHub-Release
+([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+* `AyontoPcfControls_X.Y.Z.zip` — unmanaged, für Entwicklungsumgebungen
+* `AyontoPcfControls_X.Y.Z_managed.zip` — managed, für Test und Produktion
+
+Beide enthalten `Ayonto.MentionControl` und `Ayonto.GroupDetailListControl`, Publisher `ayonto`.
+Die Solution wird bewusst im Workflow gebaut und nicht im Repository gehalten: sie ist ein
+Build-Ergebnis, und der Workflow hat die .NET-Toolchain, die `pac` dafür braucht.
+
+Lokal geht dasselbe mit:
+
+```bash
+mkdir AyontoPcfControls && cd AyontoPcfControls
+pac solution init --publisher-name Ayonto --publisher-prefix ayonto
+pac solution add-reference --path ../Mention
+pac solution add-reference --path ../GroupDetailList
+dotnet build -c Release
+```
+
 ## Deployen
 
 ```bash
