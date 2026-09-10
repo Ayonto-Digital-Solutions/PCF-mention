@@ -65,6 +65,7 @@ function propsOf(element: React.ReactElement) {
 		onChange: (value: string) => void;
 		onEditingChange: (editing: boolean) => void;
 		onMention: (user: { id: string; name: string }) => Promise<void>;
+		onWrittenMentionsChange: (userIds: readonly string[]) => void;
 	};
 }
 
@@ -214,6 +215,8 @@ describe("MentionControl notification timing", () => {
 		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
 
 		props.onChange("Danke @Anna Berger");
+		// What the editor reports: this person is written in the text.
+		props.onWrittenMentionsChange([RECIPIENT.id]);
 		const pending = props.onMention(RECIPIENT);
 
 		control.destroy();
@@ -239,8 +242,10 @@ describe("MentionControl notification timing", () => {
 		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
 
 		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange([RECIPIENT.id]);
 		const pending = props.onMention(RECIPIENT);
 		props.onChange("Danke");
+		props.onWrittenMentionsChange([]);
 
 		control.destroy();
 		await pending;
@@ -277,6 +282,7 @@ describe("MentionControl record context", () => {
 
 		const props = propsOf(control.updateView(context));
 		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange(["22222222-2222-2222-2222-222222222222"]);
 		const pending = props.onMention({ id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" });
 		control.destroy();
 		await pending;
@@ -291,5 +297,68 @@ describe("MentionControl record context", () => {
 		const { props } = mount({});
 
 		expect(props.notice).toBeUndefined();
+	});
+});
+
+describe("MentionControl mention identity", () => {
+	const THOMAS_A = { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", name: "Thomas Müller" };
+	const THOMAS_B = { id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", name: "Thomas Müller" };
+
+	it("does not let one namesake vouch for the other", async () => {
+		// Pick Thomas A, delete the mention, pick Thomas B — all inside the grace period. The
+		// text says "@Thomas Müller" either way; only the user id tells the two apart.
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
+
+		props.onChange("Hallo @Thomas Müller");
+		props.onWrittenMentionsChange([THOMAS_A.id]);
+		const first = props.onMention(THOMAS_A);
+
+		props.onChange("Hallo ");
+		props.onWrittenMentionsChange([]);
+		props.onChange("Hallo @Thomas Müller");
+		props.onWrittenMentionsChange([THOMAS_B.id]);
+		const second = props.onMention(THOMAS_B);
+
+		control.destroy();
+		await Promise.all([first, second]);
+
+		const written = createRecord.mock.calls.map((call) => (call[1] as Record<string, string>).ayonto_userid);
+		expect(written).toEqual([THOMAS_B.id]);
+	});
+
+	it("drops the notification for a mention that was taken back, and takes a new one", async () => {
+		vi.useFakeTimers();
+		try {
+			const { context, props } = mount({});
+			const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+			createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "55555555-5555-5555-5555-555555555555" });
+
+			props.onChange("Hallo @Thomas Müller");
+			props.onWrittenMentionsChange([THOMAS_A.id]);
+			const dropped = props.onMention(THOMAS_A);
+
+			// Taken back before the grace period is over.
+			props.onChange("Hallo ");
+			props.onWrittenMentionsChange([]);
+			await vi.advanceTimersByTimeAsync(6000);
+			await dropped;
+			expect(createRecord).not.toHaveBeenCalled();
+
+			// Written again: the same person may be notified after all.
+			props.onChange("Hallo @Thomas Müller");
+			props.onWrittenMentionsChange([THOMAS_A.id]);
+			const taken = props.onMention(THOMAS_A);
+			await vi.advanceTimersByTimeAsync(6000);
+			await taken;
+
+			expect(createRecord).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

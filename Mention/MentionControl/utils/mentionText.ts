@@ -104,10 +104,15 @@ export function containsMention(text: string, displayName: string): boolean {
 	return name.length > 0 && nearestMention(text, name, 0) !== undefined;
 }
 
-/** A mention this editor wrote, and where it currently sits in the text. */
+/**
+ * A mention this editor wrote: where it sits, whose name it carries, and — the part the text
+ * cannot express — which person it means. Two people can share a display name, so the name is
+ * never the identity.
+ */
 export interface InsertedMention {
 	readonly start: number;
 	readonly name: string;
+	readonly userId: string;
 }
 
 /**
@@ -133,7 +138,7 @@ export function reanchorMentions(mentions: readonly InsertedMention[], text: str
 			continue;
 		}
 		taken.add(at);
-		anchored.push({ start: at, name: mention.name });
+		anchored.push({ start: at, name: mention.name, userId: mention.userId });
 	}
 
 	return anchored;
@@ -171,12 +176,18 @@ export interface MentionSegment {
  * "@Anna Berger" is a person or a sentence, and a link that opens the wrong record is worse than
  * no link. Longer names win, so "@Bob Schmidt" is not read as a mention of "Bob".
  */
-export function splitMentions(text: string, users: ReadonlyMap<string, string>): MentionSegment[] {
-	if (users.size === 0 || text.length === 0) {
+export function splitMentions(
+	text: string,
+	users: ReadonlyMap<string, string>,
+	written: readonly InsertedMention[] = []
+): MentionSegment[] {
+	if ((users.size === 0 && written.length === 0) || text.length === 0) {
 		return text.length > 0 ? [{ text }] : [];
 	}
 
-	const names = [...users.keys()].sort((left, right) => right.length - left.length);
+	const names = [...new Set([...users.keys(), ...written.map((mention) => mention.name)])].sort(
+		(left, right) => right.length - left.length
+	);
 	const segments: MentionSegment[] = [];
 	let plainFrom = 0;
 
@@ -200,7 +211,9 @@ export function splitMentions(text: string, users: ReadonlyMap<string, string>):
 		if (at > plainFrom) {
 			segments.push({ text: text.slice(plainFrom, at) });
 		}
-		segments.push({ text: `@${name}`, userId: users.get(name) });
+		// A mention written here beats the name: it knows which of two namesakes was picked.
+		const here = written.find((mention) => mention.start === at && mention.name === name);
+		segments.push({ text: `@${name}`, userId: here?.userId ?? users.get(name) });
 		plainFrom = at + name.length + 1;
 		at = plainFrom - 1;
 	}

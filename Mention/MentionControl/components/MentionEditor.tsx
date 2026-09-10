@@ -70,6 +70,11 @@ export interface MentionEditorProps {
 	readonly loadMentions?: () => Promise<readonly LoggedMention[]>;
 	/** Opens the user behind a written mention. */
 	readonly onOpenUser?: (userId: string) => void;
+	/**
+	 * Who is mentioned in the text right now, by user id. Two people can share a display name,
+	 * so this — not the text — is what decides whether a pending notification still applies.
+	 */
+	readonly onWrittenMentionsChange?: (userIds: readonly string[]) => void;
 }
 
 const useStyles = makeStyles({
@@ -221,11 +226,26 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			try {
 				const mentions = await loadMentions();
 				if (!cancelled) {
+					// A display name two people share cannot be resolved from the text, and a link
+					// to the wrong person is worse than none — so such a name gets no link.
+					const ambiguous = new Set<string>();
+					const resolved = new Map<string, string>();
+					for (const mention of mentions) {
+						const name = mention.name.trim();
+						const known = resolved.get(name);
+						if (known !== undefined && known !== mention.userId) {
+							ambiguous.add(name);
+						}
+						resolved.set(name, mention.userId);
+					}
+
 					// Merged, not replaced: a mention picked while this was in flight stays.
 					setKnownMentions((current) => {
 						const next = new Map(current);
-						for (const mention of mentions) {
-							next.set(mention.name.trim(), mention.userId);
+						for (const [name, userId] of resolved) {
+							if (!ambiguous.has(name)) {
+								next.set(name, userId);
+							}
 						}
 						return next;
 					});
@@ -249,6 +269,9 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	React.useEffect(() => {
 		if (!isFocused.current) {
 			setText(value);
+			// A business rule or a discarded form can take a mention out from under the editor.
+			insertedMentions.current = reanchorMentions(insertedMentions.current, value);
+			reportWrittenRef.current();
 		}
 	}, [value]);
 
@@ -325,6 +348,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	 * mention — and into a notification for whoever happened to be first in the list. Moving the
 	 * caret can therefore only ever close the list; typing is what opens it.
 	 */
+	const { onWrittenMentionsChange } = props;
+	const reportWrittenRef = React.useRef<() => void>(() => undefined);
+	const reportWritten = React.useCallback(() => {
+		onWrittenMentionsChange?.(insertedMentions.current.map((mention) => mention.userId));
+	}, [onWrittenMentionsChange]);
+	reportWrittenRef.current = reportWritten;
+
 	const syncTrigger = React.useCallback(
 		(nextText: string, caret: number, mayOpen: boolean) => {
 			// Editing in front of a mention moves it, so the recorded ones are put back where they
@@ -334,6 +364,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				insertedMentions.current,
 				nextText,
 			);
+			reportWritten();
 			const found = findMentionTrigger(nextText, caret);
 			// A query may hold a space because names do, so continuing the sentence after a one-word
 			// mention ("@Bob thanks") still looks like a query. It is not: the name is already there.
@@ -370,7 +401,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				return next;
 			});
 		},
-		[],
+		[reportWritten],
 	);
 
 	const handleChange = React.useCallback(
@@ -419,6 +450,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			const written: InsertedMention = {
 				start: trigger.start,
 				name: user.name.trim(),
+				userId: user.id,
 			};
 			setKnownMentions((current) =>
 				current.get(written.name) === user.id
@@ -434,6 +466,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				),
 				written,
 			];
+			reportWritten();
 			pendingCaret.current = result.caret;
 			commit(result.text);
 			closeSuggestions();
@@ -455,6 +488,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			commit,
 			onMention,
 			props.maxLength,
+			reportWritten,
 			strings.mentionTooLong,
 			strings.notificationFailed,
 			text,
@@ -505,7 +539,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	);
 
 	const mentionSegments = React.useMemo(
-		() => splitMentions(text, knownMentions),
+		() => splitMentions(text, knownMentions, insertedMentions.current),
 		[text, knownMentions],
 	);
 

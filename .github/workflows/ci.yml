@@ -67,7 +67,18 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Check the solution source
-        run: python3 .github/scripts/check-solution.py
+        run: |
+          python3 .github/scripts/check-solution.py
+
+          # And prove the guard guards. It sat unreachable once, behind a fail() that exits.
+          rm -rf /tmp/guard
+          cp -r solution /tmp/guard
+          printf '<?xml version="1.0"?>\n<RibbonDiffXml><CustomActions /></RibbonDiffXml>\n' \
+            > /tmp/guard/src/Entities/ayonto_Mention/RibbonDiff.xml
+          if SOLUTION_ROOT=/tmp/guard python3 .github/scripts/check-solution.py; then
+            echo "::error::check-solution.py accepted a RibbonDiff.xml the packer cannot read"
+            exit 1
+          fi
 
       - name: Pack it
         run: |
