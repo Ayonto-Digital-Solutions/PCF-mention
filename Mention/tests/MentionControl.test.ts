@@ -13,6 +13,8 @@ interface ContextOptions {
 	sendEmail?: "0" | "1";
 	entityName?: string;
 	entityId?: string;
+	/** What a model-driven host reports about the record the component sits on. */
+	contextInfo?: { entityId?: string; entityTypeName?: string };
 }
 
 function makeContext(options: ContextOptions = {}) {
@@ -34,6 +36,7 @@ function makeContext(options: ContextOptions = {}) {
 			isControlDisabled: options.disabled ?? false,
 			label: "Description",
 			trackContainerResize: vi.fn(),
+			...(options.contextInfo ? { contextInfo: options.contextInfo } : {}),
 		},
 		client: {
 			isOffline: () => options.offline ?? false,
@@ -233,5 +236,53 @@ describe("MentionControl notification timing", () => {
 		await pending;
 
 		expect(createRecord).not.toHaveBeenCalled();
+	});
+});
+
+describe("MentionControl record context", () => {
+	const HOST = { entityId: "55555555-5555-5555-5555-555555555555", entityTypeName: "account" };
+
+	it("takes the record from the host when the properties are empty", () => {
+		// A maker cannot bind a text property to a primary key column, so the host is the
+		// ordinary source. Nothing has to be configured for the mention to reach the record.
+		const { props } = mount({ contextInfo: HOST });
+
+		expect(props.notice).toBeUndefined();
+	});
+
+	it("still says to save first when the host reports a record without an id", () => {
+		const { props } = mount({ contextInfo: { entityTypeName: "account" } });
+
+		expect(props.notice).toBe("Editor_UnsavedRecordNotice");
+	});
+
+	it("lets the configured properties win over the host", () => {
+		const { control, context } = mount({
+			contextInfo: HOST,
+			entityName: "contact",
+			entityId: "66666666-6666-6666-6666-666666666666",
+		});
+		const { createRecord, updateRecord } = context.webAPI as unknown as {
+			createRecord: ReturnType<typeof vi.fn>;
+			updateRecord: ReturnType<typeof vi.fn>;
+		};
+		createRecord.mockResolvedValue({ entityType: "email", id: "77777777-7777-7777-7777-777777777777" });
+		updateRecord.mockResolvedValue(undefined);
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 204, text: () => Promise.resolve("") }));
+
+		const props = propsOf(control.updateView(context));
+		props.onChange("Danke @Anna Berger");
+		void props.onMention({ id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" }).catch(() => undefined);
+		control.destroy();
+
+		expect(createRecord).toHaveBeenCalled();
+		vi.unstubAllGlobals();
+	});
+
+	it("works with neither the host nor the properties", () => {
+		// No record link, but mentioning and notifying still run.
+		const { props } = mount({});
+
+		expect(props.notice).toBeUndefined();
 	});
 });

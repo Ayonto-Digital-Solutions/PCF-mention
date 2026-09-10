@@ -541,6 +541,17 @@ describe("MentionEditor", () => {
 		expect(textarea.selectionStart).toBe(16);
 	});
 
+	it("draws the suggestion list outside its own container, where a form cannot clip it", async () => {
+		// Inside the field cell the list was cut off by the first ancestor that hides overflow.
+		const { textarea, container } = setup();
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		const list = screen.getByRole("listbox");
+		expect(list).toBeTruthy();
+		expect(container.contains(list)).toBe(false);
+	});
+
 	it("closes the suggestion list when the editor loses the focus", async () => {
 		const { textarea } = setup();
 		type(textarea, "hi @An");

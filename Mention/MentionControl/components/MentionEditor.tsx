@@ -3,6 +3,7 @@ import {
 	FluentProvider,
 	MessageBar,
 	MessageBarBody,
+	Portal,
 	Spinner,
 	Text,
 	Textarea,
@@ -24,6 +25,9 @@ import {
 
 /** Delay before an "@" query is sent to Dataverse, so typing does not cause one call per keystroke. */
 const SEARCH_DEBOUNCE_MS = 250;
+
+/** How tall the list may get. Below that much room, it opens upwards instead. */
+const LIST_MAX_HEIGHT = 280;
 
 export interface MentionEditorStrings {
 	readonly placeholder: string;
@@ -57,22 +61,32 @@ export interface MentionEditorProps {
 }
 
 const useStyles = makeStyles({
+	// The host cell is sometimes a flex row, in which case a plain block would shrink to the
+	// width of an unstyled textarea — about twenty characters. Growing and filling covers both
+	// that case and an ordinary block container.
+	provider: {
+		display: "block",
+		flexGrow: 1,
+		minWidth: 0,
+		width: "100%",
+	},
 	root: {
 		display: "flex",
 		flexDirection: "column",
-		position: "relative",
+		minWidth: 0,
 		rowGap: tokens.spacingVerticalXS,
 		width: "100%",
 	},
 	textarea: {
+		maxWidth: "100%",
+		minWidth: 0,
 		width: "100%",
 	},
+	// The list is measured against the viewport and rendered through a portal: inside the form
+	// it would be cut off by the first ancestor that clips its overflow.
 	popup: {
-		insetInlineStart: 0,
-		insetInlineEnd: 0,
-		position: "absolute",
-		top: "100%",
-		zIndex: 1000,
+		position: "fixed",
+		zIndex: 1000000,
 	},
 	srOnly: {
 		clipPath: "inset(50%)",
@@ -365,16 +379,53 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const isSuggestionListRendered = isOpen && suggestions.length > 0;
 	const remaining = props.maxLength !== undefined ? props.maxLength - text.length : undefined;
 
+	// Where the list has to be drawn, in viewport coordinates. It follows the textarea, and flips
+	// above it when the space below would cut it off.
+	const [listBox, setListBox] = React.useState<React.CSSProperties | undefined>(undefined);
+	React.useLayoutEffect(() => {
+		if (!isOpen) {
+			setListBox(undefined);
+			return undefined;
+		}
+
+		const measure = () => {
+			const element = textareaRef.current;
+			if (!element) {
+				return;
+			}
+
+			const box = element.getBoundingClientRect();
+			const below = window.innerHeight - box.bottom;
+			const width = Math.max(box.width, Math.min(300, window.innerWidth - 16));
+			const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
+
+			setListBox(
+				below < LIST_MAX_HEIGHT && box.top > below
+					? { bottom: window.innerHeight - box.top + 2, left, width }
+					: { top: box.bottom + 2, left, width }
+			);
+		};
+
+		measure();
+		window.addEventListener("resize", measure);
+		// Capturing, because what scrolls is a container inside the form, not the window.
+		window.addEventListener("scroll", measure, true);
+		return () => {
+			window.removeEventListener("resize", measure);
+			window.removeEventListener("scroll", measure, true);
+		};
+	}, [isOpen, isSearching, suggestions.length]);
+
 	if (props.masked) {
 		return (
-			<FluentProvider theme={props.theme ?? webLightTheme}>
+			<FluentProvider className={styles.provider} theme={props.theme ?? webLightTheme}>
 				<Text className={styles.masked}>{strings.maskedValue}</Text>
 			</FluentProvider>
 		);
 	}
 
 	return (
-		<FluentProvider theme={props.theme ?? webLightTheme}>
+		<FluentProvider className={styles.provider} theme={props.theme ?? webLightTheme}>
 			<div className={styles.root}>
 				<Textarea
 					appearance="outline"
@@ -414,23 +465,25 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					{isOpen && !isSearching ? strings.suggestionCount(props.formatNumber(suggestions.length)) : ""}
 				</div>
 
-				{isOpen ? (
-					<div className={styles.popup}>
-						{isSearching && suggestions.length === 0 ? (
-							<Spinner label={strings.searching} labelPosition="after" size="tiny" />
-						) : (
-							<SuggestionList
-								activeIndex={activeIndex}
-								emptyLabel={strings.noResults}
-								id={LISTBOX_ID}
-								moreLabel={hasMoreResults ? strings.moreResults : undefined}
-								onHover={setActiveIndex}
-								onSelect={select}
-								optionId={optionId}
-								suggestions={suggestions}
-							/>
-						)}
-					</div>
+				{isOpen && listBox ? (
+					<Portal>
+						<div className={styles.popup} style={listBox}>
+							{isSearching && suggestions.length === 0 ? (
+								<Spinner label={strings.searching} labelPosition="after" size="tiny" />
+							) : (
+								<SuggestionList
+									activeIndex={activeIndex}
+									emptyLabel={strings.noResults}
+									id={LISTBOX_ID}
+									moreLabel={hasMoreResults ? strings.moreResults : undefined}
+									onHover={setActiveIndex}
+									onSelect={select}
+									optionId={optionId}
+									suggestions={suggestions}
+								/>
+							)}
+						</div>
+					</Portal>
 				) : null}
 
 				<div className={styles.footer}>

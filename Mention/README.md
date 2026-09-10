@@ -15,7 +15,7 @@ Tooling und APIs, die es so nicht mehr gibt — siehe [Was sich geändert hat](#
 | Typ | `virtual` (React) |
 | Plattform-Bibliotheken | React 16.14.0, Fluent UI v9 (9.46.2) |
 | Unterstützte Apps | modellgesteuerte Apps |
-| Bundle | 22 KiB (Production-Build) |
+| Bundle | 23 KiB (Production-Build) |
 
 React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 ([platform libraries](https://learn.microsoft.com/power-apps/developer/component-framework/react-controls-platform-libraries)).
@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 156 Tests
+npm test                              # 161 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -79,12 +79,16 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Nötig für den Link in der E-Mail. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
 
-`entityId` und `entityName` sind Eigenschaften und keine Laufzeit-Abfrage, weil ein Code-Component
-den Formularkontext nicht kennt. Das ist genau der von Microsoft dokumentierte Weg:
-[How can I access the record id or table name?](https://learn.microsoft.com/power-apps/developer/component-framework/faq#how-can-i-access-the-record-id-or-table-name)
+**Den Datensatz muss man in der Regel nicht konfigurieren.** In modellgesteuerten Apps meldet der
+Host den Datensatz selbst (`context.mode.contextInfo`), und das Component nimmt ihn von dort. Die
+beiden Eigenschaften bleiben als Übersteuerung: Wo sie gesetzt sind, gewinnen sie — nützlich für
+Hosts, die nichts melden, und für einen bewusst abweichenden Bezug. Der Formular-Designer bietet
+für eine Texteigenschaft ohnehin keine Primärschlüsselspalte an, weshalb die Eigenschaften allein
+kein gangbarer Weg waren.
 
-Ohne `entityId`/`entityName` funktioniert das Component weiter — die Benachrichtigung wird dann
-nur nicht mit dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-Link.
+Ohne Datensatzbezug — weder vom Host noch konfiguriert — funktioniert das Component weiter, die
+Benachrichtigung wird dann nur nicht mit dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen
+Deep-Link.
 
 ## Wie die Benachrichtigung funktioniert
 
@@ -160,7 +164,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alt (1.0, August 2020) | Neu (2.0) |
 |---|---|
 | `pcf-scripts` 1.3.6 (Juli 2020), webpack 4, TypeScript 3.9 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
-| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (22 KiB) |
+| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (23 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
 | `Xrm.Page.data.entity.getId()` / `getEntityName()` | Manifest-Eigenschaften `entityId` / `entityName` |
 | `Xrm.Page.context.getClientUrl()` / `getUserId()` | `orgUrl`-Eigenschaft bzw. `context.userSettings.userId` |
@@ -169,7 +173,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 156 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 161 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
