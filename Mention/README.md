@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 69 Tests
+npm test                              # 83 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -113,8 +113,24 @@ erscheint ein Hinweis. Wer den direkten Versand nicht möchte, setzt `sendEmail`
 lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen der E-Mail reagieren — das
 Anlegen selbst ist unabhängig vom Versand.
 
-Jede Person wird pro Sitzung nur einmal benachrichtigt. Schlägt der Versand fehl und die Erwähnung
-wurde inzwischen wieder gelöscht, wird die Sperre aufgehoben.
+Jede Person wird pro Sitzung nur einmal benachrichtigt. Schlägt der Versand fehl, bleibt die
+Person für einen erneuten Versuch freigeschaltet.
+
+### Wann Erwähnen nicht verfügbar ist
+
+Das Component blendet die Vorschlagsliste aus und sagt im UI warum, wenn:
+
+* **keine Verbindung besteht** (`context.client.isOffline()` bzw. `isNetworkAvailable()`) — die
+  Benutzersuche braucht Dataverse;
+* **der Datensatz noch nie gespeichert wurde** und Benachrichtigungen aktiv sind. Ohne
+  Datensatz-ID zeigt die Mail ins Leere, und die Erwähnung selbst ist noch nicht gespeichert.
+  Das greift nur, wenn `entityName` gebunden ist — sind beide Datensatz-Eigenschaften leer, ist
+  das eine bewusste Konfiguration ohne Datensatzbezug und Benachrichtigungen laufen weiter.
+
+Getippt werden darf in beiden Fällen weiter; nur die Auswahlliste bleibt zu.
+
+Liefert die Suche mehr Treffer, als die Liste zeigt, weist ein Hinweis am Listenende darauf hin,
+dass die Suche eingegrenzt werden muss — statt stillschweigend abzuschneiden.
 
 ## Was sich geändert hat
 
@@ -132,7 +148,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 69 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung |
+| Keine Tests | 83 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung, Verfügbarkeit |
 
 Behobene Fehler aus 1.0:
 
@@ -174,10 +190,12 @@ Mention/
 │  ├─ services/UserSearchService.ts     Benutzersuche über context.webAPI
 │  ├─ services/EmailNotificationService.ts  E-Mail anlegen und senden
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
+│  ├─ utils/availability.ts             Wann Erwähnen verfügbar ist
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
    ├─ mentionText.test.ts               Reine Funktionen
+   ├─ availability.test.ts              Wahrheitstabelle der Verfügbarkeit
    ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
    ├─ EmailNotificationService.test.ts  Payload, Verknüpfung, Versand

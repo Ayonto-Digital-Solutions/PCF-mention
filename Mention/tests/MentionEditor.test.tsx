@@ -12,6 +12,7 @@ const USERS: UserSuggestion[] = [
 const STRINGS: MentionEditorStrings = {
 	placeholder: "Type @ to mention someone",
 	noResults: "No users found",
+	moreResults: "More matches — narrow your search",
 	searching: "Searching users",
 	suggestionCount: (count) => `${count} suggestions available`,
 	charactersLeft: (remaining) => `${remaining} characters left`,
@@ -24,7 +25,7 @@ function setup(overrides: Partial<MentionEditorProps> = {}) {
 	const onChange = vi.fn();
 	const onEditingChange = vi.fn();
 	const onMention = vi.fn().mockResolvedValue(undefined);
-	const searchUsers = vi.fn().mockResolvedValue(USERS);
+	const searchUsers = vi.fn().mockResolvedValue({ users: USERS, hasMore: false });
 
 	const props: MentionEditorProps = {
 		value: "",
@@ -184,7 +185,7 @@ describe("MentionEditor", () => {
 	});
 
 	it("reports an empty result instead of an empty list", async () => {
-		const { textarea } = setup({ searchUsers: vi.fn().mockResolvedValue([]) });
+		const { textarea } = setup({ searchUsers: vi.fn().mockResolvedValue({ users: [], hasMore: false }) });
 		type(textarea, "hi @Zz");
 
 		await waitFor(() => {
@@ -245,6 +246,41 @@ describe("MentionEditor", () => {
 		rerender(<MentionEditor {...lastProps!} value="from the platform" />);
 
 		expect(container.querySelector("textarea")!.value).toBe("from the platform");
+	});
+
+	it("says so when the server had more matches than fit in the list", async () => {
+		const { textarea } = setup({
+			searchUsers: vi.fn().mockResolvedValue({ users: USERS, hasMore: true }),
+		});
+		type(textarea, "hi @An");
+
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		expect(screen.getByText("More matches — narrow your search")).toBeTruthy();
+	});
+
+	it("does not mention truncation when the whole result is shown", async () => {
+		const { textarea } = setup();
+		type(textarea, "hi @An");
+
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		expect(screen.queryByText("More matches — narrow your search")).toBeNull();
+	});
+
+	it("keeps the picker closed and explains why when mentioning is unavailable", async () => {
+		const { textarea, searchUsers } = setup({ notice: "Save the record first." });
+		type(textarea, "hi @An");
+
+		expect(screen.getByText("Save the record first.")).toBeTruthy();
+		await waitFor(() => expect(searchUsers).toHaveBeenCalled());
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+		expect(textarea.getAttribute("aria-controls")).toBeNull();
+	});
+
+	it("still lets the user type while mentioning is unavailable", () => {
+		const { textarea, onChange } = setup({ notice: "No connection." });
+		type(textarea, "still editable");
+
+		expect(onChange).toHaveBeenCalledWith("still editable");
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {

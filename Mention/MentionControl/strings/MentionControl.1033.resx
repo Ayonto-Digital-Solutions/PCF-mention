@@ -192,6 +192,15 @@
   <data name="Editor_Placeholder" xml:space="preserve">
     <value>Type @ to mention someone</value>
   </data>
+  <data name="Editor_MoreResults" xml:space="preserve">
+    <value>More matches — narrow your search</value>
+  </data>
+  <data name="Editor_OfflineNotice" xml:space="preserve">
+    <value>No connection. Mentioning is unavailable while offline.</value>
+  </data>
+  <data name="Editor_UnsavedRecordNotice" xml:space="preserve">
+    <value>Save the record first, so mentioned people can be notified.</value>
+  </data>
   <data name="Editor_NoResults" xml:space="preserve">
     <value>No users found</value>
   </data>

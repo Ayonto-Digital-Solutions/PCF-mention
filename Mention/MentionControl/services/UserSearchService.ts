@@ -7,6 +7,12 @@ export interface UserSuggestion {
 	readonly jobTitle?: string;
 }
 
+export interface UserSearchResult {
+	readonly users: UserSuggestion[];
+	/** True when the server had more matches than were returned. */
+	readonly hasMore: boolean;
+}
+
 interface SystemUserRecord {
 	systemuserid?: string;
 	fullname?: string;
@@ -32,24 +38,29 @@ export class UserSearchService {
 		this.pageSize = pageSize;
 	}
 
-	public async search(term: string): Promise<UserSuggestion[]> {
+	public async search(term: string): Promise<UserSearchResult> {
 		const filters = ["isdisabled eq false"];
 		const trimmed = term.trim();
 		if (trimmed.length > 0) {
 			filters.push(`contains(fullname,'${escapeODataLiteral(trimmed)}')`);
 		}
 
-		// Application (service) users are filtered out on the client so that the OData query
-		// stays limited to columns that are guaranteed to be filterable.
+		// One more than the page size, so a full page can be told apart from a truncated result.
+		// Application (service) users are filtered out on the client, which keeps the OData query
+		// limited to columns that are guaranteed to be filterable, so the surplus is doubled to
+		// leave room for the ones that drop out.
+		const limit = this.pageSize * 2 + 1;
 		const query =
 			`?$select=${SELECT}` +
 			`&$filter=${filters.join(" and ")}` +
 			`&$orderby=fullname asc` +
-			`&$top=${this.pageSize * 2}`;
+			`&$top=${limit.toString()}`;
 
-		const response = await this.webAPI.retrieveMultipleRecords("systemuser", query, this.pageSize * 2);
+		const response = await this.webAPI.retrieveMultipleRecords("systemuser", query, limit);
 
 		const suggestions: UserSuggestion[] = [];
+		let hasMore = false;
+
 		for (const entity of response.entities as SystemUserRecord[]) {
 			const id = entity.systemuserid;
 			const name = entity.fullname;
@@ -59,18 +70,19 @@ export class UserSearchService {
 				continue;
 			}
 
+			if (suggestions.length === this.pageSize) {
+				hasMore = true;
+				break;
+			}
+
 			suggestions.push({
 				id,
 				name,
 				email: entity.internalemailaddress ?? undefined,
 				jobTitle: entity.jobtitle ?? undefined,
 			});
-
-			if (suggestions.length === this.pageSize) {
-				break;
-			}
 		}
 
-		return suggestions;
+		return { users: suggestions, hasMore };
 	}
 }

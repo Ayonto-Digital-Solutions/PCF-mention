@@ -10,6 +10,8 @@ export interface SuggestionListProps {
 	readonly onSelect: (user: UserSuggestion) => void;
 	readonly onHover: (index: number) => void;
 	readonly emptyLabel: string;
+	/** Shown when the server had more matches than fit in the list. */
+	readonly moreLabel?: string;
 }
 
 const useStyles = makeStyles({
@@ -50,6 +52,14 @@ const useStyles = makeStyles({
 	empty: {
 		color: tokens.colorNeutralForeground3,
 		display: "block",
+		paddingBlock: tokens.spacingVerticalXS,
+		paddingInline: tokens.spacingHorizontalS,
+	},
+	more: {
+		color: tokens.colorNeutralForeground3,
+		display: "block",
+		...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke2),
+		marginBlockStart: tokens.spacingVerticalXXS,
 		paddingBlock: tokens.spacingVerticalXS,
 		paddingInline: tokens.spacingHorizontalS,
 	},
@@ -100,6 +110,14 @@ export const SuggestionList: React.FC<SuggestionListProps> = (props) => {
 					</span>
 				</li>
 			))}
+			{props.moreLabel ? (
+				// Not an option: it is a note about the result set, not something to pick.
+				<li aria-hidden="true">
+					<Text className={styles.more} size={200}>
+						{props.moreLabel}
+					</Text>
+				</li>
+			) : null}
 		</ul>
 	);
 };

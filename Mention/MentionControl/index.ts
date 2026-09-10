@@ -3,7 +3,12 @@ import type { Theme } from "@fluentui/react-components";
 import type { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "./components/MentionEditor";
 import { EmailNotificationService } from "./services/EmailNotificationService";
-import { UserSearchService, type UserSuggestion } from "./services/UserSearchService";
+import {
+	UserSearchService,
+	type UserSearchResult,
+	type UserSuggestion,
+} from "./services/UserSearchService";
+import { mentionBlocker } from "./utils/availability";
 import { interpolate } from "./utils/format";
 import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
 
@@ -55,6 +60,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			disabled: context.mode.isControlDisabled || field.security?.editable === false,
 			masked: field.security?.readable === false,
 			maxLength: field.attributes?.MaxLength,
+			notice: this.mentionNotice(context),
 			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
 			strings: this.getStrings(),
 			formatNumber: this.formatNumber,
@@ -87,15 +93,49 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
 
-	private readonly searchUsers = async (term: string): Promise<UserSuggestion[]> => {
-		if (this.isDisposed) {
-			return [];
+	private readonly searchUsers = async (term: string): Promise<UserSearchResult> => {
+		if (this.isDisposed || this.isOffline()) {
+			return { users: [], hasMore: false };
 		}
 		return this.userSearch.search(term);
 	};
 
+	/**
+	 * Dataverse is unreachable offline, and a record that was never saved has no id to point a
+	 * notification at. In both cases mentioning is unavailable and the editor says why rather
+	 * than letting the lookup fail or sending a mail that leads nowhere.
+	 */
+	private mentionNotice(context: ComponentFramework.Context<IInputs>): string | undefined {
+		const blocker = mentionBlocker({
+			isOffline: this.isOffline(),
+			notificationsEnabled: context.parameters.sendEmail.raw === SEND_EMAIL_ENABLED,
+			entityNameConfigured: this.configured(context.parameters.entityName.raw) !== undefined,
+			hasRecordId: normalizeGuid(context.parameters.entityId.raw).length > 0,
+		});
+
+		switch (blocker) {
+			case "offline":
+				return this.resource("Editor_OfflineNotice");
+			case "unsaved-record":
+				return this.resource("Editor_UnsavedRecordNotice");
+			default:
+				return undefined;
+		}
+	}
+
+	private isOffline(): boolean {
+		const client = this.context.client;
+		if (typeof client.isOffline === "function" && client.isOffline()) {
+			return true;
+		}
+		return typeof client.isNetworkAvailable === "function" && !client.isNetworkAvailable();
+	}
+
 	private readonly onMention = async (user: UserSuggestion): Promise<void> => {
 		if (this.isDisposed || this.context.parameters.sendEmail.raw !== SEND_EMAIL_ENABLED) {
+			return;
+		}
+		if (this.mentionNotice(this.context) !== undefined) {
 			return;
 		}
 		const recipientId = normalizeGuid(user.id);
@@ -148,6 +188,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.strings ??= {
 			placeholder: this.resource("Editor_Placeholder"),
 			noResults: this.resource("Editor_NoResults"),
+			moreResults: this.resource("Editor_MoreResults"),
 			searching: this.resource("Editor_Searching"),
 			suggestionCount: (count: string) => interpolate(this.resource("Editor_SuggestionCount"), count),
 			charactersLeft: (remaining: string) => interpolate(this.resource("Editor_CharactersLeft"), remaining),

@@ -192,6 +192,15 @@
   <data name="Editor_Placeholder" xml:space="preserve">
     <value>Mit @ jemanden erwähnen</value>
   </data>
+  <data name="Editor_MoreResults" xml:space="preserve">
+    <value>Weitere Treffer — Suche eingrenzen</value>
+  </data>
+  <data name="Editor_OfflineNotice" xml:space="preserve">
+    <value>Keine Verbindung. Erwähnungen sind offline nicht verfügbar.</value>
+  </data>
+  <data name="Editor_UnsavedRecordNotice" xml:space="preserve">
+    <value>Bitte den Datensatz zuerst speichern, damit Erwähnte benachrichtigt werden können.</value>
+  </data>
   <data name="Editor_NoResults" xml:space="preserve">
     <value>Keine Benutzer gefunden</value>
   </data>

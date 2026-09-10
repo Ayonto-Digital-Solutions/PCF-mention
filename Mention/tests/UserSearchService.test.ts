@@ -61,47 +61,73 @@ describe("UserSearchService", () => {
 	});
 
 	it("maps a record onto a suggestion", async () => {
-		const result = await new UserSearchService(makeWebApi([USER()])).search("Ann");
+		const { users } = await new UserSearchService(makeWebApi([USER()])).search("Ann");
 
-		expect(result).toEqual([
+		expect(users).toEqual([
 			{ id: "u1", name: "Anna Berger", email: "anna@contoso.com", jobTitle: "Sales Manager" },
 		]);
 	});
 
 	it("leaves out application users, which cannot receive mail", async () => {
-		const result = await new UserSearchService(
+		const { users } = await new UserSearchService(
 			makeWebApi([USER(), USER({ systemuserid: "u2", fullname: "Portal App", applicationid: "app-1" })])
 		).search("");
 
-		expect(result.map((user) => user.id)).toEqual(["u1"]);
+		expect(users.map((user) => user.id)).toEqual(["u1"]);
 	});
 
 	it("skips records without an id or a name", async () => {
-		const result = await new UserSearchService(
+		const { users } = await new UserSearchService(
 			makeWebApi([USER({ systemuserid: undefined }), USER({ systemuserid: "u3", fullname: undefined }), USER()])
 		).search("");
 
-		expect(result.map((user) => user.id)).toEqual(["u1"]);
+		expect(users.map((user) => user.id)).toEqual(["u1"]);
 	});
 
 	it("never returns more than the page size", async () => {
 		const many = Array.from({ length: 40 }, (_, index) => USER({ systemuserid: `u${index.toString()}` }));
-		const result = await new UserSearchService(makeWebApi(many), 5).search("");
+		const { users } = await new UserSearchService(makeWebApi(many), 5).search("");
 
-		expect(result).toHaveLength(5);
+		expect(users).toHaveLength(5);
 	});
 
-	it("over-fetches so that filtered-out application users do not shrink the list", async () => {
+	it("reports that the server had more matches than fit in the list", async () => {
+		const many = Array.from({ length: 40 }, (_, index) => USER({ systemuserid: `u${index.toString()}` }));
+		const { hasMore } = await new UserSearchService(makeWebApi(many), 5).search("Ann");
+
+		expect(hasMore).toBe(true);
+	});
+
+	it("does not claim more matches when the result fits", async () => {
+		const few = Array.from({ length: 3 }, (_, index) => USER({ systemuserid: `u${index.toString()}` }));
+		const { hasMore } = await new UserSearchService(makeWebApi(few), 5).search("Ann");
+
+		expect(hasMore).toBe(false);
+	});
+
+	it("does not claim more matches when the surplus is only application users", async () => {
+		const records = [
+			USER({ systemuserid: "u1" }),
+			USER({ systemuserid: "u2" }),
+			USER({ systemuserid: "app", applicationid: "app-1" }),
+		];
+		const { users, hasMore } = await new UserSearchService(makeWebApi(records), 2).search("Ann");
+
+		expect(users).toHaveLength(2);
+		expect(hasMore).toBe(false);
+	});
+
+	it("asks for one more than it shows, so truncation can be detected", async () => {
 		const recorded: Recorded[] = [];
 		await new UserSearchService(makeWebApi([], recorded), 10).search("Ann");
 
-		expect(recorded[0].options).toContain("$top=20");
-		expect(recorded[0].maxPageSize).toBe(20);
+		expect(recorded[0].options).toContain("$top=21");
+		expect(recorded[0].maxPageSize).toBe(21);
 	});
 
 	it("reports a missing job title as absent rather than empty", async () => {
-		const result = await new UserSearchService(makeWebApi([USER({ jobtitle: null })])).search("Ann");
+		const { users } = await new UserSearchService(makeWebApi([USER({ jobtitle: null })])).search("Ann");
 
-		expect(result[0].jobTitle).toBeUndefined();
+		expect(users[0].jobTitle).toBeUndefined();
 	});
 });

@@ -13,7 +13,7 @@ import {
 	type Theme,
 } from "@fluentui/react-components";
 import { SuggestionList } from "./SuggestionList";
-import type { UserSuggestion } from "../services/UserSearchService";
+import type { UserSearchResult, UserSuggestion } from "../services/UserSearchService";
 import { applyMention, findMentionTrigger, type MentionTrigger } from "../utils/mentionText";
 
 /** Delay before an "@" query is sent to Dataverse, so typing does not cause one call per keystroke. */
@@ -22,6 +22,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 export interface MentionEditorStrings {
 	readonly placeholder: string;
 	readonly noResults: string;
+	readonly moreResults: string;
 	readonly searching: string;
 	readonly suggestionCount: (count: string) => string;
 	readonly charactersLeft: (remaining: string) => string;
@@ -35,10 +36,12 @@ export interface MentionEditorProps {
 	readonly disabled: boolean;
 	readonly masked: boolean;
 	readonly maxLength?: number;
+	/** Set when mentioning is unavailable; explains why, and keeps the picker closed. */
+	readonly notice?: string;
 	readonly theme?: Theme;
 	readonly strings: MentionEditorStrings;
 	readonly formatNumber: (value: number) => string;
-	readonly searchUsers: (term: string) => Promise<UserSuggestion[]>;
+	readonly searchUsers: (term: string) => Promise<UserSearchResult>;
 	readonly onChange: (value: string) => void;
 	readonly onEditingChange: (isEditing: boolean) => void;
 	readonly onMention: (user: UserSuggestion) => Promise<void>;
@@ -100,6 +103,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const [text, setText] = React.useState(value);
 	const [trigger, setTrigger] = React.useState<MentionTrigger | null>(null);
 	const [suggestions, setSuggestions] = React.useState<readonly UserSuggestion[]>([]);
+	const [hasMoreResults, setHasMoreResults] = React.useState(false);
 	const [activeIndex, setActiveIndex] = React.useState(0);
 	const [isSearching, setIsSearching] = React.useState(false);
 	const [hasLookupFailed, setHasLookupFailed] = React.useState(false);
@@ -139,9 +143,10 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		const handle = setTimeout(() => {
 			void (async () => {
 				try {
-					const users = await searchUsers(query);
+					const result = await searchUsers(query);
 					if (!cancelled) {
-						setSuggestions(users);
+						setSuggestions(result.users);
+						setHasMoreResults(result.hasMore);
 						setActiveIndex(0);
 						setHasLookupFailed(false);
 						setMessage(undefined);
@@ -149,6 +154,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				} catch (error) {
 					if (!cancelled) {
 						setSuggestions([]);
+						setHasMoreResults(false);
 						setHasLookupFailed(true);
 						setMessage(strings.lookupFailed);
 						console.error("[MentionControl] user lookup failed", error);
@@ -170,6 +176,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const closeSuggestions = React.useCallback(() => {
 		setTrigger(null);
 		setSuggestions([]);
+		setHasMoreResults(false);
 		setActiveIndex(0);
 		setHasLookupFailed(false);
 	}, []);
@@ -279,7 +286,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		[activeIndex, closeSuggestions, select, suggestions, trigger]
 	);
 
-	const isOpen = trigger !== null && !props.disabled && !hasLookupFailed;
+	const isOpen = trigger !== null && !props.disabled && !hasLookupFailed && props.notice === undefined;
 	const remaining = props.maxLength !== undefined ? props.maxLength - text.length : undefined;
 
 	if (props.masked) {
@@ -339,6 +346,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 								activeIndex={activeIndex}
 								emptyLabel={strings.noResults}
 								id={LISTBOX_ID}
+								moreLabel={hasMoreResults ? strings.moreResults : undefined}
 								onHover={setActiveIndex}
 								onSelect={select}
 								optionId={optionId}
@@ -349,6 +357,11 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				) : null}
 
 				<div className={styles.footer}>
+					{props.notice ? (
+						<MessageBar intent="info" politeness="polite">
+							<MessageBarBody>{props.notice}</MessageBarBody>
+						</MessageBar>
+					) : null}
 					{message ? (
 						<MessageBar intent="warning" politeness="polite">
 							<MessageBarBody>{message}</MessageBarBody>
