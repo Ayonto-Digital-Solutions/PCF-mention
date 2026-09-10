@@ -20,7 +20,7 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 
 ```bash
 npm install
-npm test                              # 84 Tests
+npm test                              # 85 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -84,7 +84,7 @@ die Liste würde mit jeder Seite weiterwachsen, statt umzublättern.
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 84 Tests |
+| Keine Tests | 85 Tests |
 
 Behobene Fehler aus 1.0:
 

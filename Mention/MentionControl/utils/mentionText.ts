@@ -120,12 +120,19 @@ export interface InsertedMention {
  */
 export function reanchorMentions(mentions: readonly InsertedMention[], text: string): InsertedMention[] {
 	const anchored: InsertedMention[] = [];
+	// Each mention in the text belongs to at most one record: one insertion writing several
+	// characters moves two mentions of the same person at once, and both would otherwise pick the
+	// same occurrence — leaving the second one unrecorded and therefore unguarded.
+	const taken = new Set<number>();
 
-	for (const mention of mentions) {
-		const at = nearestMention(text, mention.name, mention.start);
-		if (at === undefined || anchored.some((other) => other.start === at && other.name === mention.name)) {
+	// Longest name first, because "@Bob Schmidt" also reads as a mention of "Bob": whoever asks
+	// first would take it, and the record for the longer name would find nothing left.
+	for (const mention of [...mentions].sort((left, right) => right.name.length - left.name.length)) {
+		const at = nearestMention(text, mention.name, mention.start, taken);
+		if (at === undefined) {
 			continue;
 		}
+		taken.add(at);
 		anchored.push({ start: at, name: mention.name });
 	}
 
@@ -133,13 +140,13 @@ export function reanchorMentions(mentions: readonly InsertedMention[], text: str
 }
 
 /** Where "@name" now sits closest to where it was, or undefined when it is no longer in the text. */
-function nearestMention(text: string, name: string, near: number): number | undefined {
+function nearestMention(text: string, name: string, near: number, taken?: ReadonlySet<number>): number | undefined {
 	const mention = `@${name}`;
 	let nearest: number | undefined;
 
 	for (let at = text.indexOf(mention); at !== -1; at = text.indexOf(mention, at + 1)) {
 		const following = text[at + mention.length];
-		if (following !== undefined && !MENTION_END.test(following)) {
+		if ((following !== undefined && !MENTION_END.test(following)) || taken?.has(at)) {
 			continue;
 		}
 		if (nearest === undefined || Math.abs(at - near) < Math.abs(nearest - near)) {

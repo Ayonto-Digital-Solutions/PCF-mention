@@ -186,6 +186,37 @@ describe("reanchorMentions", () => {
 		expect(reanchorMentions([{ start: 0, name: "Bob" }], "@Bobbie Jones ")).toEqual([]);
 	});
 
+	it("keeps two mentions of the same person apart when one edit moves both", () => {
+		// Picking a suggestion inserts a whole name at once, so both records shift far enough for
+		// the second one to prefer the first one's occupied spot. Losing it would leave that
+		// mention unguarded — the picker reopens over it and Enter overwrites it.
+		const anchored = reanchorMentions(
+			[
+				{ start: 3, name: "Bob" },
+				{ start: 8, name: "Bob" },
+			],
+			"@Anna Berger @Bob @Bob "
+		);
+
+		expect(anchored.map((mention) => mention.start).sort((a, b) => a - b)).toEqual([13, 18]);
+	});
+
+	it("does not let a short name take the mention of a longer one", () => {
+		// "@Bob Schmidt" also reads as a mention of "Bob" followed by a space.
+		const anchored = reanchorMentions(
+			[
+				{ start: 0, name: "Bob Schmidt" },
+				{ start: 13, name: "Bob" },
+			],
+			"@Anna Berger @Bob Schmidt @Bob "
+		);
+
+		expect(anchored).toEqual([
+			{ start: 13, name: "Bob Schmidt" },
+			{ start: 26, name: "Bob" },
+		]);
+	});
+
 	it("keeps two mentions of the same person apart", () => {
 		const anchored = reanchorMentions(
 			[

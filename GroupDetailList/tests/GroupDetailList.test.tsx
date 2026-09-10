@@ -161,6 +161,15 @@ describe("GroupDetailList", () => {
 		expect(screen.getByText("+49 (0)30 123456").closest("a")).toBeNull();
 	});
 
+	it("leaves a trunk digit bracketed together with the area code as text", () => {
+		// "+49 (030) …" is dialled abroad as +49 30 …; keeping the zero produces a number that
+		// does not connect.
+		const rows = [{ id: "1", values: { ...ROWS[0].values, phone: "+49 (030) 123456" } }];
+		setup({ rows });
+
+		expect(screen.getByText("+49 (030) 123456").closest("a")).toBeNull();
+	});
+
 	it("still dials an area code in brackets behind a country code", () => {
 		// "+1 (555) …" is unambiguous: the brackets are typography, the digits belong to the number.
 		const rows = [{ id: "1", values: { ...ROWS[0].values, phone: "+1 (555) 123-4567" } }];
