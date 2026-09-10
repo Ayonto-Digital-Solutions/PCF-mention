@@ -49,7 +49,8 @@ Production-Build aus (siehe [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 
 ## Release
 
-Ein Tag `vX.Y.Z` prüft beide Components mit denselben vier Schritten wie die CI — ein Tag löst
+Ein Tag `vX.Y.Z` — oder ein Start des Workflows von Hand mit der Version als Eingabe, der das
+Tag dann selbst setzt — prüft beide Components mit denselben vier Schritten wie die CI — ein Tag löst
 `ci.yml` nicht aus, und aus einem Stand, der die Prüfung nicht besteht, darf kein Release
 entstehen —, baut sie, erzeugt daraus über die Power Platform CLI eine Dataverse-Solution und
 hängt sie an das GitHub-Release
