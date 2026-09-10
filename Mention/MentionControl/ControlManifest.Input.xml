@@ -91,6 +91,19 @@
               usage="input"
               required="false" />
 
+    <!--
+      Optional, and only needed to point the component at a different table than the one the
+      solution ships. Optional properties may be added to a newer version of a code component;
+      required ones may not.
+      https://learn.microsoft.com/power-apps/developer/component-framework/faq
+    -->
+    <property name="mentionTable"
+              display-name-key="MentionTable_Name"
+              description-key="MentionTable_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <property name="appId"
               display-name-key="AppId_Name"
               description-key="AppId_Desc"
@@ -114,7 +127,6 @@
 
     <feature-usage>
       <uses-feature name="WebAPI" required="true" />
-      <uses-feature name="Utility" required="true" />
     </feature-usage>
   </control>
 </manifest>

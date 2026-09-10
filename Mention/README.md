@@ -15,7 +15,7 @@ Tooling und APIs, die es so nicht mehr gibt — siehe [Was sich geändert hat](#
 | Typ | `virtual` (React) |
 | Plattform-Bibliotheken | React 16.14.0, Fluent UI v9 (9.46.2) |
 | Unterstützte Apps | modellgesteuerte Apps |
-| Bundle | 23 KiB (Production-Build) |
+| Bundle | 25 KiB (Production-Build) |
 
 React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 ([platform libraries](https://learn.microsoft.com/power-apps/developer/component-framework/react-controls-platform-libraries)).
@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 161 Tests
+npm test                              # 158 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -72,11 +72,12 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `field` | ja | Die gebundene Textspalte. `SingleLine.Text`, `SingleLine.TextArea` oder `Multiple`. |
 | `entityId` | nein | An die Primärschlüsselspalte der Tabelle binden (z. B. `accountid`). |
 | `entityName` | nein | Logischer Tabellenname, z. B. `account`. Als statischer Wert setzbar. |
-| `sendEmail` | ja | `Ja` (Standard) benachrichtigt erwähnte Personen, `Nein` schaltet den Versand ab. |
+| `sendEmail` | ja | `Ja` (Standard) schreibt für jede Erwähnung eine Zeile in die Benachrichtigungstabelle, `Nein` schreibt nur den Text. |
 | `senderUserId` | nein | GUID des absendenden Benutzers. Ohne Angabe der angemeldete Benutzer. |
 | `emailSubject` | nein | Betreff der Benachrichtigung. |
 | `emailContent` | nein | Text der Benachrichtigung. Der Datensatz-Link wird angehängt. |
-| `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Nötig für den Link in der E-Mail. |
+| `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Nötig für den Link auf den Datensatz. |
+| `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
 
 **Den Datensatz muss man in der Regel nicht konfigurieren.** In modellgesteuerten Apps meldet der
@@ -93,61 +94,57 @@ Deep-Link.
 ## Wie die Benachrichtigung funktioniert
 
 1. Eine Person wird aus der Vorschlagsliste gewählt; `@Vorname Nachname` wird in den Text geschrieben.
-2. Das Component legt über `context.webAPI.createRecord("email", …)` eine E-Mail-Aktivität an,
-   mit Absender und Empfänger als `activityparty` (`partyid_systemuser`).
-3. Ist der Datensatz bekannt — vom Host gemeldet oder über die Eigenschaften gesetzt —, wird die
-   E-Mail per `updateRecord` auf ihn bezogen (`regardingobjectid`), damit sie in dessen Zeitachse
-   auftaucht.
-4. Anschließend wird die gebundene Aktion `SendEmail` ausgelöst.
+2. Nach der Karenzzeit legt das Component über `context.webAPI.createRecord` eine Zeile in der
+   Tabelle **`ayonto_mention`** an — mit Empfänger, Absender, Betreff, Text, dem Datensatz und
+   einem fertigen Link darauf.
+3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
+   per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
+   auf `Sent` oder `Failed` zurück.
 
-Zu Schritt 3: Die Navigationseigenschaft des Regarding-Lookups lässt sich nicht aus dem
-Tabellennamen ableiten — `account` nutzt `regardingobjectid_account_email`, `asyncoperation`
-dagegen `regardingobjectid_asyncoperation`. Deshalb ist die Verknüpfung ein eigener Schritt
-*nach* dem Anlegen: Beide Schreibweisen werden nacheinander versucht, und wenn keine passt,
-geht nur der Bezug verloren, nicht die Benachrichtigung.
+Dataverse wird bewusst **nicht** gebeten zu senden. Eine Umgebung, deren Postfächer nicht auf
+serverseitige Synchronisierung eingerichtet sind, würde nur Entwürfe ansammeln, und die meisten
+Organisationen versenden ohnehin über einen Flow mit ihrem eigenen Absender, ihren Vorlagen und
+ihrem BCC.
 
-Zu Schritt 4: `context.webAPI` bietet ausschließlich `createRecord`, `retrieveRecord`,
-`retrieveMultipleRecords`, `updateRecord` und `deleteRecord` — **kein** `execute`
-([WebAPI-Referenz](https://learn.microsoft.com/power-apps/developer/component-framework/reference/webapi)).
-Eine gebundene Aktion lässt sich damit nicht aufrufen. Das Component postet die Aktion deshalb
-same-origin gegen die Web-API der eigenen Umgebung
-(`/api/data/v9.2/emails(<id>)/Microsoft.Dynamics.CRM.SendEmail`).
+Die Tabelle kommt mit der Lösung: `solution/src/Entities/ayonto_Mention` beschreibt sie, der
+Import legt sie an. Wer sie woanders haben will, trägt den logischen Namen in die Eigenschaft
+`mentionTable` ein — die Spaltennamen leiten sich dann vom Präfix dieser Tabelle ab, es braucht
+also eine Tabelle mit denselben Spalten hinter dem Präfix.
 
-Scheitert dieser Aufruf, bleibt die E-Mail als **Entwurf** in der Umgebung liegen; im Component
-erscheint ein Hinweis. Wer den direkten Versand nicht möchte, setzt `sendEmail` auf `Nein` und
-lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen der E-Mail reagieren — das
-Anlegen selbst ist unabhängig vom Versand.
+Was in einer Zeile steht:
 
-Zwischen Auswahl und Versand liegen **5 Sekunden**. Wird die Erwähnung in dieser Zeit wieder
-gelöscht — der Fehlgriff in der Liste —, geht keine Mail raus. Eine Mail „Sie wurden erwähnt"
-lässt sich nicht zurückholen; die Erwähnung selbst schon.
+| Spalte | Inhalt |
+|---|---|
+| `ayonto_name` | `@Anna Berger · Contoso AG` — was in Ansichten lesbar ist |
+| `ayonto_userid`, `ayonto_username`, `ayonto_useremail` | die erwähnte Person |
+| `ayonto_mentionedbyid` | wer erwähnt hat |
+| `ayonto_recordtable`, `ayonto_recordid`, `ayonto_recordname` | der Datensatz |
+| `ayonto_recordurl` | fertiger Deep-Link, sofern `orgUrl` gesetzt ist |
+| `ayonto_subject`, `ayonto_message` | Betreff und Text aus der Konfiguration |
+| `ayonto_deliverystatus` | `New`, bis der Flow zurückschreibt |
+| `ayonto_deliverydetail` | Fehlertext des Flows |
 
-Wird das Formular innerhalb dieser 5 Sekunden geschlossen, geht die Mail sofort raus, sofern die
-Erwähnung noch im Text steht. Ein Code-Component erfährt nicht, ob der Datensatz gespeichert
-wurde, und die Erwähnung steht in beiden Fällen im Text — die Wartezeit kann das verworfene
-Formular also nicht abdecken. Von beiden Fehlern ist die Mail der kleinere: Sie führt zu einem
-Datensatz ohne die Erwähnung, was sichtbar und erklärbar ist, während eine stillschweigend
-verworfene Benachrichtigung den Absender in dem Glauben lässt, die Person sei informiert.
+### Klickbare Erwähnungen
 
-Jede Person wird einmal pro Erwähnung benachrichtigt. Wird die Erwähnung gelöscht und später
-erneut gesetzt, wird wieder benachrichtigt. Schlägt der Versand fehl, bleibt die Person für einen
-erneuten Versuch freigeschaltet.
+Solange das Feld nicht den Fokus hat, liegt über der Textfläche eine Ansicht, in der jede
+Erwähnung ein Link auf die erwähnte Person ist (`context.navigation.openForm`). Sobald jemand
+hineinklickt oder mit Tab hineinspringt, ist es wieder ein gewöhnliches Textfeld.
 
-### Was die Umgebung für den Versand braucht
+Verlinkt wird nur, was das Component auflösen kann: die Erwähnungen, die dieser Datensatz in der
+Tabelle hat, plus die, die gerade gesetzt wurden. Der Text allein kann nicht sagen, ob
+`@Anna Berger` eine Person oder ein Satz ist, und ein Link auf den falschen Datensatz wäre
+schlimmer als keiner.
 
-Das Component legt die E-Mail an und löst `SendEmail` aus; ob sie das Haus verlässt, entscheidet
-die Umgebung:
+### Was die Umgebung dafür braucht
 
-* Das Postfach des **Absenders** muss für ausgehende E-Mail auf serverseitige Synchronisierung
-  stehen, genehmigt und „Testen und aktivieren" durchlaufen haben. Fehlt das, bleibt die E-Mail
-  als **Entwurf** liegen — sichtbar in der Umgebung, mit einem Hinweis im Component.
-* Der **Anwender** braucht Leserecht auf `systemuser` (sonst findet die Suche niemanden), Anlegen
-  auf der E-Mail-Aktivität, „Anfügen an" auf der Zieltabelle für den Datensatzbezug und
-  „E-Mail senden". Ein anderer Absender als der angemeldete Benutzer verlangt zusätzlich
-  „E-Mail als anderer Benutzer senden".
-* Der **Empfänger** braucht eine E-Mail-Adresse. Die Vorschlagsliste prüft das nicht — sie zeigt
-  aktivierte, interaktive Benutzer; ob deren Postfach bestellt ist, stellt sich erst beim Versand
-  heraus.
+* Der **Anwender** braucht Leserecht auf `systemuser` — sonst findet die Vorschlagsliste niemanden
+  — und **Anlegen** auf `ayonto_mention`. Ohne das Anlegerecht scheitert die Erwähnung sichtbar im
+  Component statt still.
+* Der **Flow** muss existieren: ohne ihn sammeln sich Zeilen mit `ayonto_deliverystatus = New`,
+  und niemand wird benachrichtigt. Die Tabelle ist dann ein vollständiges Protokoll dessen, was
+  hätte rausgehen sollen.
+* Die Vorschlagsliste prüft **kein Postfach**. Sie zeigt aktivierte, interaktive Benutzer; ob
+  deren Adresse gepflegt ist, entscheidet sich im Flow.
 
 ### Wann Erwähnen nicht verfügbar ist
 
@@ -181,16 +178,16 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alt (1.0, August 2020) | Neu (2.0) |
 |---|---|
 | `pcf-scripts` 1.3.6 (Juli 2020), webpack 4, TypeScript 3.9 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
-| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (23 KiB) |
+| `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (25 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
 | `Xrm.Page.data.entity.getId()` / `getEntityName()` | `context.mode.contextInfo`, mit `entityId` / `entityName` als Übersteuerung |
 | `Xrm.Page.context.getClientUrl()` / `getUserId()` | `orgUrl`-Eigenschaft bzw. `context.userSettings.userId` |
-| `Xrm.WebApi.online.retrieveMultipleRecords` / `.execute` | `context.webAPI` + `<uses-feature name="WebAPI">` |
+| `Xrm.WebApi.online.retrieveMultipleRecords` / `.execute` | `context.webAPI` + `<uses-feature name="WebAPI">`; benachrichtigt wird über eine Tabellenzeile und einen Flow |
 | `Xrm.Utility.alertDialog` | Inline-Hinweis im Component |
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 161 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 158 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 

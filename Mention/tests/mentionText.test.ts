@@ -9,6 +9,7 @@ import {
 	findMentionTrigger,
 	normalizeGuid,
 	reanchorMentions,
+	splitMentions,
 } from "../MentionControl/utils/mentionText";
 
 describe("findMentionTrigger", () => {
@@ -229,6 +230,49 @@ describe("reanchorMentions", () => {
 		expect(anchored).toEqual([
 			{ start: 3, name: "Bob" },
 			{ start: 12, name: "Bob" },
+		]);
+	});
+});
+
+describe("splitMentions", () => {
+	const users = new Map([
+		["Anna Berger", "u1"],
+		["Bob", "u2"],
+		["Bob Schmidt", "u3"],
+	]);
+
+	it("keeps text without mentions in one piece", () => {
+		expect(splitMentions("nothing to see", users)).toEqual([{ text: "nothing to see" }]);
+	});
+
+	it("marks a known name as a mention", () => {
+		expect(splitMentions("hi @Anna Berger, thanks", users)).toEqual([
+			{ text: "hi " },
+			{ text: "@Anna Berger", userId: "u1" },
+			{ text: ", thanks" },
+		]);
+	});
+
+	it("leaves a name nobody could resolve as plain text", () => {
+		expect(splitMentions("hi @Carla Meier", users)).toEqual([{ text: "hi @Carla Meier" }]);
+	});
+
+	it("prefers the longer name", () => {
+		expect(splitMentions("@Bob Schmidt is here", users)).toEqual([
+			{ text: "@Bob Schmidt", userId: "u3" },
+			{ text: " is here" },
+		]);
+	});
+
+	it("does not read an e-mail address as a mention", () => {
+		expect(splitMentions("mail@Bob now", users)).toEqual([{ text: "mail@Bob now" }]);
+	});
+
+	it("finds several mentions in one text", () => {
+		expect(splitMentions("@Bob and @Anna Berger", users)).toEqual([
+			{ text: "@Bob", userId: "u2" },
+			{ text: " and " },
+			{ text: "@Anna Berger", userId: "u1" },
 		]);
 	});
 });
