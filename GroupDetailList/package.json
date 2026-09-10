@@ -7,8 +7,8 @@
 	"scripts": {
 		"build": "pcf-scripts build",
 		"clean": "pcf-scripts clean",
-		"lint": "pcf-scripts lint && eslint tests vitest.config.ts",
-		"lint:fix": "pcf-scripts lint fix && eslint --fix tests vitest.config.ts",
+		"lint": "pcf-scripts lint && eslint . --max-warnings 0",
+		"lint:fix": "pcf-scripts lint fix && eslint . --fix --max-warnings 0",
 		"rebuild": "pcf-scripts rebuild",
 		"refreshTypes": "pcf-scripts refreshTypes",
 		"start": "pcf-scripts start",

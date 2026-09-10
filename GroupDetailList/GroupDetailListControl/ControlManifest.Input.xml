@@ -18,7 +18,7 @@
     <data-set name="listDataSet"
               display-name-key="DataSet_Name"
               description-key="DataSet_Desc"
-              cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFindSearch:true">
+              cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true">
     </data-set>
 
     <property name="pageSize"

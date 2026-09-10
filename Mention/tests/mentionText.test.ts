@@ -88,6 +88,11 @@ describe("containsMention", () => {
 		expect(containsMention("hi @Ann, thanks", "Ann Smith")).toBe(false);
 	});
 
+	it("needs the @: the bare name in a sentence is not a mention", () => {
+		// Without this the scheduler would treat any sentence naming the person as a live mention.
+		expect(containsMention("Ann Smith asked me to update this", "Ann Smith")).toBe(false);
+	});
+
 	it("is false for a blank name", () => {
 		expect(containsMention("hi @", "  ")).toBe(false);
 	});

@@ -113,6 +113,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const [message, setMessage] = React.useState<string | undefined>(undefined);
 
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+	/** Names this editor already wrote, so typing on past one does not look like a new query. */
+	const insertedNames = React.useRef(new Set<string>());
 	const isFocused = React.useRef(false);
 	const pendingCaret = React.useRef<number | null>(null);
 
@@ -133,7 +135,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		}
 	});
 
-	const query = trigger?.query ?? null;
+	const query = props.notice === undefined ? (trigger?.query ?? null) : null;
 	React.useEffect(() => {
 		if (query === null) {
 			setSuggestions([]);
@@ -202,7 +204,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	 * caret can therefore only ever close the list; typing is what opens it.
 	 */
 	const syncTrigger = React.useCallback((nextText: string, caret: number, mayOpen: boolean) => {
-		const next = findMentionTrigger(nextText, caret);
+		const found = findMentionTrigger(nextText, caret);
+		// A query may hold a space because names do, so continuing the sentence after a one-word
+		// mention ("@Bob thanks") still looks like a query. It is not: the name is already there.
+		const next =
+			found && [...insertedNames.current].some((name) => found.query.startsWith(`${name} `))
+				? null
+				: found;
 		setTrigger((current) => {
 			if (current === null) {
 				return mayOpen ? next : null;
@@ -250,6 +258,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				return;
 			}
 
+			insertedNames.current.add(user.name.trim());
 			pendingCaret.current = result.caret;
 			commit(result.text);
 			closeSuggestions();

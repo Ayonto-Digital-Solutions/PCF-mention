@@ -35,11 +35,13 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 	private initialSelectedIds: string[] = [];
 	private groupColumnKey: string | undefined;
 	private appliedPageSize = 0;
+	/** The selection last reported by the component, so it survives a refresh. */
+	private selection: string[] = [];
+	private mustReapplySelection = false;
 	private isDisposed = false;
 
 	public init(context: ComponentFramework.Context<IInputs>): void {
 		this.context = context;
-		context.mode.trackContainerResize(true);
 	}
 
 	public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
@@ -52,6 +54,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 			this.columns = toGridColumns(dataset.columns);
 			this.rows = toGridRows(dataset.sortedRecordIds, dataset.records, this.columns);
 			this.initialSelectedIds = dataset.getSelectedRecordIds?.() ?? [];
+			this.reapplySelection(dataset);
 		}
 
 		const props: GroupDetailListProps = {
@@ -91,6 +94,23 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 	}
 
 	/**
+	 * Refreshing clears the dataset's selection, and every sort and page turn goes through a
+	 * refresh. What the user picked is put back so the command bar keeps seeing it.
+	 */
+	private reapplySelection(dataset: DataSet): void {
+		if (!this.mustReapplySelection) {
+			return;
+		}
+		this.mustReapplySelection = false;
+
+		const onPage = new Set(this.rows.map((row) => row.id));
+		const kept = this.selection.filter((id) => onPage.has(id));
+		if (kept.length > 0) {
+			dataset.setSelectedRecordIds?.(kept);
+		}
+	}
+
+	/**
 	 * The view decides how many records a page holds. Applying it once per change keeps the
 	 * component from asking the server for the whole table, which is what the previous version
 	 * did with a page size of 5000 and a loop over every page.
@@ -105,6 +125,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		this.appliedPageSize = pageSize;
 		if (dataset.paging.pageSize !== pageSize) {
 			dataset.paging.setPageSize(pageSize);
+			this.mustReapplySelection = true;
 			dataset.refresh();
 		}
 	}
@@ -131,6 +152,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		} else {
 			dataset.sorting = sorting;
 		}
+		this.mustReapplySelection = true;
 		dataset.refresh();
 	};
 
@@ -150,6 +172,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 
 	/** The component decides what is selected; the dataset is told so commands see the same set. */
 	private readonly onSelectionChange = (rowIds: string[]): void => {
+		this.selection = rowIds;
 		if (!this.isDisposed) {
 			this.dataset.setSelectedRecordIds?.(rowIds);
 		}
@@ -181,10 +204,12 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 	// Both take loadOnlyNewPage: without it the framework returns the whole range it has loaded
 	// so far, so the grid would accumulate every page instead of turning to the next one.
 	private readonly onPreviousPage = (): void => {
+		this.mustReapplySelection = true;
 		this.dataset.paging?.loadPreviousPage(true);
 	};
 
 	private readonly onNextPage = (): void => {
+		this.mustReapplySelection = true;
 		this.dataset.paging?.loadNextPage(true);
 	};
 

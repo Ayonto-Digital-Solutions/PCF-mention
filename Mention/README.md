@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 109 Tests
+npm test                              # 128 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -153,7 +153,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 109 Tests über Logik, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 128 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
@@ -200,6 +200,7 @@ Mention/
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
+   ├─ MentionControl.test.ts            Wertabgleich und Verfügbarkeit am Control
    ├─ mentionText.test.ts               Reine Funktionen
    ├─ availability.test.ts              Wahrheitstabelle der Verfügbarkeit
    ├─ NotificationScheduler.test.ts     Karenzzeit, Rücknahme, Entdopplung

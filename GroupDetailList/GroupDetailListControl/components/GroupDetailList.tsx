@@ -110,7 +110,8 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	// Two of these controls can sit on one form, so the label id has to be unique per instance.
 	const groupByLabelId = useId("group-by-label");
 
-	const reportedFor = React.useRef<readonly GridRow[] | undefined>(undefined);
+	const rowsKey = rows.map((row) => row.id).join("\u0000");
+	const reportedFor = React.useRef<string | undefined>(undefined);
 	const selectionSeeded = React.useRef(props.initialSelectedIds.length > 0);
 
 	// The first updateView usually arrives while the dataset is still loading, so what the
@@ -129,10 +130,10 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	// so what survives has to be handed back to it or the command bar goes grey while the grid
 	// still shows ticks.
 	React.useEffect(() => {
-		if (reportedFor.current === rows) {
+		if (reportedFor.current === rowsKey) {
 			return;
 		}
-		reportedFor.current = rows;
+		reportedFor.current = rowsKey;
 
 		const onPage = new Set(rows.map((row) => row.id));
 		const kept = [...selected].filter((id) => onPage.has(id));
@@ -140,7 +141,7 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 			setSelected(new Set(kept));
 		}
 		onSelectionChange(kept);
-	}, [rows, selected, onSelectionChange]);
+	}, [rowsKey, rows, selected, onSelectionChange]);
 
 	const commitSelection = React.useCallback(
 		(next: ReadonlySet<string>) => {

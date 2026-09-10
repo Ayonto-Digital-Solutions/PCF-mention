@@ -9,7 +9,8 @@ import typescriptEslint from "typescript-eslint";
 /** @type {import('eslint').Linter.Config[]} */
 export default [
 	{
-		ignores: ["**/generated", "out/**", "node_modules/**"],
+		// The flat config itself is not part of the TypeScript project the type-aware rules need.
+		ignores: ["**/generated", "out/**", "node_modules/**", "eslint.config.mjs"],
 	},
 	eslintjs.configs.recommended,
 	...typescriptEslint.configs.recommendedTypeChecked,

@@ -73,9 +73,12 @@ describe("MentionEditor", () => {
 		expect(onChange).toHaveBeenCalledWith("hello");
 	});
 
-	it("does not query for users while no mention is open", () => {
+	it("does not query for users while no mention is open", async () => {
 		const { textarea, searchUsers } = setup();
 		type(textarea, "hello");
+
+		// The lookup is debounced, so the assertion has to outlast the debounce to mean anything.
+		await new Promise((resolve) => setTimeout(resolve, 400));
 		expect(searchUsers).not.toHaveBeenCalled();
 	});
 
@@ -101,8 +104,11 @@ describe("MentionEditor", () => {
 		expect(screen.getAllByRole("option")[0].getAttribute("aria-selected")).toBe("true");
 
 		fireEvent.keyDown(textarea, { key: "ArrowDown" });
-		expect(screen.getAllByRole("option")[1].getAttribute("aria-selected")).toBe("true");
-		expect(textarea.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id);
+		const options = screen.getAllByRole("option");
+		expect(options[1].getAttribute("aria-selected")).toBe("true");
+		// Distinct ids, or pointing at one of them would say nothing.
+		expect(options[0].id).not.toBe(options[1].id);
+		expect(textarea.getAttribute("aria-activedescendant")).toBe(options[1].id);
 
 		// Wraps around at the end of the list.
 		fireEvent.keyDown(textarea, { key: "ArrowDown" });
@@ -253,14 +259,15 @@ describe("MentionEditor", () => {
 		expect(onEditingChange).toHaveBeenLastCalledWith(false);
 	});
 
-	it("keeps the typed text when the host repeats an older value mid-edit", () => {
-		const { textarea, rerender, container } = setup({ value: "old" });
+	it("keeps the typed text when the host sends a different value mid-edit", () => {
+		const { textarea, rerender, container } = setup({ value: "start" });
 		fireEvent.focus(textarea);
-		type(textarea, "old and new");
+		type(textarea, "start typed");
 
-		rerender(<MentionEditor {...lastProps!} value="old" />);
+		// A different value, so the sync effect really runs — and must still not win.
+		rerender(<MentionEditor {...lastProps!} value="written elsewhere" />);
 
-		expect(container.querySelector("textarea")!.value).toBe("old and new");
+		expect(container.querySelector("textarea")!.value).toBe("start typed");
 	});
 
 	it("takes over a new host value once the editor is no longer focused", () => {
@@ -296,7 +303,9 @@ describe("MentionEditor", () => {
 		type(textarea, "hi @An");
 
 		expect(screen.getByText("Save the record first.")).toBeTruthy();
-		await waitFor(() => expect(searchUsers).toHaveBeenCalled());
+		// Not even a round trip: the list it would fill cannot open.
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
 		expect(screen.queryAllByRole("option")).toHaveLength(0);
 		expect(textarea.getAttribute("aria-controls")).toBeNull();
 	});
@@ -334,6 +343,54 @@ describe("MentionEditor", () => {
 		fireEvent.keyDown(textarea, { key: "Escape" });
 
 		expect(screen.queryByText("Users could not be loaded.")).toBeNull();
+	});
+
+	it("does not query again when the sentence continues after a finished mention", async () => {
+		// "@Bob thanks" still parses as a query because names hold a space, but the name is
+		// already written — searching for it again is a wasted round trip and a stray popup.
+		const { textarea, searchUsers } = setup();
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		searchUsers.mockClear();
+
+		type(textarea, "hi @Anna Berger thanks");
+
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("puts the caret after the inserted mention, not at the end of the text", async () => {
+		const { textarea } = setup();
+		type(textarea, "cc @An, thanks", 6);
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		// "cc @Anna Berger " is 16 characters; the rest of the sentence follows it.
+		expect(textarea.selectionStart).toBe(16);
+	});
+
+	it("closes the suggestion list when the editor loses the focus", async () => {
+		const { textarea } = setup();
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		fireEvent.blur(textarea);
+
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("lets an IME commit its candidate instead of picking a suggestion", async () => {
+		const { textarea, onMention } = setup();
+		type(textarea, "hi @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+		fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
+
+		expect(onMention).not.toHaveBeenCalled();
+		expect(screen.getAllByRole("option")).toHaveLength(2);
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {

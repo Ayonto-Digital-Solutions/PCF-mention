@@ -236,17 +236,84 @@ describe("GroupDetailList", () => {
 		expect(onSelectionChange).toHaveBeenLastCalledWith(["1"]);
 	});
 
-	it("hands the selection back to the dataset after a refresh clears it", () => {
-		// Every sort and page turn goes through refresh(), which wipes the dataset's own
-		// selection. Without re-reporting, the command bar greys out while ticks remain.
+	it("adopts a selection the dataset only reports after loading", () => {
+		// The first update usually arrives while the dataset is still loading, so the platform's
+		// existing selection shows up on a later one.
+		const { rerender, container } = setup({ initialSelectedIds: [] });
+		expect(screen.getByText("0 selected")).toBeTruthy();
+
+		rerender(<GroupDetailList {...lastProps!} initialSelectedIds={["1", "2"]} />);
+
+		expect(screen.getByText("2 selected")).toBeTruthy();
+		expect(container.querySelectorAll('tbody tr[aria-selected="true"], tbody tr').length).toBeGreaterThan(0);
+	});
+
+	it("does not let a late dataset selection overrule what the user picked", () => {
+		const { rerender } = setup({ initialSelectedIds: [] });
+		fireEvent.click(screen.getByText("Cara").closest("tr")!.querySelector("td")!);
+		expect(screen.getByText("1 selected")).toBeTruthy();
+
+		rerender(<GroupDetailList {...lastProps!} initialSelectedIds={["1", "2"]} />);
+
+		expect(screen.getByText("1 selected")).toBeTruthy();
+	});
+
+	it("marks the header checkbox mixed while only some rows are selected", () => {
+		const { container } = setup({ initialSelectedIds: ["1"] });
+		const headerCheckbox = container.querySelector<HTMLInputElement>('thead input[type="checkbox"]')!;
+
+		expect(headerCheckbox.indeterminate).toBe(true);
+		expect(headerCheckbox.checked).toBe(false);
+	});
+
+	it("checks the header checkbox once every row is selected", () => {
+		const { container } = setup({ initialSelectedIds: ["1", "2", "3"] });
+		const headerCheckbox = container.querySelector<HTMLInputElement>('thead input[type="checkbox"]')!;
+
+		expect(headerCheckbox.checked).toBe(true);
+		expect(headerCheckbox.indeterminate).toBe(false);
+	});
+
+	it("leaves an empty cell empty instead of linking nothing", () => {
+		// Row 2 has no e-mail, no phone and no owner.
+		const { container } = setup();
+		const secondRow = screen.getByText("Bert").closest("tr")!;
+
+		expect(secondRow.querySelectorAll("a")).toHaveLength(0);
+		expect(container.querySelector('a[href="mailto:"]')).toBeNull();
+	});
+
+	it("names a group of records that have no value for the column", () => {
+		const rows = [
+			{ id: "1", values: { ...ROWS[0].values, city: "Berlin" } },
+			{ id: "2", values: { ...ROWS[1].values, city: "" } },
+		];
+		const { container } = setup({ rows, sortOf: (key) => (key === "city" ? "ascending" : undefined) });
+
+		pickGroupColumn("City");
+
+		expect(groupHeaders(container)).toEqual(["Berlin(1)", "(empty)(1)"]);
+	});
+
+	it("does not re-report when the same records come back in a new array", () => {
+		// index.ts rebuilds the row array on every update; reacting to that identity would
+		// report the selection back on every single one.
 		const { rerender, onSelectionChange } = setup({ initialSelectedIds: ["1"] });
 		onSelectionChange.mockClear();
 
-		// Same records, new array — what a refresh looks like from here.
 		rerender(<GroupDetailList {...lastProps!} rows={[...ROWS]} />);
 
-		expect(onSelectionChange).toHaveBeenCalledWith(["1"]);
+		expect(onSelectionChange).not.toHaveBeenCalled();
 		expect(screen.getByText("1 selected")).toBeTruthy();
+	});
+
+	it("re-reports the selection when the records are reordered by a sort", () => {
+		const { rerender, onSelectionChange } = setup({ initialSelectedIds: ["1"] });
+		onSelectionChange.mockClear();
+
+		rerender(<GroupDetailList {...lastProps!} rows={[...ROWS].reverse()} />);
+
+		expect(onSelectionChange).toHaveBeenCalledWith(["1"]);
 	});
 
 	it("does not offer a column for grouping that the view forbids sorting", () => {

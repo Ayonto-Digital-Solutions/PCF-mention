@@ -39,8 +39,8 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	private scheduler: NotificationScheduler<NotificationRequest>;
 	private value = "";
-	/** The value handed to the platform that it has not echoed back yet. */
-	private pendingValue: string | undefined;
+	/** The value the platform was carrying before the edit it has not caught up with yet. */
+	private staleValue: string | undefined;
 
 	/** True while the editor has the focus, which is exactly when it owns the text. */
 	private isEditing = false;
@@ -58,7 +58,6 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			async (request: NotificationRequest) => this.notifications.notify(request),
 			(mentionName: string) => containsMention(this.value, mentionName)
 		);
-		context.mode.trackContainerResize(true);
 	}
 
 	public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
@@ -66,17 +65,16 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 		const field = context.parameters.field;
 
-		// The platform reports the column asynchronously, so an updateView can still carry a value
-		// that predates the last edit. Incoming values are ignored until the platform echoes back
-		// the one that was handed to it; only then is it caught up and safe to follow again.
-		// Editing is a second reason to ignore: while the editor has the focus it owns the text.
+		// The platform reports the column asynchronously, so an updateView can still carry the text
+		// as it was before the last edit. Exactly that one value is ignored — anything else is news
+		// and is followed, so a platform that never echoes a value back cannot wedge the component.
+		// Editing is the second reason to ignore: while the editor has the focus it owns the text.
 		const incoming = field.raw ?? "";
-		if (this.pendingValue !== undefined) {
-			if (incoming === this.pendingValue) {
-				this.pendingValue = undefined;
-			}
-		} else if (!this.isEditing || context.mode.isControlDisabled) {
+		if (incoming === this.value) {
+			this.staleValue = undefined;
+		} else if (incoming !== this.staleValue && (!this.isEditing || context.mode.isControlDisabled)) {
 			this.value = incoming;
+			this.staleValue = undefined;
 		}
 
 		const props: MentionEditorProps = {
@@ -109,8 +107,10 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	}
 
 	private readonly onChange = (value: string): void => {
+		// Remember what the platform still has, so a late update carrying it can be told apart
+		// from a genuinely new value.
+		this.staleValue ??= this.value;
 		this.value = value;
-		this.pendingValue = value;
 		// A mention that was deleted can be made again, and should notify again.
 		this.scheduler.dropWithdrawn();
 		this.notifyOutputChanged();
@@ -123,7 +123,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
 
 	private readonly searchUsers = async (term: string): Promise<UserSearchResult> => {
-		if (this.isDisposed || this.isOffline()) {
+		if (this.isDisposed || this.mentionNotice(this.context) !== undefined) {
 			return { users: [], hasMore: false };
 		}
 		return this.userSearch.search(term);
