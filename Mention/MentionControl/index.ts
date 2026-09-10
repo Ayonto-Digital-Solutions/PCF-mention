@@ -114,6 +114,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 					entityId,
 					appId: parameters.appId.raw,
 				}),
+				recordLinkLabel: this.resource("Notification_OpenRecord"),
 				entityName,
 				entityId,
 			});

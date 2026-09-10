@@ -213,6 +213,9 @@
   <data name="Editor_MaskedValue" xml:space="preserve">
     <value>* * * * *</value>
   </data>
+  <data name="Notification_OpenRecord" xml:space="preserve">
+    <value>Open the record</value>
+  </data>
   <data name="Notification_DefaultSubject" xml:space="preserve">
     <value>You were mentioned</value>
   </data>

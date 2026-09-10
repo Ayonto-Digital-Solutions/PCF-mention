@@ -88,22 +88,29 @@ nur nicht mit dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-L
 ## Wie die Benachrichtigung funktioniert
 
 1. Eine Person wird aus der Vorschlagsliste gewählt; `@Vorname Nachname` wird in den Text geschrieben.
-2. Das Component legt über `context.webAPI.createRecord("email", …)` eine E-Mail-Aktivität an:
-   Absender und Empfänger als `activityparty` (`partyid_systemuser`), optional `regardingobjectid`
-   auf den aktuellen Datensatz.
-3. Anschließend wird die gebundene Aktion `SendEmail` ausgelöst.
+2. Das Component legt über `context.webAPI.createRecord("email", …)` eine E-Mail-Aktivität an,
+   mit Absender und Empfänger als `activityparty` (`partyid_systemuser`).
+3. Sind `entityId` und `entityName` konfiguriert, wird die E-Mail per `updateRecord` auf den
+   Datensatz bezogen (`regardingobjectid`), damit sie in dessen Zeitachse auftaucht.
+4. Anschließend wird die gebundene Aktion `SendEmail` ausgelöst.
 
-Zu Schritt 3: `context.webAPI` bietet ausschließlich `createRecord`, `retrieveRecord`,
+Zu Schritt 3: Die Navigationseigenschaft des Regarding-Lookups lässt sich nicht aus dem
+Tabellennamen ableiten — `account` nutzt `regardingobjectid_account_email`, `asyncoperation`
+dagegen `regardingobjectid_asyncoperation`. Deshalb ist die Verknüpfung ein eigener Schritt
+*nach* dem Anlegen: Beide Schreibweisen werden nacheinander versucht, und wenn keine passt,
+geht nur der Bezug verloren, nicht die Benachrichtigung.
+
+Zu Schritt 4: `context.webAPI` bietet ausschließlich `createRecord`, `retrieveRecord`,
 `retrieveMultipleRecords`, `updateRecord` und `deleteRecord` — **kein** `execute`
 ([WebAPI-Referenz](https://learn.microsoft.com/power-apps/developer/component-framework/reference/webapi)).
 Eine gebundene Aktion lässt sich damit nicht aufrufen. Das Component postet die Aktion deshalb
 same-origin gegen die Web-API der eigenen Umgebung
 (`/api/data/v9.2/emails(<id>)/Microsoft.Dynamics.CRM.SendEmail`).
 
-Scheitert dieser Aufruf, bleibt die E-Mail als **Entwurf** in der Umgebung liegen und ist mit dem
-Datensatz verknüpft; im Component erscheint ein Hinweis. Wer den direkten Versand nicht möchte,
-setzt `sendEmail` auf `Nein` und lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen
-der E-Mail reagieren — das Anlegen selbst ist unabhängig vom Versand.
+Scheitert dieser Aufruf, bleibt die E-Mail als **Entwurf** in der Umgebung liegen; im Component
+erscheint ein Hinweis. Wer den direkten Versand nicht möchte, setzt `sendEmail` auf `Nein` und
+lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen der E-Mail reagieren — das
+Anlegen selbst ist unabhängig vom Versand.
 
 Jede Person wird pro Sitzung nur einmal benachrichtigt. Schlägt der Versand fehl und die Erwähnung
 wurde inzwischen wieder gelöscht, wird die Sperre aufgehoben.
@@ -124,7 +131,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 34 Tests: Mention-Logik und Editor-Verhalten |
+| Keine Tests | 62 Tests: Mention-Logik, Editor, Benutzersuche, Benachrichtigung |
 
 Behobene Fehler aus 1.0:
 
@@ -169,5 +176,7 @@ Mention/
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
    ├─ mentionText.test.ts               Reine Funktionen
+   ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
+   ├─ EmailNotificationService.test.ts  Payload, Verknüpfung, Versand
    └─ MentionEditor.test.tsx            Editor-Verhalten (jsdom)
 ```

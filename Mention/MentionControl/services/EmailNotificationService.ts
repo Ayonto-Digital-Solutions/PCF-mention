@@ -16,6 +16,7 @@ export interface NotificationRequest {
 	readonly subject: string;
 	readonly body: string;
 	readonly recordUrl?: string;
+	readonly recordLinkLabel?: string;
 	readonly entityName?: string;
 	readonly entityId?: string;
 }
@@ -36,7 +37,7 @@ export class NotificationError extends Error {
  *
  * context.webAPI has no execute method, so the action is posted against the Web API of the
  * current environment with a same-origin relative URL. If that call fails the e-mail stays in
- * the environment as a draft, linked to the record, and can be picked up by a flow.
+ * the environment as a draft and can be picked up by a flow.
  */
 export class EmailNotificationService {
 	private readonly webAPI: ComponentFramework.WebApi;
@@ -49,74 +50,86 @@ export class EmailNotificationService {
 	}
 
 	public async notify(request: NotificationRequest): Promise<void> {
-		const payload = await this.buildPayload(request);
-		const created = await this.webAPI.createRecord("email", payload);
+		const sender = normalizeGuid(request.senderUserId);
+		const recipient = normalizeGuid(request.recipient.id);
+		if (sender.length === 0 || recipient.length === 0) {
+			throw new NotificationError("A notification needs both a sender and a recipient.");
+		}
+
+		const created = await this.webAPI.createRecord("email", this.buildPayload(request, sender, recipient));
 		const emailId = normalizeGuid(created.id);
 
+		// Linking is deliberately a separate step: the navigation property for the regarding
+		// lookup is not derivable from the table name (accounts use
+		// regardingobjectid_account_email, async operations regardingobjectid_asyncoperation),
+		// so a wrong guess must never take the notification down with it.
+		await this.linkToRecord(emailId, request.entityName, request.entityId);
 		await this.send(emailId);
 	}
 
-	private async buildPayload(request: NotificationRequest): Promise<ComponentFramework.WebApi.Entity> {
-		const payload: ComponentFramework.WebApi.Entity = {
+	private buildPayload(
+		request: NotificationRequest,
+		sender: string,
+		recipient: string
+	): ComponentFramework.WebApi.Entity {
+		return {
 			subject: request.subject,
 			description: this.buildBody(request),
 			email_activity_parties: [
 				{
-					"partyid_systemuser@odata.bind": `/systemusers(${normalizeGuid(request.senderUserId)})`,
+					"partyid_systemuser@odata.bind": `/systemusers(${sender})`,
 					participationtypemask: ParticipationType.Sender,
 				},
 				{
-					"partyid_systemuser@odata.bind": `/systemusers(${normalizeGuid(request.recipient.id)})`,
+					"partyid_systemuser@odata.bind": `/systemusers(${recipient})`,
 					participationtypemask: ParticipationType.ToRecipient,
 				},
 			],
 		};
-
-		const regarding = await this.buildRegardingBinding(request.entityName, request.entityId);
-		if (regarding) {
-			payload[regarding.property] = regarding.value;
-		}
-
-		return payload;
 	}
 
 	private buildBody(request: NotificationRequest): string {
 		const paragraphs = [`<p>${escapeHtml(request.body).replace(/\r?\n/g, "<br />")}</p>`];
 
 		if (request.recordUrl) {
-			paragraphs.push(`<p><a href="${escapeHtml(request.recordUrl)}">${escapeHtml(request.recordUrl)}</a></p>`);
+			const label = request.recordLinkLabel ?? request.recordUrl;
+			paragraphs.push(`<p><a href="${escapeHtml(request.recordUrl)}">${escapeHtml(label)}</a></p>`);
 		}
 
 		return paragraphs.join("");
 	}
 
 	/**
-	 * Links the e-mail to the record it was written on. Needs the plural entity set name, which
-	 * is read from the table metadata. Best effort: without it the e-mail is still created.
+	 * Points the e-mail's regarding lookup at the record the mention was written on, so it shows
+	 * up in that record's timeline. Best effort throughout: the notification is what matters.
 	 */
-	private async buildRegardingBinding(
-		entityName?: string,
-		entityId?: string
-	): Promise<{ property: string; value: string } | undefined> {
+	private async linkToRecord(emailId: string, entityName?: string, entityId?: string): Promise<void> {
 		const logicalName = (entityName ?? "").trim().toLowerCase();
 		const recordId = normalizeGuid(entityId);
-		if (logicalName.length === 0 || recordId.length === 0) {
-			return undefined;
+		if (emailId.length === 0 || logicalName.length === 0 || recordId.length === 0) {
+			return;
 		}
 
 		try {
 			const entitySetName = await this.getEntitySetName(logicalName);
 			if (!entitySetName) {
-				return undefined;
+				return;
 			}
-			return {
-				property: `regardingobjectid_${logicalName}@odata.bind`,
-				value: `/${entitySetName}(${recordId})`,
-			};
-		} catch {
-			// Metadata is not reachable for every table (or user). The notification is more
-			// important than the link, so the e-mail is created without a regarding record.
-			return undefined;
+
+			const target = `/${entitySetName}(${recordId})`;
+			// Most tables carry the activity-type suffix, a few do not.
+			for (const property of [`regardingobjectid_${logicalName}_email`, `regardingobjectid_${logicalName}`]) {
+				try {
+					await this.webAPI.updateRecord("email", emailId, { [`${property}@odata.bind`]: target });
+					return;
+				} catch {
+					// Try the next spelling of the navigation property.
+				}
+			}
+
+			console.warn(`[MentionControl] could not link the notification to ${logicalName} ${recordId}`);
+		} catch (error) {
+			console.warn("[MentionControl] could not read table metadata for the regarding link", error);
 		}
 	}
 
