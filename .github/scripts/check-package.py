@@ -63,7 +63,12 @@ def main() -> None:
                 "not a SavedQueries folder"
             )
 
-    controls = {control.get("Name", "").lower() for control in customizations.iter("CustomControl")}
+    # The name is a child element here, not an attribute — reading it as one made every control
+    # look missing, which would have stopped the release this check exists to protect.
+    controls = {
+        (control.findtext("Name") or control.get("Name") or "").lower()
+        for control in customizations.iter("CustomControl")
+    }
     for component in solution.iter("RootComponent"):
         name = (component.get("schemaName") or "").lower()
         if component.get("type") == CONTROL_COMPONENT_TYPE and name not in controls:
