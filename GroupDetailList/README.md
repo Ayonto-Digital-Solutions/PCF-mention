@@ -20,7 +20,7 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 
 ```bash
 npm install
-npm test                              # 73 Tests
+npm test                              # 84 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -63,9 +63,10 @@ Blättern die geladene Seite verlassen, fallen aus der Auswahl heraus.
 Datensatz über `openDatasetItem` — das respektiert einen eventuell vorhandenen
 `Mscrm.OpenRecordItem`-Befehl. Ein Lookup-Feld öffnet den *referenzierten* Datensatz,
 E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:` — Letzteres nur, wenn die Zelle
-genau eine Nummer enthält. Eine Klammer um Ziffern hinter einer Ländervorwahl (`+49 (0)30 …`)
-bleibt Text: die deutsche Verkehrsausscheidungsziffer wird beim Wählen weggelassen, eine
-amerikanische Vorwahl nicht, und der Zelle ist nicht anzusehen, welcher Fall vorliegt.
+genau eine Nummer enthält. Eine eingeklammerte Null (`+49 (0)30 …`) bleibt Text: die
+Verkehrsausscheidungsziffer wird im Inland mitgewählt und aus dem Ausland weggelassen, und der
+Zelle ist nicht anzusehen, welcher Fall gilt. Eine eingeklammerte Vorwahl (`(030) …`,
+`+1 (555) …`) ist dagegen eindeutig und wird verlinkt.
 
 **Blättern.** Vor/Zurück laden die jeweilige Seite über die Paging-API des Datasets — mit
 `loadOnlyNewPage`, sonst liefert das Framework den gesamten bisher geladenen Bereich zurück und
@@ -83,7 +84,7 @@ die Liste würde mit jeder Seite weiterwachsen, statt umzublättern.
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 73 Tests |
+| Keine Tests | 84 Tests |
 
 Behobene Fehler aus 1.0:
 

@@ -42,8 +42,8 @@ export interface GroupDetailListProps {
 	readonly initialSelectedIds: readonly string[];
 	/** The column the picker shows. The control owns it, so it can drop a grouping it cannot keep. */
 	readonly groupColumnKey: string | undefined;
-	/** The column the rows on screen are actually sorted by, and may therefore be chunked by. */
-	readonly groupedBy: string | undefined;
+	/** Whether the rows on screen were fetched sorted by this column, and may be chunked by it. */
+	readonly isGroupedBy: (columnKey: string) => boolean;
 	readonly groupingEnabled: boolean;
 	readonly isLoading: boolean;
 	readonly errorMessage?: string;
@@ -140,6 +140,12 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	// so what survives has to be handed back to it or the command bar goes grey while the grid
 	// still shows ticks.
 	React.useEffect(() => {
+		// Nothing has arrived yet: the first update reaches the component while the dataset is
+		// still loading, and reporting an empty selection then wipes what the platform had before
+		// the control has even seen it.
+		if (rows.length === 0 && props.isLoading) {
+			return;
+		}
 		if (reportedFor.current === rowsKey) {
 			return;
 		}
@@ -151,7 +157,7 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 			setSelected(new Set(kept));
 		}
 		onSelectionChange(kept);
-	}, [rowsKey, rows, selected, onSelectionChange]);
+	}, [rowsKey, rows, selected, onSelectionChange, props.isLoading]);
 
 	const commitSelection = React.useCallback(
 		(next: ReadonlySet<string>) => {
@@ -189,9 +195,10 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 
 	const groupColumn = columns.find((column) => column.key === groupColumnKey);
 	// Chunking consecutive rows only produces real groups once the rows have come back sorted by
-	// that column, which is what the control reports as groupedBy — picking one is a refresh
-	// ahead of that. Switching grouping off needs no refresh, so the picker alone ends it.
-	const activeGroupKey = groupColumnKey !== undefined && groupColumnKey === props.groupedBy ? groupColumnKey : undefined;
+	// that column, which is what the control answers — picking a column that still has to be
+	// sorted is a refresh ahead of that. Switching grouping off needs no refresh at all, so the
+	// picker alone ends it.
+	const activeGroupKey = groupColumnKey !== undefined && props.isGroupedBy(groupColumnKey) ? groupColumnKey : undefined;
 
 	const groups = React.useMemo(
 		() => (props.groupingEnabled ? groupRows(rows, activeGroupKey) : undefined),

@@ -53,7 +53,7 @@ function setup(overrides: Partial<GroupDetailListProps> = {}) {
 		rows: ROWS,
 		initialSelectedIds: [],
 		groupColumnKey: undefined,
-		groupedBy: undefined,
+		isGroupedBy: () => false,
 		groupingEnabled: true,
 		isLoading: false,
 		totalResultCount: 120,
@@ -152,13 +152,28 @@ describe("GroupDetailList", () => {
 		expect(screen.getByText("(030) 123-45").getAttribute("href")).toBe("tel:03012345");
 	});
 
-	it("leaves a bracketed trunk digit behind a country code as text", () => {
-		// "+49 (0)30 …" is dialled without the 0, "+1 (555) …" with the 555. Nothing in the text
-		// tells the two apart, so neither is turned into a link that dials the wrong number.
+	it("leaves a bracketed trunk digit as text", () => {
+		// "+49 (0)30 …" is dialled inside Germany with the 0 and from abroad without it, and the
+		// cell does not say which applies — so it is not turned into a link that dials one of them.
 		const rows = [{ id: "1", values: { ...ROWS[0].values, phone: "+49 (0)30 123456" } }];
 		setup({ rows });
 
 		expect(screen.getByText("+49 (0)30 123456").closest("a")).toBeNull();
+	});
+
+	it("still dials an area code in brackets behind a country code", () => {
+		// "+1 (555) …" is unambiguous: the brackets are typography, the digits belong to the number.
+		const rows = [{ id: "1", values: { ...ROWS[0].values, phone: "+1 (555) 123-4567" } }];
+		setup({ rows });
+
+		expect(screen.getByText("+1 (555) 123-4567").getAttribute("href")).toBe("tel:+15551234567");
+	});
+
+	it("leaves a trunk digit written with the 00 prefix as text as well", () => {
+		const rows = [{ id: "1", values: { ...ROWS[0].values, phone: "0049 (0)30 123456" } }];
+		setup({ rows });
+
+		expect(screen.getByText("0049 (0)30 123456").closest("a")).toBeNull();
 	});
 
 	it("does not present an unsortable column as sortable to assistive technology", () => {
@@ -259,13 +274,23 @@ describe("GroupDetailList", () => {
 		expect(container.querySelectorAll('tbody tr[aria-selected="true"], tbody tr').length).toBeGreaterThan(0);
 	});
 
+	it("reports no selection at all before the first rows have arrived", () => {
+		// The dataset is still loading and has its own selection. Reporting an empty one now
+		// wipes it before the control has even been told what it was.
+		const { onSelectionChange } = setup({ rows: [], initialSelectedIds: [], isLoading: true });
+
+		expect(onSelectionChange).not.toHaveBeenCalled();
+	});
+
 	it("hands the adopted selection back to the dataset, not the empty one it replaced", () => {
 		// The first update carries neither rows nor a selection; the second carries both at once.
 		// Reporting what the component held before that update would grey out the command bar
 		// while the grid shows ticked rows.
-		const { rerender, onSelectionChange } = setup({ rows: [], initialSelectedIds: [] });
+		const { rerender, onSelectionChange } = setup({ rows: [], initialSelectedIds: [], isLoading: true });
 
-		rerender(<GroupDetailList {...lastProps!} rows={ROWS} initialSelectedIds={["1"]} />);
+		rerender(
+			<GroupDetailList {...lastProps!} rows={ROWS} initialSelectedIds={["1"]} isLoading={false} />
+		);
 
 		expect(screen.getByText("1 selected")).toBeTruthy();
 		expect(onSelectionChange).toHaveBeenLastCalledWith(["1"]);
@@ -311,7 +336,7 @@ describe("GroupDetailList", () => {
 			{ id: "1", values: { ...ROWS[0].values, city: "Berlin" } },
 			{ id: "2", values: { ...ROWS[1].values, city: "" } },
 		];
-		const { container } = setup({ rows, groupColumnKey: "city", groupedBy: "city" });
+		const { container } = setup({ rows, groupColumnKey: "city", isGroupedBy: (key) => key === "city" });
 
 		expect(groupHeaders(container)).toEqual(["Berlin(1)", "(empty)(1)"]);
 	});
@@ -395,7 +420,7 @@ describe("GroupDetailList", () => {
 		pickGroupColumn("City");
 		expect(onGroupColumnChange).toHaveBeenCalledWith("city");
 
-		rerender(<GroupDetailList {...lastProps!} groupColumnKey="city" groupedBy="city" />);
+		rerender(<GroupDetailList {...lastProps!} groupColumnKey="city" isGroupedBy={(key) => key === "city"} />);
 		expect(groupHeaders(container)).toEqual(["Berlin(2)", "Hamburg(1)"]);
 
 		pickGroupColumn("No grouping");
@@ -408,14 +433,14 @@ describe("GroupDetailList", () => {
 	it("waits for the sorted rows before it chunks them", () => {
 		// The rows on screen are still the ones from before the sort was requested. Chunking those
 		// would split one value across several headers.
-		const { container } = setup({ groupColumnKey: "city", groupedBy: undefined });
+		const { container } = setup({ groupColumnKey: "city", isGroupedBy: () => false });
 
 		expect(groupHeaders(container)).toEqual([]);
 	});
 
 	it("follows the control when it drops a grouping it cannot keep", () => {
 		// The view changed under the control: the column is gone, and so is the grouping.
-		const { container, rerender } = setup({ groupColumnKey: "city", groupedBy: "city" });
+		const { container, rerender } = setup({ groupColumnKey: "city", isGroupedBy: (key) => key === "city" });
 		expect(groupHeaders(container)).toEqual(["Berlin(2)", "Hamburg(1)"]);
 
 		rerender(
@@ -423,13 +448,36 @@ describe("GroupDetailList", () => {
 				{...lastProps!}
 				columns={COLUMNS.filter((column) => column.key !== "city")}
 				groupColumnKey={undefined}
-				groupedBy={undefined}
+				isGroupedBy={() => false}
 			/>
 		);
 
 		expect(groupHeaders(container)).toEqual([]);
 		// And the picker stops claiming a grouping that is not on screen.
 		expect(screen.getByRole("combobox").getAttribute("value")).toBe("No grouping");
+	});
+
+	it("follows the control when it gives up on a grouping whose column is still there", () => {
+		// The view reset the sorting and would not take it back; the column itself is untouched.
+		const { container, rerender } = setup({ groupColumnKey: "city", isGroupedBy: (key) => key === "city" });
+		expect(groupHeaders(container)).toEqual(["Berlin(2)", "Hamburg(1)"]);
+
+		rerender(
+			<GroupDetailList {...lastProps!} groupColumnKey={undefined} isGroupedBy={() => false} />
+		);
+
+		expect(groupHeaders(container)).toEqual([]);
+		expect(screen.getByRole("combobox").getAttribute("value")).toBe("No grouping");
+	});
+
+	it("groups straight away when the view is already sorted by the picked column", () => {
+		// Nothing has to be fetched, so the platform never calls updateView: the component has to
+		// be able to see for itself that these rows are already in the right order.
+		const { container } = setup({ isGroupedBy: (key) => key === "city" });
+
+		pickGroupColumn("City");
+
+		expect(groupHeaders(container)).toEqual(["Berlin(2)", "Hamburg(1)"]);
 	});
 
 	it("offers every column plus the ungrouped option", () => {

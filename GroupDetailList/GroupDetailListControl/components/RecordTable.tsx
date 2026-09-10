@@ -41,11 +41,10 @@ export interface RecordTableProps {
  * else, so anything that is not one plain number is left as text.
  */
 function toDialableNumber(value: string): string | undefined {
-	// Brackets around digits mean opposite things once a country code is in front: the German
-	// trunk "0" of "+49 (0)30 …" must be left out when dialling, an American area code must not.
-	// Nothing in the text says which, so such a number stays text; a national "(030) …" is
-	// unambiguous and keeps its digits.
-	if (value.trimStart().startsWith("+") && /\(\s*\d/.test(value)) {
+	// A bracketed lone zero is the national trunk digit: it is dialled inside the country and
+	// left out from abroad, and the cell does not say which applies here. Anything else in
+	// brackets — an area code, "(030)", "+1 (555)" — is simply part of the number.
+	if (/\(\s*0\s*\)/.test(value)) {
 		return undefined;
 	}
 

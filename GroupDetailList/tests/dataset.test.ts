@@ -3,6 +3,7 @@ import {
 	currentPageNumber,
 	groupRows,
 	hasKnownTotal,
+	isLeadingSort,
 	nextSorting,
 	sortDirectionOf,
 	toGridColumns,
@@ -202,5 +203,28 @@ describe("paging helpers", () => {
 	it("reports a first page when the framework has not numbered one yet", () => {
 		expect(currentPageNumber(0)).toBe(1);
 		expect(currentPageNumber(3)).toBe(3);
+	});
+});
+
+describe("isLeadingSort", () => {
+	it("is true for the column the dataset is ordered by first", () => {
+		expect(isLeadingSort([{ name: "city", sortDirection: 0 }], "city")).toBe(true);
+	});
+
+	it("is false for a column that only sorts within the first one", () => {
+		const sorting = [
+			{ name: "name", sortDirection: 0 as const },
+			{ name: "city", sortDirection: 0 as const },
+		];
+		expect(isLeadingSort(sorting, "city")).toBe(false);
+	});
+
+	it("is false when nothing is sorted at all", () => {
+		expect(isLeadingSort([], "city")).toBe(false);
+		expect(isLeadingSort(undefined, "city")).toBe(false);
+	});
+
+	it("is false for the typings' unsorted -1", () => {
+		expect(isLeadingSort([{ name: "city", sortDirection: -1 as unknown as 0 }], "city")).toBe(false);
 	});
 });

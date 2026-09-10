@@ -150,6 +150,17 @@ export function sortDirectionOf(
 }
 
 /**
+ * True when the dataset is ordered by this column *first*.
+ *
+ * Grouping chunks consecutive rows, so it needs the leading sort key: with the rows ordered by
+ * something else first, the same value turns up in run after run and every run becomes its own
+ * group. A view can perfectly well sort by two columns, so being in the list is not enough.
+ */
+export function isLeadingSort(sorting: readonly SortStatus[] | undefined, columnKey: string): boolean {
+	return sorting?.[0]?.name === columnKey && sortDirectionOf(sorting, columnKey) !== undefined;
+}
+
+/**
  * Clicking a sorted column flips it; clicking any other column sorts it ascending.
  *
  * While a group column is active it stays the leading sort, because grouping chunks consecutive

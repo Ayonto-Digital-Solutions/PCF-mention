@@ -11,6 +11,7 @@ import {
 	currentPageNumber,
 	groupRows,
 	hasKnownTotal,
+	isLeadingSort,
 	nextSorting,
 	sortDirectionOf,
 	toGridColumns,
@@ -72,9 +73,11 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 				name: entry.name,
 				sortDirection: entry.sortDirection,
 			}));
-			this.keepGroupColumnSorted(dataset);
 			this.initialSelectedIds = dataset.getSelectedRecordIds?.() ?? [];
 			this.reapplySelection(dataset);
+			// Last, because it can start a refresh of its own: the flag that refresh has to
+			// restore the selection would otherwise be consumed by the page already on screen.
+			this.keepGroupColumnSorted(dataset);
 		}
 
 		const props: GroupDetailListProps = {
@@ -82,7 +85,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 			rows: this.rows,
 			initialSelectedIds: this.initialSelectedIds,
 			groupColumnKey: this.groupColumnKey,
-			groupedBy: this.groupedBy(),
+			isGroupedBy: this.isGroupedBy,
 			groupingEnabled: context.parameters.enableGrouping.raw === GROUPING_ENABLED,
 			isLoading: dataset.loading,
 			errorMessage: dataset.error ? dataset.errorMessage : undefined,
@@ -116,19 +119,15 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 	}
 
 	/**
-	 * The column the rows on screen are actually chunked by.
+	 * Whether the rows on screen may be chunked by this column.
 	 *
-	 * Grouping only produces real groups once the rows have come back sorted by that column.
-	 * Between picking a group column and the refresh landing, the dataset already carries the new
-	 * sort while the rows are still the old ones — grouping those would cut the page into one
-	 * group per run of equal values.
+	 * It answers from the sorting those rows were fetched under, not from the one that has just
+	 * been requested: between picking a group column and the refresh landing, the dataset already
+	 * carries the new sort while the rows are still the old ones, and grouping those would cut the
+	 * page into one group per run of equal values. It is a callback rather than a value because
+	 * the picker repaints the component on its own, without the platform calling updateView.
 	 */
-	private groupedBy(): string | undefined {
-		if (!this.groupColumnKey || sortDirectionOf(this.appliedSorting, this.groupColumnKey) === undefined) {
-			return undefined;
-		}
-		return this.groupColumnKey;
-	}
+	private readonly isGroupedBy = (columnKey: string): boolean => isLeadingSort(this.appliedSorting, columnKey);
 
 	/**
 	 * A view change can reset the sorting while keeping the column, which would leave the picker
@@ -142,14 +141,14 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 			return;
 		}
 
-		if (sortDirectionOf(dataset.sorting, this.groupColumnKey) !== undefined) {
+		if (isLeadingSort(dataset.sorting, this.groupColumnKey)) {
 			this.groupSortRequested = false;
 		} else if (this.groupSortRequested) {
 			this.groupColumnKey = undefined;
 			this.groupSortRequested = false;
 		} else {
 			this.groupSortRequested = true;
-			this.onSort(this.groupColumnKey);
+			this.sortByGroupColumn(this.groupColumnKey);
 		}
 	}
 
@@ -204,7 +203,26 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 			return;
 		}
 		const dataset = this.dataset;
-		const sorting = nextSorting(dataset.sorting, columnKey, this.groupColumnKey);
+		this.applySorting(dataset, nextSorting(dataset.sorting, columnKey, this.groupColumnKey));
+	};
+
+	/**
+	 * Puts the group column in front of the sort. This is not a click on a header, so nothing is
+	 * flipped: the column keeps the direction it had, and the order the view sorted by until now
+	 * stays behind it, where it still decides the order inside each group.
+	 */
+	private sortByGroupColumn(columnKey: string): void {
+		const dataset = this.dataset;
+		const direction: SortStatus["sortDirection"] =
+			sortDirectionOf(dataset.sorting, columnKey) === "descending" ? 1 : 0;
+
+		this.applySorting(dataset, [
+			{ name: columnKey, sortDirection: direction },
+			...(dataset.sorting ?? []).filter((entry) => entry.name !== columnKey).slice(0, 1),
+		]);
+	}
+
+	private applySorting(dataset: DataSet, sorting: SortStatus[]): void {
 		if (Array.isArray(dataset.sorting)) {
 			// The framework watches the array it handed out, so it is replaced in place.
 			dataset.sorting.length = 0;
@@ -214,7 +232,7 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		}
 		this.mustReapplySelection = true;
 		dataset.refresh();
-	};
+	}
 
 	/**
 	 * Grouping chunks consecutive rows, so the dataset has to be sorted by the group column.
@@ -226,9 +244,9 @@ export class GroupDetailListControl implements ComponentFramework.ReactControl<I
 		}
 		this.groupColumnKey = columnKey;
 		this.groupSortRequested = false;
-		if (columnKey && sortDirectionOf(this.dataset.sorting, columnKey) === undefined) {
+		if (columnKey && !isLeadingSort(this.dataset.sorting, columnKey)) {
 			this.groupSortRequested = true;
-			this.onSort(columnKey);
+			this.sortByGroupColumn(columnKey);
 		}
 	};
 

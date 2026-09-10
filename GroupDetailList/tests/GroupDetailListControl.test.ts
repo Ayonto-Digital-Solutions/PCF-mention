@@ -79,7 +79,7 @@ function mount(sorting: SortStatus[] = []) {
 describe("GroupDetailListControl grouping", () => {
 	it("only reports a grouping once the rows came back sorted by that column", () => {
 		const { dataset, update, props } = mount();
-		expect(props.groupedBy).toBeUndefined();
+		expect(props.isGroupedBy("city")).toBe(false);
 
 		props.onGroupColumnChange("city");
 
@@ -87,12 +87,12 @@ describe("GroupDetailListControl grouping", () => {
 		// still the ones from before, and chunking those would invent groups.
 		expect(dataset.refresh).toHaveBeenCalledTimes(1);
 		dataset.loading = true;
-		expect(update().groupedBy).toBeUndefined();
+		expect(update().isGroupedBy("city")).toBe(false);
 
 		// The refresh lands: the rows now come back in that order.
 		dataset.loading = false;
 		dataset.sortedRecordIds = ["2", "1"];
-		expect(update().groupedBy).toBe("city");
+		expect(update().isGroupedBy("city")).toBe(true);
 	});
 
 	it("asks once for a sort a view change dropped, then stops claiming the grouping", () => {
@@ -100,7 +100,7 @@ describe("GroupDetailListControl grouping", () => {
 		const props = update();
 		props.onGroupColumnChange("city");
 		expect(dataset.refresh).not.toHaveBeenCalled();
-		expect(update().groupedBy).toBe("city");
+		expect(update().isGroupedBy("city")).toBe(true);
 
 		// A view change resets the sorting while keeping the column.
 		dataset.sorting.length = 0;
@@ -112,8 +112,46 @@ describe("GroupDetailListControl grouping", () => {
 		dataset.sorting.length = 0;
 		const after = update();
 		expect(after.groupColumnKey).toBeUndefined();
-		expect(after.groupedBy).toBeUndefined();
+		expect(after.isGroupedBy("city")).toBe(false);
 		expect(dataset.refresh).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not group while the view sorts by another column first", () => {
+		// Grouping chunks consecutive rows, so the group column has to be the leading sort —
+		// second place scatters one value over run after run.
+		const { dataset, update } = mount([
+			{ name: "name", sortDirection: 0 },
+			{ name: "city", sortDirection: 0 },
+		]);
+		const props = update();
+		expect(props.isGroupedBy("city")).toBe(false);
+
+		props.onGroupColumnChange("city");
+
+		expect(dataset.refresh).toHaveBeenCalledTimes(1);
+		expect(dataset.sorting).toEqual([
+			{ name: "city", sortDirection: 0 },
+			{ name: "name", sortDirection: 0 },
+		]);
+		expect(update().isGroupedBy("city")).toBe(true);
+	});
+
+	it("restores the selection after the sort it asked for itself", () => {
+		const { dataset, update } = mount([{ name: "city", sortDirection: 0 }]);
+		const props = update();
+		props.onGroupColumnChange("city");
+		props.onSelectionChange(["1"]);
+
+		// A view change resets the sorting; the next update asks for it again.
+		dataset.sorting.length = 0;
+		update();
+		expect(dataset.refresh).toHaveBeenCalledTimes(1);
+		dataset.setSelectedRecordIds.mockClear();
+
+		// The refresh lands, and a refresh clears the dataset's own selection.
+		update();
+
+		expect(dataset.setSelectedRecordIds).toHaveBeenCalledWith(["1"]);
 	});
 
 	it("drops a group column the new view no longer has", () => {

@@ -22,7 +22,7 @@ jeweiligen README unter „Was sich geändert hat".
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
 | Bundle jetzt | 22 KiB | 14 KiB |
-| Tests | 143 | 73 |
+| Tests | 152 | 84 |
 
 ## Voraussetzungen
 
@@ -61,6 +61,10 @@ hängt sie an das GitHub-Release
 Beide enthalten `Ayonto.MentionControl` und `Ayonto.GroupDetailListControl`, Publisher `ayonto`.
 Die Solution wird bewusst im Workflow gebaut und nicht im Repository gehalten: sie ist ein
 Build-Ergebnis, und der Workflow hat die .NET-Toolchain, die `pac` dafür braucht.
+
+Der Workflow schreibt dabei die Version in beide `ControlManifest.Input.xml` und in die
+`Solution.xml`: Dataverse übernimmt eine geänderte Komponente nur, wenn deren eigene Version
+steigt. Im Repository bleiben die Manifeste auf ihrem Stand.
 
 Lokal geht dasselbe mit:
 
