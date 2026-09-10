@@ -66,6 +66,27 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Nothing in here that a public repository must not carry
+        run: |
+          python3 .github/scripts/check-no-secrets.py
+
+          # And prove that guard guards, on each shape it is meant to catch. The samples are
+          # assembled here rather than written out, so the patterns never sit in a tracked file
+          # and trip the very check they exist to test.
+          key="S""G.abcdefghijklmnop.qrstuvwxyz012345"
+          url="https://someorg.c""rm4.dynamics.com"
+          secret="api""_key: \"abcdef0123456789abcdef\""
+          for leak in "$key" "$url" "$secret"; do
+            printf '%s\n' "$leak" > zz-leak-probe.md
+            git add zz-leak-probe.md
+            if python3 .github/scripts/check-no-secrets.py; then
+              echo "::error::check-no-secrets.py let this through: $leak"
+              git rm -qf zz-leak-probe.md
+              exit 1
+            fi
+            git rm -qf zz-leak-probe.md
+          done
+
       - name: Check the solution source
         run: |
           python3 .github/scripts/check-solution.py

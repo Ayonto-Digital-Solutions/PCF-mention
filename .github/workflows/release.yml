@@ -135,7 +135,7 @@ jobs:
           for config in Release Debug; do
             zip=$(find "${SOLUTION_DIR}/bin/${config}" -name '*.zip' | head -1)
             echo "== ${config}: ${zip}"
-            SOLUTION_ROOT="${SOLUTION_DIR}" python3 .github/scripts/check-package.py "$zip"
+            SOLUTION_ROOT="${SOLUTION_DIR}" python3 .github/scripts/check-package.py "$zip" --expect-controls
           done
 
       - name: Collect the artifacts

@@ -1,0 +1,4 @@
+
+# Python bytecode from the solution checks
+__pycache__/
+*.pyc
