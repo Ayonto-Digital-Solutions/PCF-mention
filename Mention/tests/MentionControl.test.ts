@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MentionControl } from "../MentionControl/index";
 import type { IInputs } from "../MentionControl/generated/ManifestTypes";
 
@@ -56,6 +56,7 @@ function propsOf(element: React.ReactElement) {
 		label?: string;
 		onChange: (value: string) => void;
 		onEditingChange: (editing: boolean) => void;
+		onMention: (user: { id: string; name: string }) => Promise<void>;
 	};
 }
 
@@ -65,7 +66,7 @@ function mount(options: ContextOptions = {}) {
 	const notifyOutputChanged = vi.fn();
 	control.init(context, notifyOutputChanged);
 	const props = propsOf(control.updateView(context));
-	return { control, notifyOutputChanged, props };
+	return { control, context, notifyOutputChanged, props };
 }
 
 describe("MentionControl value reconciliation", () => {
@@ -183,5 +184,54 @@ describe("MentionControl availability", () => {
 	it("passes the column label on, so the editor has an accessible name", () => {
 		const { props } = mount();
 		expect(props.label).toBe("Description");
+	});
+});
+
+describe("MentionControl notification timing", () => {
+	const RECIPIENT = { id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" };
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("sends what is still waiting when the form is closed", async () => {
+		// The grace period cannot outlive the control, and a code component is not told whether
+		// the record was saved. Dropping the notification would leave the author believing the
+		// person was told, so what is waiting goes out.
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "email", id: "44444444-4444-4444-4444-444444444444" });
+		const send = vi.fn().mockResolvedValue({ ok: true, status: 204, text: () => Promise.resolve("") });
+		vi.stubGlobal("fetch", send);
+
+		props.onChange("Danke @Anna Berger");
+		const pending = props.onMention(RECIPIENT);
+
+		control.destroy();
+		await pending;
+
+		expect(createRecord).toHaveBeenCalledWith("email", expect.anything());
+		// And the mail is actually sent, rather than left behind as a draft.
+		expect(send.mock.calls[0][0]).toContain("Microsoft.Dynamics.CRM.SendEmail");
+	});
+
+	it("does not send for a mention that was taken back before the form closed", async () => {
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+
+		props.onChange("Danke @Anna Berger");
+		const pending = props.onMention(RECIPIENT);
+		props.onChange("Danke");
+
+		control.destroy();
+		await pending;
+
+		expect(createRecord).not.toHaveBeenCalled();
 	});
 });
