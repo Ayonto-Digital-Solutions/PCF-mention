@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 158 Tests
+npm test                              # 160 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -101,6 +101,12 @@ Deep-Link.
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
    auf `Sent` oder `Failed` zurück.
 
+Benachrichtigt wird die Person, die in der Vorschlagsliste gewählt wurde — nicht der Name, der
+dabei in den Text geschrieben wird. Das Component merkt sich zu jeder eingefügten Erwähnung deren
+Benutzer-ID und führt sie beim Tippen mit. Zwei gleichnamige Personen sind damit zwei Erwähnungen:
+wer eine davon vor Ablauf der Karenzzeit wieder löscht, verhindert genau ihre Zeile, die des
+Namensvetters bleibt.
+
 Dataverse wird bewusst **nicht** gebeten zu senden. Eine Umgebung, deren Postfächer nicht auf
 serverseitige Synchronisierung eingerichtet sind, würde nur Entwürfe ansammeln, und die meisten
 Organisationen versenden ohnehin über einen Flow mit ihrem eigenen Absender, ihren Vorlagen und
@@ -133,7 +139,9 @@ hineinklickt oder mit Tab hineinspringt, ist es wieder ein gewöhnliches Textfel
 Verlinkt wird nur, was das Component auflösen kann: die Erwähnungen, die dieser Datensatz in der
 Tabelle hat, plus die, die gerade gesetzt wurden. Der Text allein kann nicht sagen, ob
 `@Anna Berger` eine Person oder ein Satz ist, und ein Link auf den falschen Datensatz wäre
-schlimmer als keiner.
+schlimmer als keiner. Aus demselben Grund bleibt ein Name ohne Link, wenn dieser Datensatz ihn für
+zwei verschiedene Personen führt — außer für die Erwähnung, die gerade gesetzt wurde, denn zu der
+ist die Person bekannt.
 
 ### Was die Umgebung dafür braucht
 
@@ -187,7 +195,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 158 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 160 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
@@ -212,8 +220,9 @@ ein neuer Component-Name erforderlich. Bestehende Formulare müssen also neu kon
 
 * Nur modellgesteuerte Apps. `context.webAPI` steht in Canvas-Apps nicht zur Verfügung, und
   virtuelle React-Components werden in Power Pages nicht unterstützt.
-* Erwähnungen werden als Klartext `@Vorname Nachname` gespeichert, nicht als Referenz. Zwei Personen
-  mit identischem vollständigen Namen sind im Text nicht unterscheidbar.
+* Erwähnungen werden als Klartext `@Vorname Nachname` gespeichert, nicht als Referenz. Wer
+  benachrichtigt wird, steht deshalb nur so lange fest, wie das Feld offen ist; nach dem Neuladen
+  lässt sich ein Name, den sich zwei Personen teilen, nicht mehr auflösen und bleibt ohne Link.
 * Die Benachrichtigung wird beim Einfügen der Erwähnung ausgelöst, nicht beim Speichern des
   Datensatzes. Ein Code-Component erfährt nichts vom Speichervorgang des Formulars.
 
