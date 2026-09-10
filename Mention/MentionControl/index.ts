@@ -44,6 +44,30 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	/** True while the editor has the focus, which is exactly when it owns the text. */
 	private isEditing = false;
+
+	/**
+	 * The record the component sits on, as the host reports it.
+	 *
+	 * Model-driven apps hand this to every code component, which is what the entityId and
+	 * entityName properties existed for — a maker cannot bind a text property to a primary key
+	 * column anyway. The properties still win where they are set, and hosts that report nothing
+	 * fall back to them.
+	 */
+	private get hostRecord(): { entityId?: string | null; entityTypeName?: string | null } {
+		return (this.context.mode as { contextInfo?: { entityId?: string | null; entityTypeName?: string | null } })
+			.contextInfo ?? {};
+	}
+
+	private get recordId(): string {
+		return normalizeGuid(this.context.parameters.entityId.raw) || normalizeGuid(this.hostRecord.entityId);
+	}
+
+	private get recordEntityName(): string | undefined {
+		return (
+			this.configured(this.context.parameters.entityName.raw) ??
+			this.configured(this.hostRecord.entityTypeName ?? null)
+		);
+	}
 	private isDisposed = false;
 	private strings?: MentionEditorStrings;
 
@@ -88,7 +112,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			masked: field.security?.readable === false,
 			maxLength: field.attributes?.MaxLength,
 			label: context.mode.label,
-			notice: this.mentionNotice(context),
+			notice: this.mentionNotice(),
 			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
 			strings: this.getStrings(),
 			formatNumber: this.formatNumber,
@@ -131,7 +155,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
 
 	private readonly searchUsers = async (term: string): Promise<UserSearchResult> => {
-		if (this.isDisposed || this.mentionNotice(this.context) !== undefined) {
+		if (this.isDisposed || this.mentionNotice() !== undefined) {
 			return { users: [], hasMore: false };
 		}
 		return this.userSearch.search(term);
@@ -142,12 +166,12 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	 * notification at. In both cases mentioning is unavailable and the editor says why rather
 	 * than letting the lookup fail or sending a mail that leads nowhere.
 	 */
-	private mentionNotice(context: ComponentFramework.Context<IInputs>): string | undefined {
+	private mentionNotice(): string | undefined {
 		const blocker = mentionBlocker({
 			isOffline: this.isOffline(),
-			notificationsEnabled: context.parameters.sendEmail.raw === SEND_EMAIL_ENABLED,
-			entityNameConfigured: this.configured(context.parameters.entityName.raw) !== undefined,
-			hasRecordId: normalizeGuid(context.parameters.entityId.raw).length > 0,
+			notificationsEnabled: this.context.parameters.sendEmail.raw === SEND_EMAIL_ENABLED,
+			entityNameConfigured: this.recordEntityName !== undefined,
+			hasRecordId: this.recordId.length > 0,
 		});
 
 		switch (blocker) {
@@ -172,7 +196,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		if (this.isDisposed || this.context.parameters.sendEmail.raw !== SEND_EMAIL_ENABLED) {
 			return;
 		}
-		if (this.mentionNotice(this.context) !== undefined) {
+		if (this.mentionNotice() !== undefined) {
 			return;
 		}
 
@@ -192,8 +216,8 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	private buildRequest(user: UserSuggestion, recipientId: string): NotificationRequest {
 		const parameters = this.context.parameters;
-		const entityName = parameters.entityName.raw ?? undefined;
-		const entityId = parameters.entityId.raw ?? undefined;
+		const entityName = this.recordEntityName;
+		const entityId = this.recordId.length > 0 ? this.recordId : undefined;
 
 		return {
 			recipient: { ...user, id: recipientId },
