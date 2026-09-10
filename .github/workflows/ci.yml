@@ -51,3 +51,28 @@ jobs:
 
       - name: Build
         run: npm run build -- --buildMode production
+
+  solution:
+    name: Solution source packs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The pac CLI ships as a .NET 10 tool, and the same MSBuild target packs the solution
+      # here as at release time — so a table definition that SolutionPackager refuses is caught
+      # on the pull request rather than on the tag.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Check the solution source
+        run: python3 .github/scripts/check-solution.py
+
+      - name: Pack it
+        run: |
+          rm -rf /tmp/pack
+          cp -r solution /tmp/pack
+          cd /tmp/pack
+          dotnet build -c Release
+          find bin -name '*.zip' -print

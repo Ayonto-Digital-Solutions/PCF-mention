@@ -3,9 +3,10 @@ import type { Theme } from "@fluentui/react-components";
 import type { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "./components/MentionEditor";
 import {
-	EmailNotificationService,
-	type NotificationRequest,
-} from "./services/EmailNotificationService";
+	MentionLogService,
+	type LoggedMention,
+	type MentionRequest,
+} from "./services/MentionLogService";
 import { NotificationScheduler } from "./services/NotificationScheduler";
 import {
 	UserSearchService,
@@ -35,9 +36,9 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private notifyOutputChanged: () => void;
 	private context: ComponentFramework.Context<IInputs>;
 	private userSearch: UserSearchService;
-	private notifications: EmailNotificationService;
+	private mentions: MentionLogService;
 
-	private scheduler: NotificationScheduler<NotificationRequest>;
+	private scheduler: NotificationScheduler<MentionRequest>;
 	private value = "";
 	/** The value the platform was carrying before the edit it has not caught up with yet. */
 	private staleValue: string | undefined;
@@ -53,13 +54,23 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	 * column anyway. The properties still win where they are set, and hosts that report nothing
 	 * fall back to them.
 	 */
-	private get hostRecord(): { entityId?: string | null; entityTypeName?: string | null } {
-		return (this.context.mode as { contextInfo?: { entityId?: string | null; entityTypeName?: string | null } })
-			.contextInfo ?? {};
+	private get hostRecord(): { entityId?: string | null; entityTypeName?: string | null; entityRecordName?: string | null } {
+		return (
+			(
+				this.context.mode as {
+					contextInfo?: { entityId?: string | null; entityTypeName?: string | null; entityRecordName?: string | null };
+				}
+			).contextInfo ?? {}
+		);
 	}
 
 	private get recordId(): string {
 		return normalizeGuid(this.context.parameters.entityId.raw) || normalizeGuid(this.hostRecord.entityId);
+	}
+
+	/** What the record is called, when the host says so. Undocumented, so it may be absent. */
+	private get recordName(): string | undefined {
+		return this.configured((this.hostRecord as { entityRecordName?: string | null }).entityRecordName ?? null);
 	}
 
 	private get recordEntityName(): string | undefined {
@@ -76,10 +87,10 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.notifyOutputChanged = notifyOutputChanged;
 		this.value = context.parameters.field.raw ?? "";
 		this.userSearch = new UserSearchService(context.webAPI);
-		this.notifications = new EmailNotificationService(context.webAPI, context.utils);
+		this.mentions = new MentionLogService(context.webAPI, context.parameters.mentionTable.raw ?? undefined);
 		this.scheduler = new NotificationScheduler(
 			NOTIFICATION_DELAY_MS,
-			async (request: NotificationRequest) => this.notifications.notify(request),
+			async (request: MentionRequest) => this.mentions.write(request),
 			(mentionName: string) => containsMention(this.value, mentionName)
 		);
 	}
@@ -120,6 +131,9 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			onChange: this.onChange,
 			onEditingChange: this.onEditingChange,
 			onMention: this.onMention,
+			recordKey: `${this.recordEntityName ?? ""}:${this.recordId}`,
+			loadMentions: this.loadMentions,
+			onOpenUser: this.onOpenUser,
 		};
 
 		return React.createElement(MentionEditor, props);
@@ -153,6 +167,23 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	};
 
 	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
+
+	/** The mentions this record already carries, so the names in the text can become links. */
+	private readonly loadMentions = async (): Promise<readonly LoggedMention[]> => {
+		const entityName = this.recordEntityName;
+		if (this.isDisposed || entityName === undefined || this.recordId.length === 0) {
+			return [];
+		}
+		return this.mentions.listFor(entityName, this.recordId);
+	};
+
+	private readonly onOpenUser = (userId: string): void => {
+		const id = normalizeGuid(userId);
+		if (id.length === 0) {
+			return;
+		}
+		void this.context.navigation.openForm({ entityName: "systemuser", entityId: id });
+	};
 
 	private readonly searchUsers = async (term: string): Promise<UserSearchResult> => {
 		if (this.isDisposed || this.mentionNotice() !== undefined) {
@@ -214,7 +245,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		});
 	};
 
-	private buildRequest(user: UserSuggestion, recipientId: string): NotificationRequest {
+	private buildRequest(user: UserSuggestion, recipientId: string): MentionRequest {
 		const parameters = this.context.parameters;
 		const entityName = this.recordEntityName;
 		const entityId = this.recordId.length > 0 ? this.recordId : undefined;
@@ -223,14 +254,14 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			recipient: { ...user, id: recipientId },
 			senderUserId: normalizeGuid(parameters.senderUserId.raw) || normalizeGuid(this.context.userSettings.userId),
 			subject: this.configured(parameters.emailSubject.raw) ?? this.resource(DEFAULT_SUBJECT_KEY),
-			body: this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY),
+			message: this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY),
+			recordName: this.recordName,
 			recordUrl: buildRecordUrl({
 				orgUrl: parameters.orgUrl.raw,
 				entityName,
 				entityId,
 				appId: parameters.appId.raw,
 			}),
-			recordLinkLabel: this.resource("Notification_OpenRecord"),
 			entityName,
 			entityId,
 		};

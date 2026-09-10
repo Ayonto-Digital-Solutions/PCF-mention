@@ -157,6 +157,61 @@ function nearestMention(text: string, name: string, near: number, taken?: Readon
 	return nearest;
 }
 
+/** A run of text, and the user it mentions when it is one. */
+export interface MentionSegment {
+	readonly text: string;
+	readonly userId?: string;
+}
+
+/**
+ * Splits the text into plain runs and the mentions among them, so the editor can show a written
+ * mention as a link to the person it names.
+ *
+ * Only names the caller could resolve become mentions — the text alone cannot say whether
+ * "@Anna Berger" is a person or a sentence, and a link that opens the wrong record is worse than
+ * no link. Longer names win, so "@Bob Schmidt" is not read as a mention of "Bob".
+ */
+export function splitMentions(text: string, users: ReadonlyMap<string, string>): MentionSegment[] {
+	if (users.size === 0 || text.length === 0) {
+		return text.length > 0 ? [{ text }] : [];
+	}
+
+	const names = [...users.keys()].sort((left, right) => right.length - left.length);
+	const segments: MentionSegment[] = [];
+	let plainFrom = 0;
+
+	for (let at = text.indexOf("@"); at !== -1; at = text.indexOf("@", at + 1)) {
+		const previous = at > 0 ? text[at - 1] : undefined;
+		if (previous !== undefined && !MENTION_BOUNDARY.test(previous)) {
+			continue;
+		}
+
+		const name = names.find((candidate) => {
+			if (!text.startsWith(`@${candidate}`, at)) {
+				return false;
+			}
+			const following = text[at + candidate.length + 1];
+			return following === undefined || MENTION_END.test(following);
+		});
+		if (name === undefined) {
+			continue;
+		}
+
+		if (at > plainFrom) {
+			segments.push({ text: text.slice(plainFrom, at) });
+		}
+		segments.push({ text: `@${name}`, userId: users.get(name) });
+		plainFrom = at + name.length + 1;
+		at = plainFrom - 1;
+	}
+
+	if (plainFrom < text.length) {
+		segments.push({ text: text.slice(plainFrom) });
+	}
+
+	return segments;
+}
+
 /** Escapes a value so it can be embedded in an OData string literal. */
 export function escapeODataLiteral(value: string): string {
 	return value.replace(/'/g, "''");

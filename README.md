@@ -21,8 +21,8 @@ jeweiligen README unter „Was sich geändert hat".
 | | Mention | GroupDetailList |
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
-| Bundle jetzt | 23 KiB | 14 KiB |
-| Tests | 161 | 85 |
+| Bundle jetzt | 25 KiB | 14 KiB |
+| Tests | 158 | 85 |
 
 ## Voraussetzungen
 
@@ -59,7 +59,8 @@ hängt sie an das GitHub-Release
 * `AyontoPcfControls_X.Y.Z.zip` — unmanaged, für Entwicklungsumgebungen
 * `AyontoPcfControls_X.Y.Z_managed.zip` — managed, für Test und Produktion
 
-Beide enthalten `Ayonto.MentionControl` und `Ayonto.GroupDetailListControl`, Publisher `ayonto`.
+Beide enthalten `Ayonto.MentionControl`, `Ayonto.GroupDetailListControl` und die Tabelle
+`ayonto_mention`, in die Erwähnungen geschrieben werden, Publisher `ayonto`.
 Die Solution wird bewusst im Workflow gebaut und nicht im Repository gehalten: sie ist ein
 Build-Ergebnis, und der Workflow hat die .NET-Toolchain, die `pac` dafür braucht.
 
@@ -70,12 +71,17 @@ steigt. Im Repository bleiben die Manifeste auf ihrem Stand.
 Lokal geht dasselbe mit:
 
 ```bash
-mkdir AyontoPcfControls && cd AyontoPcfControls
-pac solution init --publisher-name Ayonto --publisher-prefix ayonto
+cp -r solution AyontoPcfControls && cd AyontoPcfControls
 pac solution add-reference --path ../Mention
 pac solution add-reference --path ../GroupDetailList
-dotnet build -c Release
+dotnet build -c Release          # managed;  -c Debug erzeugt unmanaged
 ```
+
+Das Solution-Projekt liegt unter [`solution/`](solution/) im Repository statt aus
+`pac solution init` zu entstehen: Die mitgelieferte Tabelle braucht einen `RootComponent`-Eintrag
+in `Solution.xml`, und den ergänzt der Build nicht von selbst. `.github/scripts/check-solution.py`
+prüft bei jedem Pull Request, dass Tabellenordner und Eintrag zusammenpassen — sonst packt die
+Lösung stillschweigend ohne die Tabelle.
 
 ## Deployen
 

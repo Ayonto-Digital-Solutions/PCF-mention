@@ -14,8 +14,6 @@ permissions:
   contents: write
 
 env:
-  PUBLISHER_NAME: Ayonto
-  PUBLISHER_PREFIX: ayonto
   SOLUTION_DIR: AyontoPcfControls
 
 jobs:
@@ -95,29 +93,33 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Create the solution project
+      # The project is checked in rather than generated: the table that ships with the solution
+      # needs a RootComponent in Solution.xml, and nothing in the build would add one.
+      - name: Assemble the solution project
         run: |
-          mkdir -p "${SOLUTION_DIR}"
+          python3 .github/scripts/check-solution.py
+          rm -rf "${SOLUTION_DIR}"
+          cp -r solution "${SOLUTION_DIR}"
           cd "${SOLUTION_DIR}"
-          pac solution init --publisher-name "${PUBLISHER_NAME}" --publisher-prefix "${PUBLISHER_PREFIX}"
           pac solution add-reference --path ../Mention
           pac solution add-reference --path ../GroupDetailList
 
       # pac solution version only moves build and revision, so the release version is written
       # into the generated Solution.xml directly.
+      # A text edit rather than an XML round trip: Solution.xml is checked in with comments
+      # explaining what each part is for, and a round trip would drop them.
       - name: Stamp the solution version
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           python3 - "$SOLUTION_DIR/src/Other/Solution.xml" "${VERSION}.0" <<'PY'
-          import sys, xml.etree.ElementTree as ET
+          import re, sys
           path, version = sys.argv[1], sys.argv[2]
-          tree = ET.parse(path)
-          node = tree.find(".//Version")
-          if node is None:
-              raise SystemExit(f"no <Version> element in {path}")
-          node.text = version
-          tree.write(path, encoding="utf-8", xml_declaration=True)
+          text = open(path, encoding="utf-8").read()
+          patched, count = re.subn(r"<Version>[^<]*</Version>", f"<Version>{version}</Version>", text)
+          if count != 1:
+              raise SystemExit(f"expected exactly one <Version> in {path}, found {count}")
+          open(path, "w", encoding="utf-8").write(patched)
           print(f"{path}: version set to {version}")
           PY
 

@@ -31,6 +31,7 @@ function makeContext(options: ContextOptions = {}) {
 			emailContent: text(""),
 			orgUrl: text(""),
 			appId: text(""),
+			mentionTable: text(""),
 		},
 		mode: {
 			isControlDisabled: options.disabled ?? false,
@@ -45,8 +46,12 @@ function makeContext(options: ContextOptions = {}) {
 		userSettings: { userId: "{11111111-1111-1111-1111-111111111111}" },
 		formatting: { formatInteger: (value: number) => String(value) },
 		resources: { getString: (key: string) => key },
-		webAPI: { retrieveMultipleRecords: vi.fn(), createRecord: vi.fn(), updateRecord: vi.fn() },
-		utils: { getEntityMetadata: vi.fn() },
+		webAPI: {
+			retrieveMultipleRecords: vi.fn().mockResolvedValue({ entities: [] }),
+			createRecord: vi.fn(),
+			updateRecord: vi.fn(),
+		},
+		navigation: { openForm: vi.fn().mockResolvedValue(undefined) },
 	} as unknown as ComponentFramework.Context<IInputs>;
 }
 
@@ -197,18 +202,16 @@ describe("MentionControl notification timing", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("sends what is still waiting when the form is closed", async () => {
+	it("writes the mention when the form is closed", async () => {
 		// The grace period cannot outlive the control, and a code component is not told whether
 		// the record was saved. Dropping the notification would leave the author believing the
-		// person was told, so what is waiting goes out.
+		// person was told.
 		const { control, context, props } = mount({
 			entityName: "account",
 			entityId: "33333333-3333-3333-3333-333333333333",
 		});
 		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
-		createRecord.mockResolvedValue({ entityType: "email", id: "44444444-4444-4444-4444-444444444444" });
-		const send = vi.fn().mockResolvedValue({ ok: true, status: 204, text: () => Promise.resolve("") });
-		vi.stubGlobal("fetch", send);
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
 
 		props.onChange("Danke @Anna Berger");
 		const pending = props.onMention(RECIPIENT);
@@ -216,9 +219,16 @@ describe("MentionControl notification timing", () => {
 		control.destroy();
 		await pending;
 
-		expect(createRecord).toHaveBeenCalledWith("email", expect.anything());
-		// And the mail is actually sent, rather than left behind as a draft.
-		expect(send.mock.calls[0][0]).toContain("Microsoft.Dynamics.CRM.SendEmail");
+		expect(createRecord).toHaveBeenCalledTimes(1);
+		const [table, row] = createRecord.mock.calls[0] as [string, Record<string, string>];
+		expect(table).toBe("ayonto_mention");
+		expect(row).toMatchObject({
+			ayonto_userid: RECIPIENT.id,
+			ayonto_username: "Anna Berger",
+			ayonto_recordtable: "account",
+			ayonto_recordid: "33333333-3333-3333-3333-333333333333",
+			ayonto_deliverystatus: "New",
+		});
 	});
 
 	it("does not send for a mention that was taken back before the form closed", async () => {
@@ -256,27 +266,24 @@ describe("MentionControl record context", () => {
 		expect(props.notice).toBe("Editor_UnsavedRecordNotice");
 	});
 
-	it("lets the configured properties win over the host", () => {
+	it("lets the configured properties win over the host", async () => {
 		const { control, context } = mount({
 			contextInfo: HOST,
 			entityName: "contact",
 			entityId: "66666666-6666-6666-6666-666666666666",
 		});
-		const { createRecord, updateRecord } = context.webAPI as unknown as {
-			createRecord: ReturnType<typeof vi.fn>;
-			updateRecord: ReturnType<typeof vi.fn>;
-		};
-		createRecord.mockResolvedValue({ entityType: "email", id: "77777777-7777-7777-7777-777777777777" });
-		updateRecord.mockResolvedValue(undefined);
-		vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 204, text: () => Promise.resolve("") }));
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "77777777-7777-7777-7777-777777777777" });
 
 		const props = propsOf(control.updateView(context));
 		props.onChange("Danke @Anna Berger");
-		void props.onMention({ id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" }).catch(() => undefined);
+		const pending = props.onMention({ id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" });
 		control.destroy();
+		await pending;
 
-		expect(createRecord).toHaveBeenCalled();
-		vi.unstubAllGlobals();
+		const [, row] = createRecord.mock.calls[0] as [string, Record<string, string>];
+		expect(row.ayonto_recordtable).toBe("contact");
+		expect(row.ayonto_recordid).toBe("66666666-6666-6666-6666-666666666666");
 	});
 
 	it("works with neither the host nor the properties", () => {

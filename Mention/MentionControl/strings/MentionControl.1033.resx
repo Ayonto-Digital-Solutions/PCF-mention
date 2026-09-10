@@ -183,6 +183,12 @@
   <data name="OrgUrl_Desc" xml:space="preserve">
     <value>URL of the environment, for example https://contoso.crm4.dynamics.com. Needed for the record link in the e-mail.</value>
   </data>
+  <data name="MentionTable_Name" xml:space="preserve">
+    <value>Mention table</value>
+  </data>
+  <data name="MentionTable_Desc" xml:space="preserve">
+    <value>Table the mentions are written to. A flow that triggers on new rows sends the notification. Leave empty for the table the solution ships.</value>
+  </data>
   <data name="AppId_Name" xml:space="preserve">
     <value>App id</value>
   </data>

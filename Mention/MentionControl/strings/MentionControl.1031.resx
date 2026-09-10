@@ -183,6 +183,12 @@
   <data name="OrgUrl_Desc" xml:space="preserve">
     <value>URL der Umgebung, zum Beispiel https://contoso.crm4.dynamics.com. Wird für den Datensatz-Link in der E-Mail benötigt.</value>
   </data>
+  <data name="MentionTable_Name" xml:space="preserve">
+    <value>Erwähnungstabelle</value>
+  </data>
+  <data name="MentionTable_Desc" xml:space="preserve">
+    <value>Tabelle, in die Erwähnungen geschrieben werden. Ein Flow auf neue Zeilen versendet die Benachrichtigung. Leer lassen für die mitgelieferte Tabelle.</value>
+  </data>
   <data name="AppId_Name" xml:space="preserve">
     <value>App-ID</value>
   </data>
