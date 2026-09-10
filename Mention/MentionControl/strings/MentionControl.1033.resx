@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Microsoft ResX Schema
+
+    Version 2.0
+
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
+    associated with the data types.
+
+    Example:
+
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+
+    There are any number of "resheader" rows that contain simple
+    name/value pairs.
+
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
+    mimetype set.
+
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
+    extensible. For a given mimetype the value must be set accordingly:
+
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
+    read any of the formats listed below.
+
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="MentionControl_Name" xml:space="preserve">
+    <value>Mention Control</value>
+  </data>
+  <data name="MentionControl_Desc" xml:space="preserve">
+    <value>Mention Dataverse users with @ inside a text column and notify them by e-mail.</value>
+  </data>
+  <data name="Field_Name" xml:space="preserve">
+    <value>Text column</value>
+  </data>
+  <data name="Field_Desc" xml:space="preserve">
+    <value>The text column the component writes the mentions into.</value>
+  </data>
+  <data name="EntityId_Name" xml:space="preserve">
+    <value>Record id</value>
+  </data>
+  <data name="EntityId_Desc" xml:space="preserve">
+    <value>Bind this to the primary key column of the table so the notification can link to the record.</value>
+  </data>
+  <data name="EntityName_Name" xml:space="preserve">
+    <value>Table name</value>
+  </data>
+  <data name="EntityName_Desc" xml:space="preserve">
+    <value>Logical name of the table, for example account. Can be set as a static value.</value>
+  </data>
+  <data name="SendEmail_Name" xml:space="preserve">
+    <value>Send e-mail</value>
+  </data>
+  <data name="SendEmail_Desc" xml:space="preserve">
+    <value>Whether a mentioned user is notified by e-mail.</value>
+  </data>
+  <data name="SendEmail_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="SendEmail_Yes_Desc" xml:space="preserve">
+    <value>Notify the mentioned user.</value>
+  </data>
+  <data name="SendEmail_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="SendEmail_No_Desc" xml:space="preserve">
+    <value>Do not notify the mentioned user.</value>
+  </data>
+  <data name="SenderUserId_Name" xml:space="preserve">
+    <value>Sender</value>
+  </data>
+  <data name="SenderUserId_Desc" xml:space="preserve">
+    <value>Id of the user the notification is sent from. Defaults to the signed-in user.</value>
+  </data>
+  <data name="EmailSubject_Name" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="EmailSubject_Desc" xml:space="preserve">
+    <value>Subject of the notification e-mail.</value>
+  </data>
+  <data name="EmailContent_Name" xml:space="preserve">
+    <value>Message</value>
+  </data>
+  <data name="EmailContent_Desc" xml:space="preserve">
+    <value>Body of the notification e-mail. The link to the record is appended.</value>
+  </data>
+  <data name="OrgUrl_Name" xml:space="preserve">
+    <value>Environment URL</value>
+  </data>
+  <data name="OrgUrl_Desc" xml:space="preserve">
+    <value>URL of the environment, for example https://contoso.crm4.dynamics.com. Needed for the record link in the e-mail.</value>
+  </data>
+  <data name="AppId_Name" xml:space="preserve">
+    <value>App id</value>
+  </data>
+  <data name="AppId_Desc" xml:space="preserve">
+    <value>Id of the model-driven app the record link should open in. Optional.</value>
+  </data>
+  <data name="Editor_Placeholder" xml:space="preserve">
+    <value>Type @ to mention someone</value>
+  </data>
+  <data name="Editor_NoResults" xml:space="preserve">
+    <value>No users found</value>
+  </data>
+  <data name="Editor_Searching" xml:space="preserve">
+    <value>Searching users</value>
+  </data>
+  <data name="Editor_SuggestionCount" xml:space="preserve">
+    <value>suggestions available</value>
+  </data>
+  <data name="Editor_CharactersLeft" xml:space="preserve">
+    <value>characters left</value>
+  </data>
+  <data name="Editor_NotificationFailed" xml:space="preserve">
+    <value>The mention was saved, but the notification could not be sent.</value>
+  </data>
+  <data name="Editor_LookupFailed" xml:space="preserve">
+    <value>Users could not be loaded.</value>
+  </data>
+  <data name="Editor_MaskedValue" xml:space="preserve">
+    <value>* * * * *</value>
+  </data>
+  <data name="Notification_DefaultSubject" xml:space="preserve">
+    <value>You were mentioned</value>
+  </data>
+  <data name="Notification_DefaultBody" xml:space="preserve">
+    <value>You were mentioned on a record.</value>
+  </data>
+</root>

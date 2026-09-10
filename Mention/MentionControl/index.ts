@@ -1,112 +1,144 @@
-import {IInputs, IOutputs} from "./generated/ManifestTypes";
-import { IPersonaProps, IPersonaStyles } from "office-ui-fabric-react/lib/Persona";
-import MentionEditorControl, { IMentionProps } from "./utilities/Mention";
-import ReactDOM = require("react-dom");
-import React = require("react");
-import { people } from "@uifabric/example-data";
+import * as React from "react";
+import type { Theme } from "@fluentui/react-components";
+import type { IInputs, IOutputs } from "./generated/ManifestTypes";
+import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "./components/MentionEditor";
+import { EmailNotificationService } from "./services/EmailNotificationService";
+import { UserSearchService, type UserSuggestion } from "./services/UserSearchService";
+import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
 
-export class MentionControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
-	private _context: ComponentFramework.Context<IInputs>;
-	private _container: HTMLDivElement;
-	private mentionEditor: MentionEditorControl;
-	private _notifyOutputChanged: any;
-//	private Xrm: any;
-	
-	/**
-	 * Empty constructor.
-	 */
-	constructor()
-	{
+/** Value of the sendEmail choice that switches notifications on. */
+const SEND_EMAIL_ENABLED = "0";
 
+const DEFAULT_SUBJECT_KEY = "Notification_DefaultSubject";
+const DEFAULT_BODY_KEY = "Notification_DefaultBody";
+
+export class MentionControl implements ComponentFramework.ReactControl<IInputs, IOutputs> {
+	private notifyOutputChanged: () => void;
+	private context: ComponentFramework.Context<IInputs>;
+	private userSearch: UserSearchService;
+	private notifications: EmailNotificationService;
+
+	/** Users already notified for this record in this session, so a re-mention does not spam them. */
+	private readonly notified = new Set<string>();
+	private value = "";
+
+	/** True between notifyOutputChanged and the getOutputs call that picks the value up. */
+	private hasPendingOutput = false;
+	private isDisposed = false;
+
+	public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void): void {
+		this.context = context;
+		this.notifyOutputChanged = notifyOutputChanged;
+		this.value = context.parameters.field.raw ?? "";
+		this.userSearch = new UserSearchService(context.webAPI);
+		this.notifications = new EmailNotificationService(context.webAPI, context.utils);
+		context.mode.trackContainerResize(true);
 	}
 
-	/**
-	 * Used to initialize the control instance. Controls can kick off remote server calls and other initialization actions here.
-	 * Data-set values are not initialized here, use updateView.
-	 * @param context The entire property bag available to control via Context Object; It contains values as set up by the customizer mapped to property names defined in the manifest, as well as utility functions.
-	 * @param notifyOutputChanged A callback method to alert the framework that the control has new outputs ready to be retrieved asynchronously.
-	 * @param state A piece of data that persists in one session for a single user. Can be set at any point in a controls life cycle by calling 'setControlState' in the Mode interface.
-	 * @param container If a control is marked control-type='standard', it will receive an empty div element within which it can render its content.
-	 */
-	public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void, state: ComponentFramework.Dictionary, container:HTMLDivElement)
-	{
-		// Add control initialization code
-		
-		this._context = context;
-		this._container = container;
-		this._notifyOutputChanged = notifyOutputChanged;
-	}
+	public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
+		this.context = context;
 
+		const field = context.parameters.field;
 
-	/**
-	 * Called when any value in the property bag has changed. This includes field values, data-sets, global values such as container height and width, offline status, control metadata values such as label, visible, etc.
-	 * @param context The entire property bag available to control via Context Object; It contains values as set up by the customizer mapped to names defined in the manifest, as well as utility functions
-	 */
-	public updateView(context: ComponentFramework.Context<IInputs>): void
-	{
-		const field: string = context.parameters.field.raw || '';
-		const allowedNumberOfCharacters = context.parameters.field.attributes?.MaxLength || 100;
-		const sendEmail = context.parameters.sendEmail.raw;
-		const fromUser = context.parameters.emailFromUserGuid.raw || '';
-		const subject = context.parameters.emailSubject.raw || '';
-		const description = context.parameters.emailContent.raw || '';
-		const _props: IMentionProps = {
-			context: this._context,
-			people: this._retrieveSystemUsers(),
-			value: field,
-			formatNumber: (n: number): string => context.formatting.formatInteger(n),
-			notifyOutputChanged: this._notifyOutputChanged,
-			allowedNumberOfCharacters: allowedNumberOfCharacters,
-			fromUser: fromUser,
-			sendEmail: sendEmail,
-			subject: subject,
-			description: description
+		// The platform can call updateView with a value that predates the edit that is still on
+		// its way out. Adopting it would silently roll the column back, so incoming values are
+		// only taken over once the pending output has been collected.
+		if (!this.hasPendingOutput) {
+			this.value = field.raw ?? "";
 		}
-		this.mentionEditor = ReactDOM.render(
-			React.createElement(MentionEditorControl, _props),
-			this._container
-		);
-		this.mentionEditor.setValue(context.parameters.field.raw);
-		
+
+		const props: MentionEditorProps = {
+			value: this.value,
+			disabled: context.mode.isControlDisabled || field.security?.editable === false,
+			masked: field.security?.readable === false,
+			maxLength: field.attributes?.MaxLength,
+			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
+			strings: this.getStrings(),
+			formatNumber: this.formatNumber,
+			searchUsers: this.searchUsers,
+			onChange: this.onChange,
+			onMention: this.onMention,
+		};
+
+		return React.createElement(MentionEditor, props);
 	}
 
-	/** 
-	 * It is called by the framework prior to a control receiving new data. 
-	 * @returns an object based on nomenclature defined in manifest, expecting object[s] for property marked as “bound” or “output”
-	 */
-	public getOutputs(): IOutputs
-	{
+	public getOutputs(): IOutputs {
+		this.hasPendingOutput = false;
+		return { field: this.value };
+	}
+
+	public destroy(): void {
+		this.isDisposed = true;
+		this.notified.clear();
+	}
+
+	private readonly onChange = (value: string): void => {
+		this.value = value;
+		this.hasPendingOutput = true;
+		this.notifyOutputChanged();
+	};
+
+	private readonly formatNumber = (value: number): string => this.context.formatting.formatInteger(value);
+
+	private readonly searchUsers = async (term: string): Promise<UserSuggestion[]> => {
+		if (this.isDisposed) {
+			return [];
+		}
+		return this.userSearch.search(term);
+	};
+
+	private readonly onMention = async (user: UserSuggestion): Promise<void> => {
+		if (this.isDisposed || this.context.parameters.sendEmail.raw !== SEND_EMAIL_ENABLED) {
+			return;
+		}
+		if (this.notified.has(user.id)) {
+			return;
+		}
+
+		const parameters = this.context.parameters;
+		const entityName = parameters.entityName.raw ?? undefined;
+		const entityId = parameters.entityId.raw ?? undefined;
+
+		// Reserve the recipient before awaiting, so two quick mentions cannot both pass the check.
+		this.notified.add(user.id);
+		try {
+			await this.notifications.notify({
+				recipient: user,
+				senderUserId: normalizeGuid(parameters.senderUserId.raw) || normalizeGuid(this.context.userSettings.userId),
+				subject: parameters.emailSubject.raw ?? this.resource(DEFAULT_SUBJECT_KEY),
+				body: parameters.emailContent.raw ?? this.resource(DEFAULT_BODY_KEY),
+				recordUrl: buildRecordUrl({
+					orgUrl: parameters.orgUrl.raw,
+					entityName,
+					entityId,
+					appId: parameters.appId.raw,
+				}),
+				entityName,
+				entityId,
+			});
+		} catch (error) {
+			// The guard exists to prevent duplicate deliveries, not to swallow failed ones, so a
+			// recipient that was not reached stays eligible for the next attempt.
+			this.notified.delete(user.id);
+			throw error;
+		}
+	};
+
+	private resource(key: string): string {
+		return this.context.resources.getString(key);
+	}
+
+	private getStrings(): MentionEditorStrings {
 		return {
-			field: this.mentionEditor.getValue() ?? undefined,
+			placeholder: this.resource("Editor_Placeholder"),
+			noResults: this.resource("Editor_NoResults"),
+			searching: this.resource("Editor_Searching"),
+			suggestionCount: (count: string) => `${count} ${this.resource("Editor_SuggestionCount")}`,
+			charactersLeft: (remaining: string) => `${remaining} ${this.resource("Editor_CharactersLeft")}`,
+			notificationFailed: this.resource("Editor_NotificationFailed"),
+			lookupFailed: this.resource("Editor_LookupFailed"),
+			maskedValue: this.resource("Editor_MaskedValue"),
 		};
 	}
-
-	/** 
-	 * Called when the control is to be removed from the DOM tree. Controls should use this call for cleanup.
-	 * i.e. cancelling any pending remote calls, removing listeners, etc.
-	 */
-	public destroy(): void
-	{
-		// Add code to cleanup control if necessary
-	}
-
-	private _retrieveSystemUsers(): IPersonaProps[] {
-		let People: IPersonaProps[] = [];
-		//@ts-ignore
-		Xrm.WebApi.online.retrieveMultipleRecords("systemuser", "?$select=fullname,systemuserid,firstname,jobtitle,entityimage_url").then(
-			function success(result: { entities: any[]; }) {
-				result.entities.map((entity: any) => {
-					People.push({
-						//"styles":styleq,
-						"text": entity.fullname, "secondaryText": entity.jobtitle,"primaryText":entity.firstname, "optionalText": entity.systemuserid,					
-						"imageUrl":
-							//@ts-ignore
-							Xrm.Page.context.getClientUrl() + entity.entityimage_url
-					});
-				});
-
-			});
-		return People;
-	}
-        
 }
