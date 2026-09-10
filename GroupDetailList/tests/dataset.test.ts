@@ -63,6 +63,12 @@ describe("toGridColumns", () => {
 		expect(toGridColumns([column({ dataType: "Whole.None" })])[0].kind).toBe("text");
 	});
 
+	it("survives a column the framework hands out without a data type", () => {
+		expect(
+			toGridColumns([column({ dataType: null as unknown as string, isPrimary: false })])[0].kind
+		).toBe("text");
+	});
+
 	it("falls back to a usable width when the view reports none", () => {
 		expect(toGridColumns([column({ visualSizeFactor: 0 })])[0].widthFactor).toBe(100);
 	});

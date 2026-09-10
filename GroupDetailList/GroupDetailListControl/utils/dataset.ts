@@ -41,13 +41,16 @@ function kindOf(column: Column): CellKind {
 	if (column.isPrimary) {
 		return "record";
 	}
-	if (column.dataType.startsWith("Lookup.")) {
+
+	// dataType is declared as a string but the framework does hand out columns without one.
+	const dataType = column.dataType ?? "";
+	if (dataType.startsWith("Lookup.")) {
 		return "reference";
 	}
-	if (column.dataType === "SingleLine.Email") {
+	if (dataType === "SingleLine.Email") {
 		return "email";
 	}
-	if (column.dataType === "SingleLine.Phone") {
+	if (dataType === "SingleLine.Phone") {
 		return "phone";
 	}
 	return "text";

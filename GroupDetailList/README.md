@@ -20,7 +20,7 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 
 ```bash
 npm install
-npm test                              # 47 Tests
+npm test                              # 48 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -70,7 +70,7 @@ E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:`.
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 47 Tests |
+| Keine Tests | 48 Tests |
 
 Behobene Fehler aus 1.0:
 
