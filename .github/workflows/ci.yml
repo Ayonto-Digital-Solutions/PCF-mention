@@ -76,15 +76,18 @@ jobs:
           key="S""G.abcdefghijklmnop.qrstuvwxyz012345"
           url="https://someorg.c""rm4.dynamics.com"
           secret="api""_key: \"abcdef0123456789abcdef\""
-          for leak in "$key" "$url" "$secret"; do
-            printf '%s\n' "$leak" > zz-leak-probe.md
-            git add zz-leak-probe.md
+          prefix="\"z""z_mention\""
+          # Written under Mention/, because a publisher prefix is only looked for where Dataverse
+          # logical names live — at the repository root an underscore is just an underscore.
+          for leak in "$key" "$url" "$secret" "$prefix"; do
+            printf '%s\n' "$leak" > Mention/zz-leak-probe.md
+            git add Mention/zz-leak-probe.md
             if python3 .github/scripts/check-no-secrets.py; then
               echo "::error::check-no-secrets.py let this through: $leak"
-              git rm -qf zz-leak-probe.md
+              git rm -qf Mention/zz-leak-probe.md
               exit 1
             fi
-            git rm -qf zz-leak-probe.md
+            git rm -qf Mention/zz-leak-probe.md
           done
 
       - name: Check the solution source
