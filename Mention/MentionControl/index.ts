@@ -107,9 +107,11 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 	public destroy(): void {
 		this.isDisposed = true;
-		// A form that closes without saving is precisely what the grace period is for: the
-		// mention never reached the record, so nobody should hear about it.
-		this.scheduler.cancelPending();
+		// The control is torn down for every reason there is — a saved form that closes, a tab
+		// that moves on, a form that is discarded — and a code component is not told which. What
+		// is still waiting therefore goes out now rather than being dropped on the guess that the
+		// record was abandoned: a notification nobody sends is one the author believes was sent.
+		this.scheduler.flushPending();
 	}
 
 	private readonly onChange = (value: string): void => {

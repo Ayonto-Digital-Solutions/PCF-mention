@@ -8,6 +8,7 @@ import {
 	escapeODataLiteral,
 	findMentionTrigger,
 	normalizeGuid,
+	reanchorMentions,
 } from "../MentionControl/utils/mentionText";
 
 describe("findMentionTrigger", () => {
@@ -161,5 +162,42 @@ describe("buildRecordUrl", () => {
 
 	it("returns undefined when the record id is missing", () => {
 		expect(buildRecordUrl({ orgUrl: "https://c", entityName: "account" })).toBeUndefined();
+	});
+});
+
+describe("reanchorMentions", () => {
+	it("moves a mention along when text is inserted in front of it", () => {
+		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi there @Bob ")).toEqual([
+			{ start: 9, name: "Bob" },
+		]);
+	});
+
+	it("leaves a mention that did not move where it is", () => {
+		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi @Bob thanks")).toEqual([
+			{ start: 3, name: "Bob" },
+		]);
+	});
+
+	it("forgets a mention that is no longer in the text", () => {
+		expect(reanchorMentions([{ start: 3, name: "Bob" }], "hi thanks")).toEqual([]);
+	});
+
+	it("does not mistake a longer name for the one it is looking for", () => {
+		expect(reanchorMentions([{ start: 0, name: "Bob" }], "@Bobbie Jones ")).toEqual([]);
+	});
+
+	it("keeps two mentions of the same person apart", () => {
+		const anchored = reanchorMentions(
+			[
+				{ start: 0, name: "Bob" },
+				{ start: 9, name: "Bob" },
+			],
+			"cc @Bob and @Bob "
+		);
+
+		expect(anchored).toEqual([
+			{ start: 3, name: "Bob" },
+			{ start: 12, name: "Bob" },
+		]);
 	});
 });

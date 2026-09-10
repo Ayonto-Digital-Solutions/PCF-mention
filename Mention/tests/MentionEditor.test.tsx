@@ -213,14 +213,20 @@ describe("MentionEditor", () => {
 		// With the picker open on a fresh query, clicking inside a finished mention earlier in the
 		// text used to re-anchor the trigger there — and the next Enter overwrote that mention and
 		// notified whoever the new query matched.
-		const { textarea, onChange, onMention } = setup({ value: "hi @Andreas Klein and " });
+		const { textarea, onChange, onMention, searchUsers } = setup({ value: "hi @Andreas Klein and " });
 		type(textarea, "hi @Andreas Klein and @ne", 25);
 		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		searchUsers.mockClear();
 
 		textarea.selectionStart = 6;
 		textarea.selectionEnd = 6;
 		fireEvent.click(textarea);
 
+		// Long enough for a re-aimed query to be sent and answered: an empty list right after the
+		// click only means the answer is outstanding, which every closed *and* every open picker
+		// looks like for 250 ms.
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
 		expect(screen.queryAllByRole("option")).toHaveLength(0);
 
 		const callsBefore = onChange.mock.calls.length;
@@ -452,6 +458,49 @@ describe("MentionEditor", () => {
 		type(textarea, "hi @Bob cc @Bob Schmidt");
 
 		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("Bob Schmidt"));
+	});
+
+	it("keeps a finished mention safe after the text in front of it changed", async () => {
+		// The guard is positional, so every edit before a mention has to move it along. Left
+		// behind, it stops covering that mention: the picker reopens over it and the next Enter
+		// overwrites the mention and notifies whoever happens to be first in the list.
+		const searchUsers = vi.fn().mockResolvedValue({ users: [{ id: "u3", name: "Bob" }], hasMore: false });
+		const { textarea } = setup({ searchUsers });
+		type(textarea, "hi @Bo");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		searchUsers.mockClear();
+
+		// Six characters typed in front of the mention, then the sentence carried on behind it.
+		type(textarea, "hi there @Bob ", 8);
+		type(textarea, "hi there @Bob t");
+
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
+		expect(screen.queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("keeps both mentions safe when a second one is written where the first one started", async () => {
+		const searchUsers = vi
+			.fn()
+			.mockResolvedValue({ users: [{ id: "u3", name: "Bob" }, ...USERS], hasMore: false });
+		const { textarea } = setup({ searchUsers });
+		type(textarea, "@Bo");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		// A second mention written at the start pushes the first one along.
+		type(textarea, "@An@Bob ", 3);
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(textarea.value).toBe("@Anna Berger @Bob ");
+		searchUsers.mockClear();
+
+		type(textarea, "@Anna Berger @Bob t");
+
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(searchUsers).not.toHaveBeenCalled();
 	});
 
 	it("says nothing about a failed notification once the form has closed", async () => {

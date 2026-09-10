@@ -155,26 +155,48 @@ describe("NotificationScheduler", () => {
 		expect(send).toHaveBeenCalledTimes(1);
 	});
 
-	it("drops what is still waiting when it is cancelled", async () => {
-		// A form closed without saving must not mail anyone about a mention it discarded.
+	it("sends what is still waiting when it is flushed", async () => {
+		// The control is going away and cannot wait out the rest of the grace period. Dropping the
+		// notification would leave the author believing the person was told.
 		const { scheduler, send } = makeScheduler({});
 		const pending = scheduler.schedule(item());
 
-		scheduler.cancelPending();
-		await vi.advanceTimersByTimeAsync(DELAY * 2);
+		scheduler.flushPending();
+		await pending;
 
-		expect(send).not.toHaveBeenCalled();
-		expect(scheduler.isPending("user-1")).toBe(false);
-		void pending;
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(scheduler.isPending("user-1")).toBe(true);
 	});
 
-	it("leaves a notification that already went out alone when cancelled", async () => {
+	it("still drops a withdrawn mention when it is flushed", async () => {
+		const { scheduler, send, mentioned } = makeScheduler({});
+		const pending = scheduler.schedule(item());
+		mentioned.delete("Anna Berger");
+
+		scheduler.flushPending();
+		await pending;
+
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it("does not send twice when the timer would have fired after a flush", async () => {
+		const { scheduler, send } = makeScheduler({});
+		const pending = scheduler.schedule(item());
+
+		scheduler.flushPending();
+		await pending;
+		await vi.advanceTimersByTimeAsync(DELAY * 2);
+
+		expect(send).toHaveBeenCalledTimes(1);
+	});
+
+	it("leaves a notification that already went out alone when flushed", async () => {
 		const { scheduler, send } = makeScheduler({});
 		const first = scheduler.schedule(item());
 		await vi.advanceTimersByTimeAsync(DELAY);
 		await first;
 
-		scheduler.cancelPending();
+		scheduler.flushPending();
 
 		expect(send).toHaveBeenCalledTimes(1);
 	});

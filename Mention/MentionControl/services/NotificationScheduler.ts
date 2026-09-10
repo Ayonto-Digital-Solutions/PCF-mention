@@ -3,8 +3,8 @@
  * gone by the time it would go out.
  *
  * A mention lands in the text the moment it is picked, but the mail must not: picking one entry
- * off the list happens, and "you were mentioned" cannot be taken back. Waiting also covers the
- * form the user abandons — the mention was never saved, so nobody should hear about it.
+ * off the list happens, and "you were mentioned" cannot be taken back. Deleting the mention again
+ * within the grace period is therefore the one thing that stops the mail.
  *
  * Kept free of the platform so the timing, the de-duplication and the withdrawal rule can be
  * exercised directly.
@@ -24,8 +24,8 @@ export class NotificationScheduler<TPayload> {
 
 	/** Recipients whose notification went out, by key, with the name it used. */
 	private readonly sent = new Map<string, string>();
-	/** Notifications waiting out the delay, by key. */
-	private readonly waiting = new Map<string, ReturnType<typeof setTimeout>>();
+	/** Notifications waiting out the delay, by key, each with the way to let it go now. */
+	private readonly waiting = new Map<string, { handle: ReturnType<typeof setTimeout>; fire: () => void }>();
 
 	constructor(
 		delayMs: number,
@@ -52,8 +52,12 @@ export class NotificationScheduler<TPayload> {
 		}
 
 		return new Promise<void>((resolve, reject) => {
-			const handle = setTimeout(() => {
-				this.waiting.delete(item.key);
+			const fire = () => {
+				const waiting = this.waiting.get(item.key);
+				if (waiting) {
+					clearTimeout(waiting.handle);
+					this.waiting.delete(item.key);
+				}
 
 				if (!this.isStillMentioned(item.mentionName)) {
 					resolve();
@@ -72,23 +76,26 @@ export class NotificationScheduler<TPayload> {
 						reject(error instanceof Error ? error : new Error(String(error)));
 					}
 				})();
-			}, this.delayMs);
+			};
 
-			this.waiting.set(item.key, handle);
+			this.waiting.set(item.key, { handle: setTimeout(fire, this.delayMs), fire });
 		});
 	}
 
 	/**
-	 * Drops everything still waiting. Used when the component goes away: the grace period exists
-	 * so a mention the author did not keep never turns into a mail, and closing a form without
-	 * saving is exactly that case. The cost is that picking a mention and saving within the grace
-	 * period sends nothing — recoverable by mentioning again, unlike a mail that already went out.
+	 * Lets everything that is still waiting go out now, each still subject to the check the timer
+	 * would have made. Used when the component goes away.
+	 *
+	 * Waiting cannot cover the abandoned form after all: a code component is not told whether the
+	 * record was saved, and the mention sits in the text either way. Between a mail for a mention
+	 * that was discarded and a notification that is silently lost, the mail is the lesser harm —
+	 * the discarded one leads to a record without the mention, which is visible and explainable,
+	 * while the lost one leaves the author believing somebody was told.
 	 */
-	public cancelPending(): void {
-		for (const handle of this.waiting.values()) {
-			clearTimeout(handle);
+	public flushPending(): void {
+		for (const waiting of [...this.waiting.values()]) {
+			waiting.fire();
 		}
-		this.waiting.clear();
 	}
 
 	/**

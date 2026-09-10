@@ -30,7 +30,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 143 Tests
+npm test                              # 152 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -114,8 +114,15 @@ lässt einen Power-Automate-Flow oder ein Plug-in auf das Anlegen der E-Mail rea
 Anlegen selbst ist unabhängig vom Versand.
 
 Zwischen Auswahl und Versand liegen **5 Sekunden**. Wird die Erwähnung in dieser Zeit wieder
-gelöscht — ein Fehlgriff in der Liste, oder ein Formular, das verworfen wird — geht keine Mail
-raus. Eine Mail „Sie wurden erwähnt" lässt sich nicht zurückholen; die Erwähnung selbst schon.
+gelöscht — der Fehlgriff in der Liste —, geht keine Mail raus. Eine Mail „Sie wurden erwähnt"
+lässt sich nicht zurückholen; die Erwähnung selbst schon.
+
+Wird das Formular innerhalb dieser 5 Sekunden geschlossen, geht die Mail sofort raus, sofern die
+Erwähnung noch im Text steht. Ein Code-Component erfährt nicht, ob der Datensatz gespeichert
+wurde, und die Erwähnung steht in beiden Fällen im Text — die Wartezeit kann das verworfene
+Formular also nicht abdecken. Von beiden Fehlern ist die Mail der kleinere: Sie führt zu einem
+Datensatz ohne die Erwähnung, was sichtbar und erklärbar ist, während eine stillschweigend
+verworfene Benachrichtigung den Absender in dem Glauben lässt, die Person sei informiert.
 
 Jede Person wird einmal pro Erwähnung benachrichtigt. Wird die Erwähnung gelöscht und später
 erneut gesetzt, wird wieder benachrichtigt. Schlägt der Versand fehl, bleibt die Person für einen
@@ -162,7 +169,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 143 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 152 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 

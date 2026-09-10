@@ -101,19 +101,53 @@ const MENTION_END = /[\s,.;:!?()[\]{}"]/;
  */
 export function containsMention(text: string, displayName: string): boolean {
 	const name = displayName.trim();
-	if (name.length === 0) {
-		return false;
+	return name.length > 0 && nearestMention(text, name, 0) !== undefined;
+}
+
+/** A mention this editor wrote, and where it currently sits in the text. */
+export interface InsertedMention {
+	readonly start: number;
+	readonly name: string;
+}
+
+/**
+ * Moves the mentions the editor wrote to where they now sit, and forgets the ones that are gone.
+ *
+ * Their positions are what tells a sentence carrying on after a mention ("@Bob thanks") from a new
+ * query that happens to start with the same name ("@Bob Schmidt") — the two read alike, only their
+ * origin differs. Every edit before a mention moves it, so a position that is left where it was
+ * points at the wrong place, and the rule that reads it quietly stops working.
+ */
+export function reanchorMentions(mentions: readonly InsertedMention[], text: string): InsertedMention[] {
+	const anchored: InsertedMention[] = [];
+
+	for (const mention of mentions) {
+		const at = nearestMention(text, mention.name, mention.start);
+		if (at === undefined || anchored.some((other) => other.start === at && other.name === mention.name)) {
+			continue;
+		}
+		anchored.push({ start: at, name: mention.name });
 	}
 
+	return anchored;
+}
+
+/** Where "@name" now sits closest to where it was, or undefined when it is no longer in the text. */
+function nearestMention(text: string, name: string, near: number): number | undefined {
 	const mention = `@${name}`;
+	let nearest: number | undefined;
+
 	for (let at = text.indexOf(mention); at !== -1; at = text.indexOf(mention, at + 1)) {
 		const following = text[at + mention.length];
-		if (following === undefined || MENTION_END.test(following)) {
-			return true;
+		if (following !== undefined && !MENTION_END.test(following)) {
+			continue;
+		}
+		if (nearest === undefined || Math.abs(at - near) < Math.abs(nearest - near)) {
+			nearest = at;
 		}
 	}
 
-	return false;
+	return nearest;
 }
 
 /** Escapes a value so it can be embedded in an OData string literal. */

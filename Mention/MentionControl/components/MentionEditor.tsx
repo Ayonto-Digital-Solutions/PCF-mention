@@ -14,7 +14,13 @@ import {
 } from "@fluentui/react-components";
 import { SuggestionList } from "./SuggestionList";
 import type { UserSearchResult, UserSuggestion } from "../services/UserSearchService";
-import { applyMention, findMentionTrigger, type MentionTrigger } from "../utils/mentionText";
+import {
+	applyMention,
+	findMentionTrigger,
+	reanchorMentions,
+	type InsertedMention,
+	type MentionTrigger,
+} from "../utils/mentionText";
 
 /** Delay before an "@" query is sent to Dataverse, so typing does not cause one call per keystroke. */
 const SEARCH_DEBOUNCE_MS = 250;
@@ -127,7 +133,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 	/** Where this editor wrote a mention, so typing on past one does not look like a new query. */
-	const insertedMentions = React.useRef<{ start: number; name: string }[]>([]);
+	const insertedMentions = React.useRef<InsertedMention[]>([]);
 	const isFocused = React.useRef(false);
 	const pendingCaret = React.useRef<number | null>(null);
 	/** The grace period outlives a form that closes, so nothing is set on a gone component. */
@@ -218,6 +224,10 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	 * caret can therefore only ever close the list; typing is what opens it.
 	 */
 	const syncTrigger = React.useCallback((nextText: string, caret: number, mayOpen: boolean) => {
+		// Editing in front of a mention moves it, so the recorded ones are put back where they
+		// now sit before they are consulted — otherwise the rule below silently stops applying
+		// to them, and the picker reopens over a mention that is already finished.
+		insertedMentions.current = reanchorMentions(insertedMentions.current, nextText);
 		const found = findMentionTrigger(nextText, caret);
 		// A query may hold a space because names do, so continuing the sentence after a one-word
 		// mention ("@Bob thanks") still looks like a query. It is not: the name is already there.
@@ -282,9 +292,14 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				return;
 			}
 
+			const written: InsertedMention = { start: trigger.start, name: user.name.trim() };
 			insertedMentions.current = [
-				...insertedMentions.current.filter((mention) => mention.start !== trigger.start),
-				{ start: trigger.start, name: user.name.trim() },
+				// Re-anchored against the text that now holds the new mention, so an earlier one
+				// at this position is kept rather than dropped for sharing the index it had.
+				...reanchorMentions(insertedMentions.current, result.text).filter(
+					(mention) => mention.start !== written.start || mention.name !== written.name
+				),
+				written,
 			];
 			pendingCaret.current = result.caret;
 			commit(result.text);
