@@ -109,9 +109,12 @@ describe("NotificationScheduler", () => {
 			.mockResolvedValueOnce(undefined);
 		const { scheduler } = makeScheduler({ send });
 
+		// The rejection handler has to be attached before the timer fires, or the rejection is
+		// unhandled for a tick and the run fails even though every assertion passes.
 		const first = scheduler.schedule(item());
+		const rejects = expect(first).rejects.toThrow("smtp down");
 		await vi.advanceTimersByTimeAsync(DELAY);
-		await expect(first).rejects.toThrow("smtp down");
+		await rejects;
 
 		const second = scheduler.schedule(item());
 		await vi.advanceTimersByTimeAsync(DELAY);
