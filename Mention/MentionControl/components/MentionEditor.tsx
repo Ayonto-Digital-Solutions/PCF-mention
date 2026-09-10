@@ -101,6 +101,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const [suggestions, setSuggestions] = React.useState<readonly UserSuggestion[]>([]);
 	const [activeIndex, setActiveIndex] = React.useState(0);
 	const [isSearching, setIsSearching] = React.useState(false);
+	const [hasLookupFailed, setHasLookupFailed] = React.useState(false);
 	const [message, setMessage] = React.useState<string | undefined>(undefined);
 
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -141,10 +142,13 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					if (!cancelled) {
 						setSuggestions(users);
 						setActiveIndex(0);
+						setHasLookupFailed(false);
+						setMessage(undefined);
 					}
 				} catch (error) {
 					if (!cancelled) {
 						setSuggestions([]);
+						setHasLookupFailed(true);
 						setMessage(strings.lookupFailed);
 						console.error("[MentionControl] user lookup failed", error);
 					}
@@ -166,6 +170,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		setTrigger(null);
 		setSuggestions([]);
 		setActiveIndex(0);
+		setHasLookupFailed(false);
 	}, []);
 
 	const commit = React.useCallback(
@@ -246,7 +251,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		[activeIndex, closeSuggestions, select, suggestions, trigger]
 	);
 
-	const isOpen = trigger !== null && !props.disabled;
+	const isOpen = trigger !== null && !props.disabled && !hasLookupFailed;
 	const remaining = props.maxLength !== undefined ? props.maxLength - text.length : undefined;
 
 	if (props.masked) {
