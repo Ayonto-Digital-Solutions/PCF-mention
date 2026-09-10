@@ -54,6 +54,12 @@ def main() -> None:
     for orphan in sorted(declared):
         fail(f"Solution.xml claims the table '{orphan}', but src/Entities has no folder for it")
 
+        # A hand-written RibbonDiff.xml made SolutionPackager throw a NullReferenceException
+        # that named nothing but the entity. The file is optional, so the check keeps it out
+        # rather than letting somebody rediscover that on a release tag.
+        if (ROOT / "src/Entities" / folder / "RibbonDiff.xml").is_file():
+            fail(f"Entities/{folder}/RibbonDiff.xml — the packer cannot read a hand-written one; leave it out")
+
     customizations = ET.parse(ROOT / "src/Other/Customizations.xml").getroot()
     entities = customizations.find("Entities")
     if entities is not None and len(entities) > 0:
