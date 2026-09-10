@@ -40,6 +40,10 @@ export interface GroupDetailListProps {
 	readonly rows: readonly GridRow[];
 	/** What the dataset already had selected when the component first rendered. */
 	readonly initialSelectedIds: readonly string[];
+	/** The column the picker shows. The control owns it, so it can drop a grouping it cannot keep. */
+	readonly groupColumnKey: string | undefined;
+	/** The column the rows on screen are actually sorted by, and may therefore be chunked by. */
+	readonly groupedBy: string | undefined;
 	readonly groupingEnabled: boolean;
 	readonly isLoading: boolean;
 	readonly errorMessage?: string;
@@ -106,7 +110,7 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	const [selected, setSelected] = React.useState<ReadonlySet<string>>(
 		() => new Set(props.initialSelectedIds)
 	);
-	const [groupColumnKey, setGroupColumnKey] = React.useState<string | undefined>(undefined);
+	const [groupColumnKey, setGroupColumnKey] = React.useState<string | undefined>(props.groupColumnKey);
 	// Two of these controls can sit on one form, so the label id has to be unique per instance.
 	const groupByLabelId = useId("group-by-label");
 
@@ -115,14 +119,20 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	const selectionSeeded = React.useRef(props.initialSelectedIds.length > 0);
 
 	// The first updateView usually arrives while the dataset is still loading, so what the
-	// platform already had selected only shows up on a later one.
-	React.useEffect(() => {
-		if (selectionSeeded.current || props.initialSelectedIds.length === 0) {
-			return;
-		}
+	// platform already had selected only shows up on a later one. Taking it over during the render
+	// rather than in an effect keeps it ahead of the effect below, which would otherwise still see
+	// the empty selection and report exactly that back to the dataset.
+	if (!selectionSeeded.current && props.initialSelectedIds.length > 0) {
 		selectionSeeded.current = true;
 		setSelected(new Set(props.initialSelectedIds));
-	}, [props.initialSelectedIds]);
+	}
+
+	// The control can drop a grouping it is unable to keep — a column the new view no longer has,
+	// or one it will not sort by. The picker follows it instead of claiming a grouping that is not
+	// on screen; picking one stays instant, because that path sets the state here first.
+	React.useEffect(() => {
+		setGroupColumnKey(props.groupColumnKey);
+	}, [props.groupColumnKey]);
 
 	// Two things happen when a new set of rows arrives. Records that left the page cannot stay
 	// selected, or the header checkbox and the count would describe rows nobody can see. And a
@@ -178,10 +188,10 @@ export const GroupDetailList: React.FC<GroupDetailListProps> = (props) => {
 	);
 
 	const groupColumn = columns.find((column) => column.key === groupColumnKey);
-	// Chunking consecutive rows only produces real groups while the dataset is sorted by that
-	// column, and the column can disappear when the view changes under the control.
-	const activeGroupKey =
-		groupColumn && props.sortOf(groupColumn.key) !== undefined ? groupColumn.key : undefined;
+	// Chunking consecutive rows only produces real groups once the rows have come back sorted by
+	// that column, which is what the control reports as groupedBy — picking one is a refresh
+	// ahead of that. Switching grouping off needs no refresh, so the picker alone ends it.
+	const activeGroupKey = groupColumnKey !== undefined && groupColumnKey === props.groupedBy ? groupColumnKey : undefined;
 
 	const groups = React.useMemo(
 		() => (props.groupingEnabled ? groupRows(rows, activeGroupKey) : undefined),

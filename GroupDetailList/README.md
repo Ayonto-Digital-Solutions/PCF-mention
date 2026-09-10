@@ -14,13 +14,13 @@ Version 2.0.0 ist eine vollständige Neuimplementierung — siehe [Was sich geä
 | Typ | `virtual` (React), Dataset |
 | Plattform-Bibliotheken | React 16.14.0, Fluent UI v9 (9.46.2) |
 | Unterstützte Apps | modellgesteuerte Apps |
-| Bundle | 10 KiB (Production-Build) |
+| Bundle | 14 KiB (Production-Build) |
 
 ## Entwickeln
 
 ```bash
 npm install
-npm test                              # 68 Tests
+npm test                              # 73 Tests
 npm run lint
 npm run typecheck
 npm run build -- --buildMode production
@@ -43,9 +43,12 @@ siehe [../Mention/README.md](../Mention/README.md#in-eine-umgebung-deployen).
 **Gruppieren.** Die Auswahl einer Spalte sortiert das Dataset serverseitig nach dieser Spalte und
 fasst anschließend aufeinanderfolgende Zeilen mit gleichem Wert zu Gruppen zusammen. Ohne die
 serverseitige Sortierung würde derselbe Wert über Seitengrenzen hinweg in mehreren Gruppen landen.
-Gruppiert wird deshalb nur, solange das Dataset auch tatsächlich nach dieser Spalte sortiert ist
-und die Spalte noch Teil der Ansicht ist — sonst fällt die Liste auf die flache Darstellung
-zurück, statt falsche Gruppen zu zeigen. Angeboten werden nur sortierbare Spalten.
+Gruppiert wird deshalb erst, wenn die Zeilen auch tatsächlich in dieser Sortierung zurückgekommen
+sind — die Auswahl ist einen Refresh voraus, und die alten Zeilen zu zerlegen ergäbe eine Gruppe je
+gleichem Wertelauf. Verliert die Spalte ihre Sortierung, weil die Ansicht gewechselt hat, fordert
+das Control sie genau einmal erneut an; bleibt sie aus, endet die Gruppierung, statt eine
+Gruppierung zu behaupten, die nicht auf dem Bildschirm steht. Verschwindet die Spalte ganz aus der
+Ansicht, endet sie ebenfalls. Angeboten werden nur sortierbare Spalten.
 
 **Sortieren.** Ein Klick auf eine Spaltenüberschrift setzt die Sortierung des Datasets und lädt
 neu — es wird also die gesamte Ansicht sortiert, nicht nur die geladene Seite. Ist eine
@@ -59,7 +62,10 @@ Blättern die geladene Seite verlassen, fallen aus der Auswahl heraus.
 **Öffnen.** Ein Klick auf die Primärspalte oder ein Doppelklick auf die Zeile öffnet den
 Datensatz über `openDatasetItem` — das respektiert einen eventuell vorhandenen
 `Mscrm.OpenRecordItem`-Befehl. Ein Lookup-Feld öffnet den *referenzierten* Datensatz,
-E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:`.
+E-Mail-Spalten werden zu `mailto:`, Telefonspalten zu `tel:` — Letzteres nur, wenn die Zelle
+genau eine Nummer enthält. Eine Klammer um Ziffern hinter einer Ländervorwahl (`+49 (0)30 …`)
+bleibt Text: die deutsche Verkehrsausscheidungsziffer wird beim Wählen weggelassen, eine
+amerikanische Vorwahl nicht, und der Zelle ist nicht anzusehen, welcher Fall vorliegt.
 
 **Blättern.** Vor/Zurück laden die jeweilige Seite über die Paging-API des Datasets — mit
 `loadOnlyNewPage`, sonst liefert das Framework den gesamten bisher geladenen Bereich zurück und
@@ -70,14 +76,14 @@ die Liste würde mit jeder Seite weiterwachsen, statt umzublättern.
 | Alt (1.0, August 2020) | Neu (2.0) |
 |---|---|
 | `pcf-scripts` 1.3.6, webpack 4 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
-| `office-ui-fabric-react` v7 `DetailsList`, gebündelt (2689 KiB) | Fluent UI v9 als Plattform-Bibliothek (10 KiB) |
+| `office-ui-fabric-react` v7 `DetailsList`, gebündelt (2689 KiB) | Fluent UI v9 als Plattform-Bibliothek (14 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
 | `setPageSize(5000)` und Schleife über alle Seiten | Seitenweise über die Paging-API, Standard 50 |
 | Clientseitiges Sortieren der geladenen Zeilen | Serverseitig über `dataset.sorting` + `refresh()` |
 | `(context.mode as any).rowSpan` | Entfällt; Höhe über CSS |
 | Alle `Device.*`-Features als `required` deklariert | Keine `feature-usage` — es wird keine gebraucht |
 | Feste englische Texte im Code | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 68 Tests |
+| Keine Tests | 73 Tests |
 
 Behobene Fehler aus 1.0:
 
@@ -116,4 +122,8 @@ GroupDetailList/
 │  ├─ utils/format.ts                 Platzhalter in lokalisierten Texten
 │  └─ strings/                        resx für 1033 und 1031
 └─ tests/
+   ├─ GroupDetailListControl.test.ts  Sortierung, Gruppierung, Ansichtswechsel
+   ├─ GroupDetailList.test.tsx        Toolbar, Auswahl, Gruppen, Zellentypen
+   ├─ dataset.test.ts                 Abbildung, Gruppierung, Sortierlogik
+   └─ format.test.ts                  Platzhalter
 ```

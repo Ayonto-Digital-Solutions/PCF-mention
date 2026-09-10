@@ -41,6 +41,14 @@ export interface RecordTableProps {
  * else, so anything that is not one plain number is left as text.
  */
 function toDialableNumber(value: string): string | undefined {
+	// Brackets around digits mean opposite things once a country code is in front: the German
+	// trunk "0" of "+49 (0)30 …" must be left out when dialling, an American area code must not.
+	// Nothing in the text says which, so such a number stays text; a national "(030) …" is
+	// unambiguous and keeps its digits.
+	if (value.trimStart().startsWith("+") && /\(\s*\d/.test(value)) {
+		return undefined;
+	}
+
 	const withoutSeparators = value.replace(/[\s\-.()/]/g, "");
 	return /^\+?\d{3,20}$/.test(withoutSeparators) ? withoutSeparators : undefined;
 }
