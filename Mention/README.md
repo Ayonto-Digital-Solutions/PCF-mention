@@ -95,8 +95,9 @@ Deep-Link.
 1. Eine Person wird aus der Vorschlagsliste gewählt; `@Vorname Nachname` wird in den Text geschrieben.
 2. Das Component legt über `context.webAPI.createRecord("email", …)` eine E-Mail-Aktivität an,
    mit Absender und Empfänger als `activityparty` (`partyid_systemuser`).
-3. Sind `entityId` und `entityName` konfiguriert, wird die E-Mail per `updateRecord` auf den
-   Datensatz bezogen (`regardingobjectid`), damit sie in dessen Zeitachse auftaucht.
+3. Ist der Datensatz bekannt — vom Host gemeldet oder über die Eigenschaften gesetzt —, wird die
+   E-Mail per `updateRecord` auf ihn bezogen (`regardingobjectid`), damit sie in dessen Zeitachse
+   auftaucht.
 4. Anschließend wird die gebundene Aktion `SendEmail` ausgelöst.
 
 Zu Schritt 3: Die Navigationseigenschaft des Regarding-Lookups lässt sich nicht aus dem
@@ -132,6 +133,22 @@ Jede Person wird einmal pro Erwähnung benachrichtigt. Wird die Erwähnung gelö
 erneut gesetzt, wird wieder benachrichtigt. Schlägt der Versand fehl, bleibt die Person für einen
 erneuten Versuch freigeschaltet.
 
+### Was die Umgebung für den Versand braucht
+
+Das Component legt die E-Mail an und löst `SendEmail` aus; ob sie das Haus verlässt, entscheidet
+die Umgebung:
+
+* Das Postfach des **Absenders** muss für ausgehende E-Mail auf serverseitige Synchronisierung
+  stehen, genehmigt und „Testen und aktivieren" durchlaufen haben. Fehlt das, bleibt die E-Mail
+  als **Entwurf** liegen — sichtbar in der Umgebung, mit einem Hinweis im Component.
+* Der **Anwender** braucht Leserecht auf `systemuser` (sonst findet die Suche niemanden), Anlegen
+  auf der E-Mail-Aktivität, „Anfügen an" auf der Zieltabelle für den Datensatzbezug und
+  „E-Mail senden". Ein anderer Absender als der angemeldete Benutzer verlangt zusätzlich
+  „E-Mail als anderer Benutzer senden".
+* Der **Empfänger** braucht eine E-Mail-Adresse. Die Vorschlagsliste prüft das nicht — sie zeigt
+  aktivierte, interaktive Benutzer; ob deren Postfach bestellt ist, stellt sich erst beim Versand
+  heraus.
+
 ### Wann Erwähnen nicht verfügbar ist
 
 Das Component blendet die Vorschlagsliste aus und sagt im UI warum, wenn:
@@ -166,7 +183,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | `pcf-scripts` 1.3.6 (Juli 2020), webpack 4, TypeScript 3.9 | `pcf-scripts` 1.51.x, webpack 5, TypeScript 5.8 |
 | `office-ui-fabric-react` v7, komplett gebündelt (2417 KiB) | Fluent UI v9 als Plattform-Bibliothek (23 KiB) |
 | `control-type="standard"`, `ReactDOM.render` in `updateView` | `control-type="virtual"`, `ComponentFramework.ReactControl` |
-| `Xrm.Page.data.entity.getId()` / `getEntityName()` | Manifest-Eigenschaften `entityId` / `entityName` |
+| `Xrm.Page.data.entity.getId()` / `getEntityName()` | `context.mode.contextInfo`, mit `entityId` / `entityName` als Übersteuerung |
 | `Xrm.Page.context.getClientUrl()` / `getUserId()` | `orgUrl`-Eigenschaft bzw. `context.userSettings.userId` |
 | `Xrm.WebApi.online.retrieveMultipleRecords` / `.execute` | `context.webAPI` + `<uses-feature name="WebAPI">` |
 | `Xrm.Utility.alertDialog` | Inline-Hinweis im Component |
