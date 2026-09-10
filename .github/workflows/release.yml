@@ -53,11 +53,45 @@ jobs:
           dotnet tool install --global Microsoft.PowerApps.CLI.Tool
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Build the code components
+      # Dataverse only picks up a changed component when the component's own version moves;
+      # bumping the solution alone leaves the old bundle in place.
+      - name: Stamp the component versions
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - "$VERSION" Mention/MentionControl/ControlManifest.Input.xml \
+            GroupDetailList/GroupDetailListControl/ControlManifest.Input.xml <<'PY'
+          import re, sys
+          version, *paths = sys.argv[1:]
+          for path in paths:
+              text = open(path, encoding="utf-8").read()
+              patched, count = re.subn(
+                  r'(<control\b[^>]*?\bversion=")[^"]*(")',
+                  lambda m: m.group(1) + version + m.group(2),
+                  text,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit(f"no control version attribute in {path}")
+              open(path, "w", encoding="utf-8").write(patched)
+              print(f"{path}: control version set to {version}")
+          PY
+
+      # A tag push does not run ci.yml, so the same gates run here: a release must never be cut
+      # from a commit that would have failed the pull request build.
+      - name: Check and build the code components
         run: |
           for control in Mention GroupDetailList; do
             echo "::group::${control}"
-            (cd "${control}" && npm ci && npm run build -- --buildMode production)
+            (
+              cd "${control}"
+              npm ci
+              npm run refreshTypes
+              npm run lint
+              npm run typecheck
+              npm test
+              npm run build -- --buildMode production
+            )
             echo "::endgroup::"
           done
 

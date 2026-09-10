@@ -21,8 +21,8 @@ jeweiligen README unter „Was sich geändert hat".
 | | Mention | GroupDetailList |
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
-| Bundle jetzt | 14 KiB | 10 KiB |
-| Tests | 128 | 68 |
+| Bundle jetzt | 22 KiB | 14 KiB |
+| Tests | 143 | 73 |
 
 ## Voraussetzungen
 
@@ -49,8 +49,10 @@ Production-Build aus (siehe [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 
 ## Release
 
-Ein Tag `vX.Y.Z` baut beide Components, erzeugt daraus über die Power Platform CLI eine
-Dataverse-Solution und hängt sie an das GitHub-Release
+Ein Tag `vX.Y.Z` prüft beide Components mit denselben vier Schritten wie die CI — ein Tag löst
+`ci.yml` nicht aus, und aus einem Stand, der die Prüfung nicht besteht, darf kein Release
+entstehen —, baut sie, erzeugt daraus über die Power Platform CLI eine Dataverse-Solution und
+hängt sie an das GitHub-Release
 ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
 
 * `AyontoPcfControls_X.Y.Z.zip` — unmanaged, für Entwicklungsumgebungen
