@@ -35,6 +35,11 @@ jobs:
 
       - run: npm ci
 
+      # ManifestTypes.d.ts is generated from the manifest and is not checked in,
+      # so lint and typecheck have nothing to resolve against without this.
+      - name: Generate manifest types
+        run: npm run refreshTypes
+
       - name: Lint
         run: npm run lint
 
