@@ -26,9 +26,10 @@ const DEFAULT_BODY_KEY = "Notification_DefaultBody";
 /**
  * How long a notification waits before it goes out.
  *
- * A mention is sent the moment it is picked, but the mail is not: picking one entry off the list
- * happens, and a mail saying "you were mentioned" cannot be taken back. The wait is long enough to
- * delete a wrong pick and short enough that nobody notices it.
+ * A mention lands in the text the moment it is picked, but the notification must not: picking the
+ * wrong entry off the list happens, and "you were mentioned" cannot be taken back. The wait is long
+ * enough to delete a wrong pick and short enough that nobody notices it. Only the first mention of
+ * a person schedules one — the rest of the text may name them as often as it likes.
  */
 const NOTIFICATION_DELAY_MS = 5000;
 
@@ -54,12 +55,14 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private writtenMentions = new Set<string>();
 
 	/**
-	 * The record the component sits on, as the host reports it.
+	 * The record as the host reports it, for hosts that report one at all.
 	 *
-	 * Model-driven apps hand this to every code component, which is what the entityId and
-	 * entityName properties existed for — a maker cannot bind a text property to a primary key
-	 * column anyway. The properties still win where they are set, and hosts that report nothing
-	 * fall back to them.
+	 * The documented way to the record is the other one: bind entityId to the primary key column
+	 * and set entityName, which is what the FAQ tells makers to do and what the form designer
+	 * offers. context.mode.contextInfo appears in no reference and in no version of the type
+	 * definitions — hence the cast — so it is read only where those properties are empty, and
+	 * nothing here may depend on it being there.
+	 * https://learn.microsoft.com/power-apps/developer/component-framework/faq#how-can-i-access-the-record-id-or-table-name
 	 */
 	private get hostRecord(): { entityId?: string | null; entityTypeName?: string | null; entityRecordName?: string | null } {
 		return (
@@ -75,7 +78,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		return normalizeGuid(this.context.parameters.entityId.raw) || normalizeGuid(this.hostRecord.entityId);
 	}
 
-	/** What the record is called, when the host says so. Undocumented, so it may be absent. */
+	/** What the record is called. Only the host knows, so it is often absent. */
 	private get recordName(): string | undefined {
 		return this.configured((this.hostRecord as { entityRecordName?: string | null }).entityRecordName ?? null);
 	}

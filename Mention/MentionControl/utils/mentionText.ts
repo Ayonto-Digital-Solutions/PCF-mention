@@ -30,7 +30,10 @@ export interface MentionTrigger {
  * rest of the sentence and every further keystroke would trigger another lookup. The query also
  * never crosses a line break and never grows past MAX_QUERY_LENGTH.
  */
-export function findMentionTrigger(text: string, caret: number): MentionTrigger | null {
+export function findMentionTrigger(
+	text: string,
+	caret: number,
+): MentionTrigger | null {
 	if (caret < 0 || caret > text.length) {
 		return null;
 	}
@@ -74,13 +77,20 @@ export interface MentionInsertResult {
  * writes, or behind the one that was already there. Leaving it in front of an existing space
  * would put the next keystroke inside the name and break the mention.
  */
-export function applyMention(text: string, trigger: MentionTrigger, displayName: string): MentionInsertResult {
+export function applyMention(
+	text: string,
+	trigger: MentionTrigger,
+	displayName: string,
+): MentionInsertResult {
 	const mention = `@${displayName.trim()}`;
 	const tail = text.slice(trigger.end);
 	const reusesExistingSpace = tail.startsWith(" ");
 	const head = `${text.slice(0, trigger.start)}${mention}${reusesExistingSpace ? "" : " "}`;
 
-	return { text: `${head}${tail}`, caret: head.length + (reusesExistingSpace ? 1 : 0) };
+	return {
+		text: `${head}${tail}`,
+		caret: head.length + (reusesExistingSpace ? 1 : 0),
+	};
 }
 
 /**
@@ -88,21 +98,6 @@ export function applyMention(text: string, trigger: MentionTrigger, displayName:
  * name, so "@Anna Meier-Schulz" does not count as a mention of "Anna Meier".
  */
 const MENTION_END = /[\s,.;:!?()[\]{}"]/;
-
-/**
- * True when the text still carries the mention for the given display name.
- *
- * A plain substring test would report one name as mentioned whenever a longer name starting with
- * it is in the text, and this predicate decides whether a pending notification still applies —
- * so it would mail someone who was never mentioned and stay quiet for someone who was.
- *
- * Names hold spaces, so a space has to end a mention. "@Tom Braun (Fabrikam)" therefore still
- * counts as a mention of "Tom Braun"; plain text cannot tell those two apart.
- */
-export function containsMention(text: string, displayName: string): boolean {
-	const name = displayName.trim();
-	return name.length > 0 && nearestMention(text, name, 0) !== undefined;
-}
 
 /**
  * A mention this editor wrote: where it sits, whose name it carries, and — the part the text
@@ -115,25 +110,97 @@ export interface InsertedMention {
 	readonly userId: string;
 }
 
+/** True when "@name" stands at exactly this position and ends where a mention may end. */
+function readsAsMention(text: string, at: number, name: string): boolean {
+	if (!text.startsWith(`@${name}`, at)) {
+		return false;
+	}
+	const following = text[at + name.length + 1];
+	return following === undefined || MENTION_END.test(following);
+}
+
 /**
- * Moves the mentions the editor wrote to where they now sit, and forgets the ones that are gone.
+ * The single stretch two texts disagree about: everything before `from` and everything from `to`
+ * on came through the edit untouched, and what sat behind `to` moved by `delta`.
+ *
+ * One contiguous stretch is what a textarea produces — typing, pasting, deleting a selection. A
+ * value the platform pushes in wholesale is not, and then the stretch simply covers everything
+ * that changed, which drops every mention inside it. That is the safe direction.
+ */
+function editedSpan(
+	previous: string,
+	text: string,
+): { from: number; to: number; delta: number } {
+	const shortest = Math.min(previous.length, text.length);
+	let from = 0;
+	while (from < shortest && previous[from] === text[from]) {
+		from += 1;
+	}
+	let tail = 0;
+	while (
+		tail < shortest - from &&
+		previous[previous.length - 1 - tail] === text[text.length - 1 - tail]
+	) {
+		tail += 1;
+	}
+
+	return {
+		from,
+		to: previous.length - tail,
+		delta: text.length - previous.length,
+	};
+}
+
+/**
+ * Moves the mentions the editor wrote to where they now sit, and forgets the ones the edit took.
  *
  * Their positions are what tells a sentence carrying on after a mention ("@Bob thanks") from a new
  * query that happens to start with the same name ("@Bob Schmidt") — the two read alike, only their
  * origin differs. Every edit before a mention moves it, so a position that is left where it was
  * points at the wrong place, and the rule that reads it quietly stops working.
+ *
+ * An edit leaves each mention exactly two possible places: where it was, and that shifted by what
+ * the edit added or removed. Both are read off the change itself, which is the whole point — the
+ * text afterwards cannot say which of two people with the same name was the one deleted. Looking
+ * the name up again answered that wrongly: deleting the first of two identical names left the
+ * deleted person's record sitting on the surviving mention, so the person just taken out was
+ * notified and the one still standing in the text was not.
+ *
+ * Two identical mentions written directly next to each other are the one case nothing can settle:
+ * deleting either leaves the same text behind. Then the later one counts as the deleted one.
  */
-export function reanchorMentions(mentions: readonly InsertedMention[], text: string): InsertedMention[] {
+export function reanchorMentions(
+	mentions: readonly InsertedMention[],
+	previous: string,
+	text: string,
+): InsertedMention[] {
+	const { from, to, delta } = editedSpan(previous, text);
 	const anchored: InsertedMention[] = [];
-	// Each mention in the text belongs to at most one record: one insertion writing several
-	// characters moves two mentions of the same person at once, and both would otherwise pick the
-	// same occurrence — leaving the second one unrecorded and therefore unguarded.
+	// One mention in the text speaks for one record. Two records reaching for the same place would
+	// otherwise both keep it, and one of them means somebody the text no longer names.
 	const taken = new Set<number>();
 
-	// Longest name first, because "@Bob Schmidt" also reads as a mention of "Bob": whoever asks
-	// first would take it, and the record for the longer name would find nothing left.
-	for (const mention of [...mentions].sort((left, right) => right.name.length - left.name.length)) {
-		const at = nearestMention(text, mention.name, mention.start, taken);
+	for (const mention of [...mentions].sort(
+		(left, right) => left.start - right.start,
+	)) {
+		// What lies in front of the edit stayed put, what lies behind it moved by what the edit
+		// added or removed. Where the edit runs through a mention, neither is certain — an
+		// insertion that begins with the same character it is placed in front of reads as both —
+		// so both places are offered and the text decides which one still holds the mention.
+		const places: number[] = [];
+		if (mention.start < to) {
+			places.push(mention.start);
+		}
+		if (mention.start + mention.name.length + 1 > from) {
+			places.push(mention.start + delta);
+		}
+
+		const at = places.find(
+			(place) =>
+				place >= 0 &&
+				!taken.has(place) &&
+				readsAsMention(text, place, mention.name),
+		);
 		if (at === undefined) {
 			continue;
 		}
@@ -142,24 +209,6 @@ export function reanchorMentions(mentions: readonly InsertedMention[], text: str
 	}
 
 	return anchored;
-}
-
-/** Where "@name" now sits closest to where it was, or undefined when it is no longer in the text. */
-function nearestMention(text: string, name: string, near: number, taken?: ReadonlySet<number>): number | undefined {
-	const mention = `@${name}`;
-	let nearest: number | undefined;
-
-	for (let at = text.indexOf(mention); at !== -1; at = text.indexOf(mention, at + 1)) {
-		const following = text[at + mention.length];
-		if ((following !== undefined && !MENTION_END.test(following)) || taken?.has(at)) {
-			continue;
-		}
-		if (nearest === undefined || Math.abs(at - near) < Math.abs(nearest - near)) {
-			nearest = at;
-		}
-	}
-
-	return nearest;
 }
 
 /** A run of text, and the user it mentions when it is one. */
@@ -179,15 +228,15 @@ export interface MentionSegment {
 export function splitMentions(
 	text: string,
 	users: ReadonlyMap<string, string>,
-	written: readonly InsertedMention[] = []
+	written: readonly InsertedMention[] = [],
 ): MentionSegment[] {
 	if ((users.size === 0 && written.length === 0) || text.length === 0) {
 		return text.length > 0 ? [{ text }] : [];
 	}
 
-	const names = [...new Set([...users.keys(), ...written.map((mention) => mention.name)])].sort(
-		(left, right) => right.length - left.length
-	);
+	const names = [
+		...new Set([...users.keys(), ...written.map((mention) => mention.name)]),
+	].sort((left, right) => right.length - left.length);
 	const segments: MentionSegment[] = [];
 	let plainFrom = 0;
 
@@ -212,8 +261,13 @@ export function splitMentions(
 			segments.push({ text: text.slice(plainFrom, at) });
 		}
 		// A mention written here beats the name: it knows which of two namesakes was picked.
-		const here = written.find((mention) => mention.start === at && mention.name === name);
-		segments.push({ text: `@${name}`, userId: here?.userId ?? users.get(name) });
+		const here = written.find(
+			(mention) => mention.start === at && mention.name === name,
+		);
+		segments.push({
+			text: `@${name}`,
+			userId: here?.userId ?? users.get(name),
+		});
 		plainFrom = at + name.length + 1;
 		at = plainFrom - 1;
 	}
@@ -263,7 +317,11 @@ export function buildRecordUrl(options: {
 		return undefined;
 	}
 
-	const parameters = [`pagetype=entityrecord`, `etn=${encodeURIComponent(entityName)}`, `id=${encodeURIComponent(entityId)}`];
+	const parameters = [
+		`pagetype=entityrecord`,
+		`etn=${encodeURIComponent(entityName)}`,
+		`id=${encodeURIComponent(entityId)}`,
+	];
 	const appId = normalizeGuid(options.appId);
 	if (appId.length > 0) {
 		parameters.unshift(`appid=${encodeURIComponent(appId)}`);

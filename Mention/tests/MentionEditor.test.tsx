@@ -480,6 +480,37 @@ describe("MentionEditor", () => {
 		expect(screen.queryAllByRole("option")).toHaveLength(0);
 	});
 
+	it("keeps the namesake who is still in the text, not the one that was deleted", async () => {
+		// Two people are called the same and both are mentioned. Deleting the first mention leaves
+		// a text that reads exactly like deleting the second one, so looking the name up again
+		// handed the surviving mention to the person who had just been taken out — and it was
+		// their notification that went out instead of the other one's.
+		const namesakes: UserSuggestion[] = [
+			{ id: "n1", name: "Thomas Müller", jobTitle: "Betrieb" },
+			{ id: "n2", name: "Thomas Müller", jobTitle: "Planung" },
+		];
+		const searchUsers = vi.fn().mockResolvedValue({ users: namesakes, hasMore: false });
+		const onWrittenMentionsChange = vi.fn();
+		const { textarea } = setup({ searchUsers, onWrittenMentionsChange });
+
+		type(textarea, "Hallo @Th");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(textarea.value).toBe("Hallo @Thomas Müller ");
+
+		type(textarea, "Hallo @Thomas Müller und @Th");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(textarea.value).toBe("Hallo @Thomas Müller und @Thomas Müller ");
+		onWrittenMentionsChange.mockClear();
+
+		// The first of the two deleted, the second one left standing.
+		type(textarea, "Hallo und @Thomas Müller ", 6);
+
+		expect(onWrittenMentionsChange).toHaveBeenLastCalledWith(["n2"]);
+	});
+
 	it("keeps both mentions safe when a second one is written where the first one started", async () => {
 		const searchUsers = vi
 			.fn()

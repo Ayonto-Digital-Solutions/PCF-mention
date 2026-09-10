@@ -3,7 +3,6 @@ import {
 	MAX_QUERY_LENGTH,
 	applyMention,
 	buildRecordUrl,
-	containsMention,
 	escapeHtml,
 	escapeODataLiteral,
 	findMentionTrigger,
@@ -14,15 +13,27 @@ import {
 
 describe("findMentionTrigger", () => {
 	it("finds a trigger at the start of the text", () => {
-		expect(findMentionTrigger("@Ann", 4)).toEqual({ start: 0, end: 4, query: "Ann" });
+		expect(findMentionTrigger("@Ann", 4)).toEqual({
+			start: 0,
+			end: 4,
+			query: "Ann",
+		});
 	});
 
 	it("finds a trigger that follows whitespace", () => {
-		expect(findMentionTrigger("hi @Ann", 7)).toEqual({ start: 3, end: 7, query: "Ann" });
+		expect(findMentionTrigger("hi @Ann", 7)).toEqual({
+			start: 3,
+			end: 7,
+			query: "Ann",
+		});
 	});
 
 	it("allows one space inside the query, because user names contain one", () => {
-		expect(findMentionTrigger("cc @Ann Smi", 11)).toEqual({ start: 3, end: 11, query: "Ann Smi" });
+		expect(findMentionTrigger("cc @Ann Smi", 11)).toEqual({
+			start: 3,
+			end: 11,
+			query: "Ann Smi",
+		});
 	});
 
 	it("stops at a second space, so the query cannot swallow the sentence", () => {
@@ -51,7 +62,11 @@ describe("findMentionTrigger", () => {
 	});
 
 	it("uses the @ closest to the caret", () => {
-		expect(findMentionTrigger("@Bo @An", 7)).toEqual({ start: 4, end: 7, query: "An" });
+		expect(findMentionTrigger("@Bo @An", 7)).toEqual({
+			start: 4,
+			end: 7,
+			query: "An",
+		});
 	});
 
 	it("returns null for a caret outside the text", () => {
@@ -63,66 +78,33 @@ describe("applyMention", () => {
 	it("replaces the query with the full name and appends a separating space", () => {
 		const trigger = findMentionTrigger("hi @An", 6);
 		expect(trigger).not.toBeNull();
-		expect(applyMention("hi @An", trigger!, "Ann Smith")).toEqual({ text: "hi @Ann Smith ", caret: 14 });
+		expect(applyMention("hi @An", trigger!, "Ann Smith")).toEqual({
+			text: "hi @Ann Smith ",
+			caret: 14,
+		});
 	});
 
 	it("keeps whatever followed the caret", () => {
 		const trigger = findMentionTrigger("hi @An, bye", 6);
-		expect(applyMention("hi @An, bye", trigger!, "Ann Smith").text).toBe("hi @Ann Smith , bye");
+		expect(applyMention("hi @An, bye", trigger!, "Ann Smith").text).toBe(
+			"hi @Ann Smith , bye",
+		);
 	});
 
 	it("does not add a second space when one is already there", () => {
 		const trigger = findMentionTrigger("hi @An bye", 6);
 		// The caret goes behind that space, not in front of it: typing on from there has to
 		// continue the sentence rather than run into the name.
-		expect(applyMention("hi @An bye", trigger!, "Ann Smith")).toEqual({ text: "hi @Ann Smith bye", caret: 14 });
+		expect(applyMention("hi @An bye", trigger!, "Ann Smith")).toEqual({
+			text: "hi @Ann Smith bye",
+			caret: 14,
+		});
 	});
 
 	it("leaves the caret behind the space it wrote itself", () => {
 		const trigger = findMentionTrigger("hi @An", 6);
 		const result = applyMention("hi @An", trigger!, "Ann Smith");
 		expect(result.text.slice(0, result.caret)).toBe("hi @Ann Smith ");
-	});
-});
-
-describe("containsMention", () => {
-	it("is true while the mention is in the text", () => {
-		expect(containsMention("hi @Ann Smith, thanks", "Ann Smith")).toBe(true);
-	});
-
-	it("is false once the mention was deleted", () => {
-		expect(containsMention("hi , thanks", "Ann Smith")).toBe(false);
-	});
-
-	it("is false for a partly deleted mention", () => {
-		expect(containsMention("hi @Ann, thanks", "Ann Smith")).toBe(false);
-	});
-
-	it("does not read a longer name as a mention of the shorter one", () => {
-		// The predicate decides whether a pending notification still applies, so a prefix match
-		// would mail someone who was never mentioned.
-		expect(containsMention("cc @Anna Meier-Schulz", "Anna Meier")).toBe(false);
-		expect(containsMention("cc @Jan Petersen", "Jan Peters")).toBe(false);
-	});
-
-	it("still finds the shorter name when it is the one written", () => {
-		expect(containsMention("cc @Anna Meier and @Anna Meier-Schulz", "Anna Meier")).toBe(true);
-		expect(containsMention("cc @Anna Meier-Schulz and @Anna Meier", "Anna Meier")).toBe(true);
-	});
-
-	it("accepts the punctuation that normally follows a mention", () => {
-		for (const text of ["hi @Ann Smith", "hi @Ann Smith.", "hi @Ann Smith, ok", "(@Ann Smith)"]) {
-			expect(containsMention(text, "Ann Smith")).toBe(true);
-		}
-	});
-
-	it("needs the @: the bare name in a sentence is not a mention", () => {
-		// Without this the scheduler would treat any sentence naming the person as a live mention.
-		expect(containsMention("Ann Smith asked me to update this", "Ann Smith")).toBe(false);
-	});
-
-	it("is false for a blank name", () => {
-		expect(containsMention("hi @", "  ")).toBe(false);
 	});
 });
 
@@ -168,38 +150,71 @@ describe("buildRecordUrl", () => {
 
 describe("reanchorMentions", () => {
 	it("moves a mention along when text is inserted in front of it", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi there @Bob ")).toEqual([
-			{ start: 9, name: "Bob", userId: "u-bob" },
-		]);
+		expect(
+			reanchorMentions(
+				[{ start: 3, name: "Bob", userId: "u-bob" }],
+				"hi @Bob ",
+				"hi there @Bob ",
+			),
+		).toEqual([{ start: 9, name: "Bob", userId: "u-bob" }]);
 	});
 
 	it("leaves a mention that did not move where it is", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi @Bob thanks")).toEqual([
-			{ start: 3, name: "Bob", userId: "u-bob" },
-		]);
+		expect(
+			reanchorMentions(
+				[{ start: 3, name: "Bob", userId: "u-bob" }],
+				"hi @Bob ",
+				"hi @Bob thanks",
+			),
+		).toEqual([{ start: 3, name: "Bob", userId: "u-bob" }]);
 	});
 
 	it("forgets a mention that is no longer in the text", () => {
-		expect(reanchorMentions([{ start: 3, name: "Bob", userId: "u-bob" }], "hi thanks")).toEqual([]);
+		expect(
+			reanchorMentions(
+				[{ start: 3, name: "Bob", userId: "u-bob" }],
+				"hi @Bob ",
+				"hi thanks",
+			),
+		).toEqual([]);
+	});
+
+	it("forgets a mention the edit wrote into", () => {
+		// "@Bob" with an "s" typed onto it is a mention of nobody, so whoever it stood for is no
+		// longer mentioned — and a notification still waiting for them must not go out.
+		expect(
+			reanchorMentions(
+				[{ start: 3, name: "Bob", userId: "u-bob" }],
+				"hi @Bob ",
+				"hi @Bobs ",
+			),
+		).toEqual([]);
 	});
 
 	it("does not mistake a longer name for the one it is looking for", () => {
-		expect(reanchorMentions([{ start: 0, name: "Bob", userId: "u-bob" }], "@Bobbie Jones ")).toEqual([]);
+		expect(
+			reanchorMentions(
+				[{ start: 0, name: "Bob", userId: "u-bob" }],
+				"@Bob ",
+				"@Bobbie Jones ",
+			),
+		).toEqual([]);
 	});
 
 	it("keeps two mentions of the same person apart when one edit moves both", () => {
-		// Picking a suggestion inserts a whole name at once, so both records shift far enough for
-		// the second one to prefer the first one's occupied spot. Losing it would leave that
-		// mention unguarded — the picker reopens over it and Enter overwrites it.
+		// Picking a suggestion inserts a whole name at once, and it starts with the same "@" it is
+		// placed in front of — so the change alone cannot say where it begins. Losing a record here
+		// would leave that mention unguarded: the picker reopens over it and Enter overwrites it.
 		const anchored = reanchorMentions(
 			[
-				{ start: 3, name: "Bob", userId: "u-bob" },
-				{ start: 8, name: "Bob", userId: "u-bob" },
+				{ start: 0, name: "Bob", userId: "u-bob" },
+				{ start: 5, name: "Bob", userId: "u-bob" },
 			],
-			"@Anna Berger @Bob @Bob "
+			"@Bob @Bob ",
+			"@Anna Berger @Bob @Bob ",
 		);
 
-		expect(anchored.map((mention) => mention.start).sort((a, b) => a - b)).toEqual([13, 18]);
+		expect(anchored.map((mention) => mention.start)).toEqual([13, 18]);
 	});
 
 	it("does not let a short name take the mention of a longer one", () => {
@@ -207,14 +222,15 @@ describe("reanchorMentions", () => {
 		const anchored = reanchorMentions(
 			[
 				{ start: 0, name: "Bob Schmidt", userId: "u-bob" },
-				{ start: 13, name: "Bob", userId: "u-bob" },
+				{ start: 13, name: "Bob", userId: "u-short" },
 			],
-			"@Anna Berger @Bob Schmidt @Bob "
+			"@Bob Schmidt @Bob ",
+			"@Anna Berger @Bob Schmidt @Bob ",
 		);
 
 		expect(anchored).toEqual([
 			{ start: 13, name: "Bob Schmidt", userId: "u-bob" },
-			{ start: 26, name: "Bob", userId: "u-bob" },
+			{ start: 26, name: "Bob", userId: "u-short" },
 		]);
 	});
 
@@ -224,12 +240,46 @@ describe("reanchorMentions", () => {
 				{ start: 0, name: "Bob", userId: "u-bob" },
 				{ start: 9, name: "Bob", userId: "u-bob" },
 			],
-			"cc @Bob and @Bob "
+			"@Bob and @Bob ",
+			"cc @Bob and @Bob ",
 		);
 
 		expect(anchored).toEqual([
 			{ start: 3, name: "Bob", userId: "u-bob" },
 			{ start: 12, name: "Bob", userId: "u-bob" },
+		]);
+	});
+
+	it("drops the namesake who was deleted, not the one still in the text", () => {
+		// Two people are called the same, both are mentioned, and the FIRST mention is deleted.
+		// The text left behind is the same either way, so looking the name up again handed the
+		// surviving mention to the deleted person — and notified them instead of the other.
+		const anchored = reanchorMentions(
+			[
+				{ start: 6, name: "Thomas Müller", userId: "id-a" },
+				{ start: 25, name: "Thomas Müller", userId: "id-b" },
+			],
+			"Hallo @Thomas Müller und @Thomas Müller ",
+			"Hallo und @Thomas Müller ",
+		);
+
+		expect(anchored).toEqual([
+			{ start: 10, name: "Thomas Müller", userId: "id-b" },
+		]);
+	});
+
+	it("drops the right namesake when the second mention is the one deleted", () => {
+		const anchored = reanchorMentions(
+			[
+				{ start: 6, name: "Thomas Müller", userId: "id-a" },
+				{ start: 25, name: "Thomas Müller", userId: "id-b" },
+			],
+			"Hallo @Thomas Müller und @Thomas Müller ",
+			"Hallo @Thomas Müller und ",
+		);
+
+		expect(anchored).toEqual([
+			{ start: 6, name: "Thomas Müller", userId: "id-a" },
 		]);
 	});
 });
@@ -242,7 +292,9 @@ describe("splitMentions", () => {
 	]);
 
 	it("keeps text without mentions in one piece", () => {
-		expect(splitMentions("nothing to see", users)).toEqual([{ text: "nothing to see" }]);
+		expect(splitMentions("nothing to see", users)).toEqual([
+			{ text: "nothing to see" },
+		]);
 	});
 
 	it("marks a known name as a mention", () => {
@@ -254,7 +306,9 @@ describe("splitMentions", () => {
 	});
 
 	it("leaves a name nobody could resolve as plain text", () => {
-		expect(splitMentions("hi @Carla Meier", users)).toEqual([{ text: "hi @Carla Meier" }]);
+		expect(splitMentions("hi @Carla Meier", users)).toEqual([
+			{ text: "hi @Carla Meier" },
+		]);
 	});
 
 	it("prefers the longer name", () => {
@@ -265,7 +319,9 @@ describe("splitMentions", () => {
 	});
 
 	it("does not read an e-mail address as a mention", () => {
-		expect(splitMentions("mail@Bob now", users)).toEqual([{ text: "mail@Bob now" }]);
+		expect(splitMentions("mail@Bob now", users)).toEqual([
+			{ text: "mail@Bob now" },
+		]);
 	});
 
 	it("finds several mentions in one text", () => {

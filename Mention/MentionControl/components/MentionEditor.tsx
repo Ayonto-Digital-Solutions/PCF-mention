@@ -204,6 +204,21 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 	/** Where this editor wrote a mention, so typing on past one does not look like a new query. */
 	const insertedMentions = React.useRef<InsertedMention[]>([]);
+	/**
+	 * The text those positions were measured against. Moving them needs the edit, not just its
+	 * result: two people of the same name leave two identical mentions, and only the change says
+	 * which of them was deleted.
+	 */
+	const anchoredText = React.useRef(value);
+	const reanchor = React.useCallback((next: string): InsertedMention[] => {
+		insertedMentions.current = reanchorMentions(
+			insertedMentions.current,
+			anchoredText.current,
+			next,
+		);
+		anchoredText.current = next;
+		return insertedMentions.current;
+	}, []);
 	const isFocused = React.useRef(false);
 	const pendingCaret = React.useRef<number | null>(null);
 	/** The grace period outlives a form that closes, so nothing is set on a gone component. */
@@ -270,10 +285,10 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		if (!isFocused.current) {
 			setText(value);
 			// A business rule or a discarded form can take a mention out from under the editor.
-			insertedMentions.current = reanchorMentions(insertedMentions.current, value);
+			reanchor(value);
 			reportWrittenRef.current();
 		}
-	}, [value]);
+	}, [reanchor, value]);
 
 	// Restores the caret after a mention was written into the text.
 	React.useEffect(() => {
@@ -360,10 +375,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			// Editing in front of a mention moves it, so the recorded ones are put back where they
 			// now sit before they are consulted — otherwise the rule below silently stops applying
 			// to them, and the picker reopens over a mention that is already finished.
-			insertedMentions.current = reanchorMentions(
-				insertedMentions.current,
-				nextText,
-			);
+			reanchor(nextText);
 			reportWritten();
 			const found = findMentionTrigger(nextText, caret);
 			// A query may hold a space because names do, so continuing the sentence after a one-word
@@ -401,7 +413,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				return next;
 			});
 		},
-		[reportWritten],
+		[reanchor, reportWritten],
 	);
 
 	const handleChange = React.useCallback(
@@ -457,12 +469,14 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					? current
 					: new Map(current).set(written.name, user.id),
 			);
+			const writtenEnd = written.start + written.name.length + 1;
 			insertedMentions.current = [
-				// Re-anchored against the text that now holds the new mention, so an earlier one
-				// at this position is kept rather than dropped for sharing the index it had.
-				...reanchorMentions(insertedMentions.current, result.text).filter(
+				// The new mention takes the space the query stood in, so anything recorded there
+				// speaks for a person the text no longer names.
+				...reanchor(result.text).filter(
 					(mention) =>
-						mention.start !== written.start || mention.name !== written.name,
+						mention.start + mention.name.length + 1 <= written.start ||
+						mention.start >= writtenEnd,
 				),
 				written,
 			];
@@ -488,6 +502,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			commit,
 			onMention,
 			props.maxLength,
+			reanchor,
 			reportWritten,
 			strings.mentionTooLong,
 			strings.notificationFailed,
