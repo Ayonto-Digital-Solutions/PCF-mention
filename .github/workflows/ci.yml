@@ -115,6 +115,37 @@ jobs:
             exit 1
           fi
 
+          # Three mistakes that are silent everywhere else. A column name that does not exist,
+          # which Dataverse answers with null rather than an error; a column read through
+          # trigger() instead of triggerOutputs(), which is always empty; and a column length in
+          # the README that no longer matches the table it is copied from. The first two leave a
+          # flow that runs green and delivers nothing.
+          python3 - <<'MUTATE'
+          import re
+          import shutil
+          from pathlib import Path
+
+          flow = "src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+          cases = {
+              "typo": (flow, "body/ayonto_useremail", "body/ayonto_usermail"),
+              "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
+              "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
+          }
+          for name, (where, before, after) in cases.items():
+              target = Path(f"/tmp/mutant-{name}")
+              shutil.rmtree(target, ignore_errors=True)
+              shutil.copytree("solution", target)
+              text = (target / where).read_text(encoding="utf-8")
+              assert before in text, f"{name}: the source no longer contains {before!r}"
+              (target / where).write_text(text.replace(before, after), encoding="utf-8")
+          MUTATE
+          for mutant in /tmp/mutant-*; do
+            if SOLUTION_ROOT="$mutant" python3 .github/scripts/check-solution.py; then
+              echo "::error::check-solution.py read past the mistake in $mutant"
+              exit 1
+            fi
+          done
+
       - name: Pack it and check what came out
         run: |
           rm -rf /tmp/pack

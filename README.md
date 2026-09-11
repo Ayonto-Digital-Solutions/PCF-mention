@@ -96,6 +96,32 @@ Fertige `.zip`-Dateien liegen bewusst nicht im Repository: die früheren waren a
 Umgebung und einen Platzhalter-Publisher gebunden und ließen sich aus dem Quellstand nicht
 reproduzieren.
 
+## SendGrid notification provider
+
+Die Lösung liefert den Benachrichtigungsweg mit: Tabelle, Cloud-Flow, beide Connection References
+und beide Environment Variables sind Bestandteil des Pakets. Wer sie importiert, muss nichts
+nachbauen — nur zuweisen, was in keine Lösung gehört.
+
+| mitgeliefert | von der Zielumgebung zu stellen |
+|---|---|
+| Tabelle `ayonto_mention` samt Ansicht | Verbindung Dataverse |
+| Flow *Ayonto – Send Mention Notification* | Verbindung SendGrid (trägt den API-Key) |
+| Connection References für beide Connectoren | Wert der Absenderadresse |
+| Environment Variables für Absenderadresse und -name | verifizierter Absender bei SendGrid |
+
+Der Flow löst auf **neue** Zeilen mit `ayonto_deliverystatus = New` aus, verschickt über SendGrid
+und schreibt `Sent` oder `Failed` in dieselbe Zeile zurück. Dass er nur auf neue Zeilen hört, ist
+die Bedingung dafür: die Rückschreibung ändert die Zeile, die ihn ausgelöst hat.
+
+Der API-Key steht ausschließlich in der SendGrid-Verbindung — nicht im Flow, nicht in einer
+Environment Variable, nicht in der Lösung, und damit auch in keiner Kopie davon. Eine
+Teams-Aktion enthält der Flow bewusst nicht: ein Connector, den die Zielumgebung nicht lizenziert
+oder freigegeben hat, blockiert den Import der ganzen Lösung. Wie man einen zweiten Kanal
+trotzdem ergänzt, steht im Einrichtungsdokument.
+
+Einrichtung, Umbau eines vorhandenen Flows und alle Ausdrücke zum Kopieren:
+**[solution/README.md](solution/README.md)**.
+
 ## Abhängigkeiten und Sicherheit
 
 `npm audit` meldet in beiden Komponenten Befunde. Der Stand, geprüft am 10. September 2026:
