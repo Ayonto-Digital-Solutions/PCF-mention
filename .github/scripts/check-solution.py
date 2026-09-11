@@ -87,6 +87,25 @@ def check_flow(
                 "these actions take the plural set name, not the logical name"
             )
 
+    # outputs('X') and result('X') name another action. Misspell one and the designer shows
+    # nothing wrong; at run time the expression resolves to null and the value it was meant to
+    # carry — here, the link to the record — quietly disappears from the message.
+    named: set[str] = set()
+
+    def collect(actions: dict) -> None:
+        for action_name, action in actions.items():
+            named.add(action_name)
+            if isinstance(action, dict) and isinstance(action.get("actions"), dict):
+                collect(action["actions"])
+
+    collect(definition.get("properties", {}).get("definition", {}).get("actions", {}))
+    for referenced in sorted(set(re.findall(r"(?:outputs|result|body)\('([^']+)'\)", text))):
+        if referenced.replace("_", " ") not in {known.replace("_", " ") for known in named}:
+            fail(
+                f"the flow '{name}' reads {referenced!r}, which is no action in it — "
+                "the expression resolves to null and whatever it carried is silently gone"
+            )
+
     for reference in sorted(set(re.findall(r'"connectionReferenceLogicalName":\s*"([^"]+)"', text))):
         if reference.lower() not in references:
             fail(

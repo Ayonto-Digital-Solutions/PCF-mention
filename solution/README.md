@@ -15,6 +15,7 @@ kopieren kann.
 Mention-Component
   └─ legt eine Zeile je erwähnter Person in ayonto_mention an   (ayonto_deliverystatus = New)
        └─ Flow löst auf neue Zeilen aus
+            ├─ Datensatzlink ermitteln
             ├─ Versand (Scope)
             │    └─ E-Mail über den Mail-Connector
             ├─ erfolgreich   → ayonto_deliverystatus = Sent
@@ -34,6 +35,8 @@ schreibt, wer was in welchem Datensatz erwähnt hat, und der Flow entscheidet, w
 | Connection Reference Mail-Connector | ✔ | Verbindung zuweisen (API-Key) |
 | Environment Variable Absenderadresse | ✔ (ohne Wert) | Wert setzen |
 | Environment Variable Absendername | ✔ (Vorgabewert) | bei Bedarf ändern |
+| Environment Variable Umgebungs-URL | ✔ (ohne Wert) | setzen, falls die Komponente keinen Link schreibt |
+| Environment Variable App-ID | ✔ (ohne Wert) | optional |
 | Verifizierter Absender beim Mail-Dienst | | ✔ |
 
 Der API-Key des Mail-Dienstes lebt **ausschließlich in der Verbindung**. Nicht im Flow, nicht in
@@ -47,7 +50,8 @@ Kopie der Lösung.
 2. **Environment Variables** setzen: Absenderadresse (Pflicht, ohne Vorgabe) und Absendername.
    Die Adresse muss beim Mail-Dienst als *Verified Sender* eingetragen sein, sonst weist er den
    Versand mit 403 ab — der häufigste Fehler beim ersten Lauf, und er sieht aus wie ein
-   Verbindungsproblem.
+   Verbindungsproblem. Zur Umgebungs-URL und zur App-ID siehe den Abschnitt
+   [Der Link auf den Datensatz](#der-link-auf-den-datensatz).
 3. Flow **einschalten**. Ein importierter Flow ist zunächst aus.
 4. Test: eine Zeile in `ayonto_mention` von Hand anlegen, `ayonto_useremail` auf die eigene
    Adresse, `ayonto_message` mit Text, `ayonto_deliverystatus` = `New`.
@@ -121,6 +125,44 @@ niemand erfährt davon. Insbesondere:
 
 Wie in Weg A, Schritt 3 und 4.
 
+## Der Link auf den Datensatz
+
+Wer eine Benachrichtigung bekommt, soll den Datensatz mit einem Klick öffnen können — sonst muss
+der Empfänger ihn suchen, und genau das kostet die Benachrichtigung ihren Zweck. Der Link steht
+deshalb in jeder Nachricht, sowohl in der Mail als auch im optionalen zweiten Kanal.
+
+Er kommt aus einer von zwei Quellen, und der Flow nimmt die erste, die etwas liefert:
+
+1. **`ayonto_recordurl` aus der Zeile.** Das Component schreibt den fertigen Deep-Link hinein —
+   samt App-ID, wenn eine konfiguriert ist. Das ist der Normalfall und der genauere Weg, weil das
+   Component weiß, auf welchem Datensatz es sitzt.
+2. **Aus Umgebungs-URL, Tabelle und Zeilen-ID zusammengesetzt.** Greift, wenn die Spalte leer ist,
+   und braucht die Environment Variable mit der Umgebungs-URL.
+
+Warum es Quelle 2 überhaupt gibt: ein Code-Component darf das `window`-Objekt nicht lesen, die
+Umgebungs-URL lässt sich zur Laufzeit also nicht ermitteln, sondern muss auf dem Component als
+Eigenschaft `orgUrl` konfiguriert werden
+([FAQ](https://learn.microsoft.com/power-apps/developer/component-framework/faq#can-i-access-window-object-from-the-component)).
+Wird das vergessen, bleibt `ayonto_recordurl` leer — und ohne Ersatz stünde in der Mail dann kein
+Link. Die Environment Variable ist die zweite Chance: einmal pro Umgebung gesetzt, gilt sie für
+jede Benachrichtigung, egal wie die Komponente auf dem einzelnen Formular konfiguriert ist.
+
+Liefert keine der beiden Quellen etwas, entfällt der Absatz mit dem Link — ein toter Link ist
+schlechter als keiner.
+
+**Damit Quelle 1 funktioniert**, braucht die Komponente auf dem Formular:
+
+| Eigenschaft | Wert |
+|---|---|
+| `entityId` | an die Primärschlüsselspalte der Tabelle gebunden |
+| `entityName` | logischer Name der Tabelle, statisch |
+| `orgUrl` | Basis-URL der Umgebung, z. B. `https://contoso.crm4.dynamics.com` |
+| `appId` | optional, damit der Link in der richtigen App öffnet |
+
+**Damit Quelle 2 funktioniert**, genügen die beiden Environment Variables — Umgebungs-URL
+zwingend, App-ID optional. Ein abschließender Schrägstrich in der URL stört nicht, der Flow
+schneidet ihn ab.
+
 ## Ausdrücke zum Kopieren
 
 **Zeilenfilter im Trigger**
@@ -138,6 +180,31 @@ ayonto_deliverystatus eq 'New'
 `trigger()` statt `triggerOutputs()` ist hier ein beliebter Fehler: das liefert den Lauf, nicht die
 Zeile, der Ausdruck ist immer leer und es greift stillschweigend immer der Ersatztext.
 
+**Umgebungsadresse** (Compose, schneidet einen abschließenden Schrägstrich ab)
+
+```
+@if(endsWith(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), '/'),
+    substring(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), 0,
+              sub(length(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), 1)),
+    parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'))
+```
+
+**Datensatzlink** (Compose, nimmt die Spalte und baut nur ersatzweise selbst)
+
+```
+@if(not(empty(triggerOutputs()?['body/ayonto_recordurl'])),
+    triggerOutputs()?['body/ayonto_recordurl'],
+    if(or(empty(outputs('Umgebungsadresse')),
+          or(empty(triggerOutputs()?['body/ayonto_recordtable']),
+             empty(triggerOutputs()?['body/ayonto_recordid']))),
+       '',
+       concat(outputs('Umgebungsadresse'), '/main.aspx?',
+              if(empty(parameters('Ayonto Mention App Id (ayonto_MentionAppId)')), '',
+                 concat('appid=', parameters('Ayonto Mention App Id (ayonto_MentionAppId)'), '&')),
+              'pagetype=entityrecord&etn=', triggerOutputs()?['body/ayonto_recordtable'],
+              '&id=', triggerOutputs()?['body/ayonto_recordid'])))
+```
+
 **Nachrichtentext (HTML)**
 
 ```
@@ -145,13 +212,13 @@ Zeile, der Ausdruck ist immer leer und es greift stillschweigend immer der Ersat
   '<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>',
   if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
      concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')),
-  if(empty(triggerOutputs()?['body/ayonto_recordurl']), '',
-     concat('<p><a href="', triggerOutputs()?['body/ayonto_recordurl'], '">Datensatz öffnen</a></p>'))
+  if(empty(outputs('Datensatzlink')), '',
+     concat('<p><a href="', outputs('Datensatzlink'), '">Datensatz öffnen</a></p>'))
 )
 ```
 
-Die beiden `if(empty(…))` sind der Grund, warum die Mail auch dann lesbar ist, wenn auf dem
-Component keine Umgebungs-URL konfiguriert wurde: statt eines toten Links fehlt der Absatz.
+Die beiden `if(empty(…))` sind der Grund, warum die Mail auch dann lesbar bleibt, wenn weder
+Spalte noch Environment Variable einen Link hergeben: statt eines toten Links fehlt der Absatz.
 
 **Fehlertext für `ayonto_deliverydetail`**
 
@@ -185,8 +252,8 @@ Nachrichtentext dafür:
 <p>@{triggerOutputs()?['body/ayonto_message']}</p>
 @{if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
      concat('<p><b>Datensatz:</b> ', triggerOutputs()?['body/ayonto_recordname'], '</p>'))}
-@{if(empty(triggerOutputs()?['body/ayonto_recordurl']), '',
-     concat('<p><a href="', triggerOutputs()?['body/ayonto_recordurl'], '">Datensatz öffnen</a></p>'))}
+@{if(empty(outputs('Datensatzlink')), '',
+     concat('<p><a href="', outputs('Datensatzlink'), '">Datensatz öffnen</a></p>'))}
 ```
 
 Als Empfänger dient `ayonto_useremail`. Chat-Connectoren lösen eine Person über ihre Mailadresse
@@ -248,7 +315,8 @@ sich im Designer nicht zeigt und erst zur Laufzeit auffällt.
 | Betreff immer der Ersatztext | `trigger()` statt `triggerOutputs()` |
 | Mail-Dienst lehnt mit 403 ab | Absenderadresse ist kein verifizierter Absender |
 | Zeile bleibt auf `New` | Rückschreibung fehlt, oder der Detailtext war länger als die Spalte |
-| Link in der Mail tot | `orgUrl` ist auf dem Component nicht gesetzt, `ayonto_recordurl` also leer |
+| kein Link in der Mail | weder `orgUrl` auf dem Component noch die Umgebungs-URL als Variable gesetzt |
+| Link öffnet die falsche App | App-ID fehlt — Dataverse nimmt dann die Standard-App |
 | Flow läuft endlos | Trigger steht auf „Hinzugefügt oder Geändert" |
 
 Die ersten drei Zeilen dieser Tabelle prüft `check-solution.py` beim Bauen: es hält jede Spalte,
