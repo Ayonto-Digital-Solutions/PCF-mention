@@ -9,15 +9,6 @@
           "connectionReferenceLogicalName": "ayonto_sharedcommondataserviceforapps_mention"
         },
         "runtimeSource": "embedded"
-      },
-      "shared_sendgrid": {
-        "api": {
-          "name": "shared_sendgrid"
-        },
-        "connection": {
-          "connectionReferenceLogicalName": "ayonto_sharedsendgrid_mention"
-        },
-        "runtimeSource": "embedded"
       }
     },
     "definition": {
@@ -32,20 +23,6 @@
           "defaultValue": {},
           "type": "Object"
         },
-        "Ayonto Mention Sender Address (ayonto_MentionSenderAddress)": {
-          "defaultValue": "",
-          "type": "String",
-          "metadata": {
-            "schemaName": "ayonto_MentionSenderAddress"
-          }
-        },
-        "Ayonto Mention Sender Name (ayonto_MentionSenderName)": {
-          "defaultValue": "",
-          "type": "String",
-          "metadata": {
-            "schemaName": "ayonto_MentionSenderName"
-          }
-        },
         "Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)": {
           "defaultValue": "",
           "type": "String",
@@ -58,6 +35,13 @@
           "type": "String",
           "metadata": {
             "schemaName": "ayonto_MentionAppId"
+          }
+        },
+        "Ayonto Mention Sender User (ayonto_MentionSenderUser)": {
+          "defaultValue": "",
+          "type": "String",
+          "metadata": {
+            "schemaName": "ayonto_MentionSenderUser"
           }
         }
       },
@@ -149,25 +133,69 @@
                     "operationMetadataId": "1c1a8e5d-3d5f-4b90-8e18-6a7b2c3d4e51"
                   },
                   "actions": {
-                    "E_Mail_senden_V4": {
-                      "type": "OpenApiConnection",
+                    "Absender_bestimmen": {
+                      "type": "Compose",
                       "runAfter": {},
                       "metadata": {
-                        "operationMetadataId": "2d2b9f6e-4e60-4ca1-9f29-7b8c3d4e5f62"
+                        "operationMetadataId": "a1a0b6e6-c6e8-4429-b7ab-5de3a0cb1eba"
+                      },
+                      "inputs": "@if(empty(parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)')), triggerOutputs()?['body/ayonto_mentionedbyid'], parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)'))"
+                    },
+                    "E_Mail_anlegen": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {
+                        "Absender_bestimmen": [
+                          "Succeeded"
+                        ]
+                      },
+                      "metadata": {
+                        "operationMetadataId": "b2b1c7f7-d7f9-453a-c8bc-6ef4b1dc2fcb"
                       },
                       "inputs": {
                         "host": {
-                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sendgrid",
-                          "connectionName": "shared_sendgrid",
-                          "operationId": "SendEmailV4"
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                          "connectionName": "shared_commondataserviceforapps",
+                          "operationId": "CreateRecord"
                         },
                         "parameters": {
-                          "request/from": "@parameters('Ayonto Mention Sender Address (ayonto_MentionSenderAddress)')",
-                          "request/fromname": "@parameters('Ayonto Mention Sender Name (ayonto_MentionSenderName)')",
-                          "request/to": "@triggerOutputs()?['body/ayonto_useremail']",
-                          "request/subject": "@coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')",
-                          "request/text": "@concat('<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>', if(empty(triggerOutputs()?['body/ayonto_recordname']), '', concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')), if(empty(outputs('Datensatzlink')), '', concat('<p><a href=\"', outputs('Datensatzlink'), '\">', if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen', triggerOutputs()?['body/ayonto_linktext']), '</a></p>')))",
-                          "request/ishtml": true
+                          "entityName": "emails",
+                          "item/subject": "@coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')",
+                          "item/description": "@concat('<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>', if(empty(triggerOutputs()?['body/ayonto_recordname']), '', concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')), if(empty(outputs('Datensatzlink')), '', concat('<p><a href=\"', outputs('Datensatzlink'), '\">', if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen', triggerOutputs()?['body/ayonto_linktext']), '</a></p>')))",
+                          "item/email_activity_parties": [
+                            {
+                              "partyid_systemuser@@odata.bind": "@concat('/systemusers(', outputs('Absender_bestimmen'), ')')",
+                              "participationtypemask": 1
+                            },
+                            {
+                              "partyid_systemuser@@odata.bind": "@concat('/systemusers(', triggerOutputs()?['body/ayonto_userid'], ')')",
+                              "participationtypemask": 2
+                            }
+                          ]
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    },
+                    "E_Mail_senden": {
+                      "type": "OpenApiConnection",
+                      "runAfter": {
+                        "E_Mail_anlegen": [
+                          "Succeeded"
+                        ]
+                      },
+                      "metadata": {
+                        "operationMetadataId": "c3c2d808-e80a-464b-d9cd-7fa5c2ed30dc"
+                      },
+                      "inputs": {
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                          "connectionName": "shared_commondataserviceforapps",
+                          "operationId": "PerformBoundAction"
+                        },
+                        "parameters": {
+                          "entityName": "emails",
+                          "recordId": "@outputs('E_Mail_anlegen')?['body/activityid']",
+                          "actionName": "SendEmail",
+                          "item/IssueSend": true
                         },
                         "authentication": "@parameters('$authentication')"
                       }
@@ -198,12 +226,27 @@
                     "authentication": "@parameters('$authentication')"
                   }
                 },
-                "Als_fehlgeschlagen_vermerken": {
-                  "type": "OpenApiConnection",
+                "Fehler_ermitteln": {
+                  "type": "Query",
                   "runAfter": {
                     "Versand": [
                       "Failed",
                       "TimedOut"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "d4d3e919-f91b-475c-eade-8ab6d3fe41ed"
+                  },
+                  "inputs": {
+                    "from": "@result('Versand')",
+                    "where": "@not(equals(item()?['status'], 'Succeeded'))"
+                  }
+                },
+                "Als_fehlgeschlagen_vermerken": {
+                  "type": "OpenApiConnection",
+                  "runAfter": {
+                    "Fehler_ermitteln": [
+                      "Succeeded"
                     ]
                   },
                   "metadata": {
@@ -219,7 +262,7 @@
                       "entityName": "ayonto_mentions",
                       "recordId": "@triggerOutputs()?['body/ayonto_mentionid']",
                       "item/ayonto_deliverystatus": "Failed",
-                      "item/ayonto_deliverydetail": "@substring(string(first(result('Versand'))?['error']), 0, min(480, length(string(first(result('Versand'))?['error']))))"
+                      "item/ayonto_deliverydetail": "@substring(string(first(body('Fehler_ermitteln'))?['error']), 0, min(480, length(string(first(body('Fehler_ermitteln'))?['error']))))"
                     },
                     "authentication": "@parameters('$authentication')"
                   }

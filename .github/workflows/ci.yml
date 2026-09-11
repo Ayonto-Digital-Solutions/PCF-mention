@@ -127,7 +127,7 @@ jobs:
 
           flow = "src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
           cases = {
-              "typo": (flow, "body/ayonto_useremail", "body/ayonto_usermail"),
+              "typo": (flow, "body/ayonto_userid", "body/ayonto_usrid"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
               "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
               "outputs": (flow, '"Datensatzlink": {', '"Datensatzlink_": {'),
