@@ -48,22 +48,11 @@ in den Flow hinein.
 | Von-Name | Environment Variable |
 | An / Empfänger | `@{triggerOutputs()?['body/ayonto_useremail']}` |
 | Betreff | `@{coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')}` |
-| Inhalt / Text | der Ausdruck unten |
+| Inhalt / Text | `@{outputs('Mail_Body')}` |
 | HTML | ja |
 
-Inhalt:
-
-```
-@concat(
-  '<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>',
-  if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
-     concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')),
-  if(empty(outputs('Datensatzlink')), '',
-     concat('<p><a href="', outputs('Datensatzlink'), '">',
-            if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen',
-               triggerOutputs()?['body/ayonto_linktext']), '</a></p>'))
-)
-```
+Der Inhalt steht bereits im Schritt `Mail_Body` der [Hauptanleitung](README.md) — der Connector
+liest ihn nur, statt ihn erneut zusammenzusetzen.
 
 Beachten Sie, dass der Empfänger hier die **Mailadresse** ist (`ayonto_useremail`), während der
 Dataverse-Versand die **Benutzer-ID** braucht (`ayonto_userid`). Beides steht in der Zeile.
@@ -128,22 +117,11 @@ environment.
 | From name | environment variable |
 | To / recipient | `@{triggerOutputs()?['body/ayonto_useremail']}` |
 | Subject | `@{coalesce(triggerOutputs()?['body/ayonto_subject'], 'You were mentioned')}` |
-| Body / text | the expression below |
+| Body / text | `@{outputs('Mail_Body')}` |
 | Is HTML | yes |
 
-Body:
-
-```
-@concat(
-  '<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>',
-  if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
-     concat('<p>Record: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')),
-  if(empty(outputs('Datensatzlink')), '',
-     concat('<p><a href="', outputs('Datensatzlink'), '">',
-            if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Open record',
-               triggerOutputs()?['body/ayonto_linktext']), '</a></p>'))
-)
-```
+The body is already assembled in the `Mail_Body` step of the [main guide](README.md) — the
+connector only reads it rather than building it again.
 
 Note that the recipient here is the **mail address** (`ayonto_useremail`), whereas the Dataverse
 path needs the **user id** (`ayonto_userid`). The row carries both.
