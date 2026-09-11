@@ -161,12 +161,25 @@ jobs:
             "dist/Ayonto-Mention-Benachrichtigung_${version}.pdf" \
             solution/README.md solution/external-mail-provider.md
 
+          # Every file that is meant to be published, named. A glob that quietly misses one is
+          # how the documentation was built and then left behind on 2.3.1.
+          for expected in \
+            "dist/AyontoPcfControls_${version}_managed.zip" \
+            "dist/AyontoPcfControls_${version}.zip" \
+            "dist/Ayonto-Mention-Benachrichtigung_${version}.pdf"; do
+            if [ ! -s "${expected}" ]; then
+              echo "::error::${expected} was not produced"
+              ls -l dist >&2 || true
+              exit 1
+            fi
+          done
+
           ls -l dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: solution-${{ steps.version.outputs.version }}
-          path: dist/*.zip
+          path: dist/*
 
       # Started by hand rather than by a tag, the tag does not exist yet: the release is cut at
       # the commit that was built, which creates it. Either way the zips end up on the release.
@@ -182,9 +195,9 @@ jobs:
           fi
 
           if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" dist/*.zip --clobber
+            gh release upload "${tag}" dist/* --clobber
           else
-            gh release create "${tag}" dist/*.zip \
+            gh release create "${tag}" dist/* \
               --target "${GITHUB_SHA}" \
               --title "${tag}" \
               --generate-notes
