@@ -136,6 +136,8 @@ jobs:
             zip=$(find "${SOLUTION_DIR}/bin/${config}" -name '*.zip' | head -1)
             echo "== ${config}: ${zip}"
             SOLUTION_ROOT="${SOLUTION_DIR}" python3 .github/scripts/check-package.py "$zip" --expect-controls
+            python3 .github/scripts/check-guide.py "$zip" \
+              solution/README.md solution/external-mail-provider.md --expect-controls
           done
 
       - name: Collect the artifacts
