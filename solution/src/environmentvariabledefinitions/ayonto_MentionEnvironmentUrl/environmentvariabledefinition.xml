@@ -2,8 +2,8 @@
   <displayname default="Ayonto Mention Environment Url">
     <label description="Ayonto Mention Environment Url" languagecode="1033" />
   </displayname>
-  <description default="Base URL of this environment, used to build the record link when the component wrote none. Example: https://contoso.crm4.dynamics.com">
-    <label description="Base URL of this environment, used to build the record link when the component wrote none. Example: https://contoso.crm4.dynamics.com" languagecode="1033" />
+  <description default="Optional. The flow reads the environment URL off the row it was handed; set this only to override it, for instance when the app is reached through a different host. Example: https://contoso.crm4.dynamics.com">
+    <label description="Optional. The flow reads the environment URL off the row it was handed; set this only to override it, for instance when the app is reached through a different host. Example: https://contoso.crm4.dynamics.com" languagecode="1033" />
   </description>
   <introducedversion>1.0.0.0</introducedversion>
   <iscustomizable>1</iscustomizable>

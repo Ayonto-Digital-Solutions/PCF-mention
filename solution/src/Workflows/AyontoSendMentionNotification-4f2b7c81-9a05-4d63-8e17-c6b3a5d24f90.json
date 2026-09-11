@@ -172,11 +172,15 @@
         },
         "Umgebungsadresse": {
           "type": "Compose",
-          "runAfter": {},
+          "runAfter": {
+            "Datensatz_lesen": [
+              "Succeeded"
+            ]
+          },
           "metadata": {
             "operationMetadataId": "5a5ec291-7193-4fd4-c25c-0ebf6a7b8c95"
           },
-          "inputs": "@if(endsWith(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), '/'), substring(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), 0, sub(length(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), 1)), parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'))"
+          "inputs": "@if(empty(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), concat('https://', uriHost(outputs('Datensatz_lesen')?['body/@odata.id'])), if(endsWith(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), '/'), substring(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), 0, sub(length(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), 1)), parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')))"
         },
         "Datensatzlink": {
           "type": "Compose",
@@ -189,6 +193,25 @@
             "operationMetadataId": "6b6fd3a2-82a4-40e5-d36d-1fa07b8c9da6"
           },
           "inputs": "@if(not(empty(triggerOutputs()?['body/ayonto_recordurl'])), triggerOutputs()?['body/ayonto_recordurl'], if(or(empty(outputs('Umgebungsadresse')), or(empty(triggerOutputs()?['body/ayonto_recordtable']), empty(triggerOutputs()?['body/ayonto_recordid']))), '', concat(outputs('Umgebungsadresse'), '/main.aspx?', if(empty(parameters('Ayonto Mention App Id (ayonto_MentionAppId)')), '', concat('appid=', parameters('Ayonto Mention App Id (ayonto_MentionAppId)'), '&')), 'pagetype=entityrecord&etn=', triggerOutputs()?['body/ayonto_recordtable'], '&id=', triggerOutputs()?['body/ayonto_recordid'])))"
+        },
+        "Datensatz_lesen": {
+          "type": "OpenApiConnection",
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "7c70e4b3-93b5-41f6-e47e-2ab18c9daeb7"
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "GetItem"
+            },
+            "parameters": {
+              "entityName": "ayonto_mentions",
+              "recordId": "@triggerOutputs()?['body/ayonto_mentionid']"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
         }
       }
     },
