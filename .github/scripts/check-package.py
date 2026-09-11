@@ -8,6 +8,10 @@ nobody could tell was incomplete by looking at the build. So this reads the othe
 declares, and the contract in .github/solution-contract.json.
 
 Usage: check-package.py <solution.zip> [--contract <file>] [--expect-controls]
+
+There are two packages: the solution with the table and the code components, and the optional
+flow package beside it. Each has its own contract, and the flow package's contract says
+"exclusive": nothing beyond what it lists may be in there.
 """
 
 import argparse
@@ -83,6 +87,19 @@ def main() -> None:
     unique = manifest.findtext("UniqueName") or ""
     if unique != contract["uniqueName"]:
         wrong(f"unique name is '{unique}', the contract says '{contract['uniqueName']}'")
+
+    # Managed(1) lässt sich nicht mehr ändern. Das Flow-Paket lebt davon, geändert zu werden —
+    # Betreff, Text und Versandweg sind eine Hausentscheidung —, also steht im Vertrag, wie es
+    # gepackt sein muss, und nicht im Build-Skript allein.
+    if "managed" in contract:
+        packed_managed = (manifest.findtext("Managed") or "").strip()
+        expected_managed = "1" if contract["managed"] else "0"
+        if packed_managed != expected_managed:
+            kind = {"0": "unmanaged", "1": "managed"}
+            wrong(
+                f"the package is {kind.get(packed_managed, packed_managed)}, "
+                f"the contract says {kind[expected_managed]}"
+            )
 
     version = manifest.findtext("Version") or ""
     if version.count(".") != 3 or not all(part.isdigit() for part in version.split(".")):
@@ -174,17 +191,54 @@ def main() -> None:
             wrong(f"the flow '{flow['name']}' has no definition file '{payload}' in the package")
 
     # --- connection references and environment variables ---------------------
-    text = "\n".join(
-        zipfile.ZipFile(args.package).read(name).decode("utf-8", "replace")
-        for name in files
-        if name.endswith((".xml", ".json"))
-    )
+    # Gelesen wird die Deklaration, nicht der Text des Pakets. Ein Textfund beweist hier nichts:
+    # Der Flow selbst nennt die Verbindung, die er benutzen will, in seiner eigenen Definition.
+    # Wird sie in customizations.xml vergessen, steht der Name also weiterhin im ZIP — und ein
+    # Paket, dessen Flow beim Import ungebunden bleibt, käme ohne ein Wort durch.
+    packed_references = {
+        (reference.get("connectionreferencelogicalname") or "").lower()
+        for reference in customizations.iter("connectionreference")
+    }
     for reference in contract["connectionReferences"]:
-        if reference not in text:
-            wrong(f"the connection reference '{reference}' is not in the package")
+        if reference.lower() not in packed_references:
+            wrong(
+                f"the connection reference '{reference}' is not declared in the package "
+                "— the flow that binds it would arrive unbound"
+            )
+
+    packed_variables = {
+        (variable.get("schemaname") or "").lower()
+        for variable in customizations.iter("environmentvariabledefinition")
+    }
     for variable in contract["environmentVariables"]:
-        if variable not in text:
-            wrong(f"the environment variable '{variable}' is not in the package")
+        if variable.lower() not in packed_variables:
+            wrong(f"the environment variable '{variable}' is not declared in the package")
+
+    # Bis hierher wurde geprüft, dass alles da ist, was da sein muss. Ein Paket, das darüber
+    # hinaus etwas mitbringt, ist genauso falsch: Käme die Tabelle versehentlich im Flow-Paket
+    # mit, würde sie beim Import der Hauptlösung in die Quere kommen, und niemand sähe warum.
+    if contract.get("exclusive"):
+        for table in sorted(set(packed_tables) - set(contract["tables"])):
+            wrong(f"the package carries the table '{table}', which the contract does not list")
+        for control in sorted(controls - {name.lower() for name in contract["controls"]}):
+            wrong(f"the package carries the code component '{control}', which the contract does not list")
+        for relationship in sorted(
+            packed_relationships - {name.lower() for name in contract["relationships"]}
+        ):
+            wrong(f"the package carries the relationship '{relationship}', which the contract does not list")
+        for flow in sorted(packed_flows - {flow["name"] for flow in contract["workflows"]}):
+            wrong(f"the package carries the flow '{flow}', which the contract does not list")
+        for reference in sorted(
+            packed_references - {name.lower() for name in contract["connectionReferences"]}
+        ):
+            wrong(
+                f"the package carries the connection reference '{reference}', which the contract "
+                "does not list — every one of them is a question the import puts to whoever imports it"
+            )
+        for variable in sorted(
+            packed_variables - {name.lower() for name in contract["environmentVariables"]}
+        ):
+            wrong(f"the package carries the environment variable '{variable}', which the contract does not list")
 
     if problems:
         for problem in problems:

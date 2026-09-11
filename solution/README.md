@@ -3,10 +3,18 @@
 Die Lösung bringt die Tabelle `ayonto_mention` samt Ansicht und die beiden Code-Components mit —
 **mehr nicht**. Der Import fragt nach keiner einzigen Verbindung, weil nichts darin eine braucht.
 
-Den Flow, der aus einer Zeile eine Benachrichtigung macht, bauen Sie selbst. Das ist Absicht: ein
-Flow bringt eine Verbindung mit, die beim Import belegt werden muss, und wer die Benachrichtigung
-gar nicht braucht, soll darüber nicht stolpern. Wie eine Benachrichtigung aussieht, ist ohnehin
-eine Hausentscheidung.
+Den Flow, der aus einer Zeile eine Benachrichtigung macht, gibt es **auf zwei Wegen**:
+
+* **Fertig importieren** — `AyontoMentionFlow_<version>.zip` liegt dem Release als eigenes,
+  **optionales** Paket bei. Ein Import, eine Frage nach der Dataverse-Verbindung, fertig.
+  Siehe [Der fertige Flow als Zusatzpaket](#der-fertige-flow-als-zusatzpaket).
+* **Selbst bauen** — diese Anleitung, Schritt für Schritt. Das dauert länger, und danach wissen
+  Sie, was der Flow tut und wo Sie ihn anfassen.
+
+Getrennt sind die beiden, weil ein Flow eine Verbindung mitbringt, die beim Import belegt werden
+muss. Wer die Benachrichtigung gar nicht braucht, soll darüber nicht stolpern — deshalb fragt die
+Hauptlösung nach nichts, und die Frage stellt nur, wer das Zusatzpaket bewusst dazunimmt. Wie eine
+Benachrichtigung aussieht, ist ohnehin eine Hausentscheidung.
 
 **Der Standardweg ist Dataverse selbst**: der Flow legt eine E-Mail-Aktivität an und löst die
 Aktion `SendEmail` aus. Kein externer Connector, kein API-Schlüssel, nichts, was die Umgebung
@@ -14,13 +22,49 @@ verlässt. Wo die Voraussetzung fehlt — serverseitige Synchronisierung mit ein
 Postfach — tritt ein Mail-Connector an die Stelle der beiden Dataverse-Aktionen; das steht in
 [external-mail-provider.md](external-mail-provider.md), deutsch und englisch.
 
-Die fertige Definition zum Nachschlagen liegt unter
-[`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird beim
-Bauen gegen die Tabelle geprüft, gehört aber nicht zur Lösung.
+Die fertige Definition liegt unter
+[`../solution-flow/src/Workflows/`](../solution-flow/src/Workflows) — dieselbe Datei, die ins
+Zusatzpaket gepackt wird. Sie wird bei jedem Bau gegen die Tabelle geprüft: Spaltennamen,
+Ausdrücke und die Verbindung, an die sie gebunden ist.
 
 > Die Schritte hier sind gegen einen **deutschsprachigen Designer** geschrieben und in einer echten
 > Umgebung durchgelaufen. Platzhalter stehen in spitzen Klammern: `<zieltabelle>` ist der logische
 > Name der Tabelle, auf deren Formular die Komponente sitzt.
+
+## Der fertige Flow als Zusatzpaket
+
+`AyontoMentionFlow_<version>.zip` enthält **nur** den Flow und die eine Dataverse-Verbindung, die
+er benutzt. Keine Tabelle, kein Code-Component, keine Umgebungsvariable — das bringt die
+Hauptlösung mit, und die wird **zuerst** importiert.
+
+**So nehmen Sie es:**
+
+1. `AyontoPcfControls_<version>_managed.zip` importieren (oder die unmanaged Fassung). Fragt nach
+   nichts.
+2. `AyontoMentionFlow_<version>.zip` importieren. Der Import fragt jetzt nach **einer** Verbindung:
+   *Microsoft Dataverse*. Eine bestehende auswählen oder eine neue anlegen.
+3. Den Flow **einschalten**. Er kommt bewusst ausgeschaltet an — siehe unten.
+4. Die Komponente auf dem Formular konfigurieren, wie im Abschnitt
+   [Schritt 1 — Die Komponente am Formular](#schritt-1--die-komponente-am-formular) beschrieben. Der Flow
+   liest Betreff, Text und Linkbeschriftung aus der Zeile, nicht aus sich selbst.
+
+**Das Paket ist unmanaged, und das mit Absicht.** Eine managed Lösung ließe sich nicht mehr
+ändern — und Ändern ist der Zweck: Betreff und Wortlaut sind das eine, der Versandweg das andere.
+Wer statt der beiden Dataverse-Aktionen einen Mail-Connector einsetzen will, tauscht sie im
+importierten Flow aus; wie, steht in
+[external-mail-provider.md](external-mail-provider.md).
+
+**Der Flow kommt ausgeschaltet an.** Ein Flow, der sich beim Import selbst einschaltet, verschickt
+Benachrichtigungen, bevor jemand den Wortlaut gesehen hat. Einschalten ist ein Klick; ein zu früh
+verschicktes „Sie wurden erwähnt" nimmt niemand zurück.
+
+**Unter welchem Konto er läuft:** unter dem der Verbindung, die Sie beim Import angeben. Das ist
+dieselbe Frage wie beim selbst gebauten Flow und mit denselben Folgen — der Abschnitt
+[Unter welchem Konto der Flow läuft](#unter-welchem-konto-der-flow-läuft) gilt unverändert.
+
+**Wer selbst baut, überspringt dieses Paket** und liest ab hier weiter. Beide Wege enden beim
+selben Flow; der Rest dieser Anleitung beschreibt ihn Aktion für Aktion, also auch dann, wenn Sie
+den fertigen importiert haben und wissen wollen, was darin passiert.
 
 ## So liest sich die Anleitung
 
@@ -71,13 +115,17 @@ Chat-Nachricht nicht" heißen.
 
 ## Was mitgeliefert wird und was Sie bauen
 
-| | mitgeliefert | selbst zu bauen oder zu stellen |
-|---|---|---|
-| Tabelle `ayonto_mention` samt Ansicht | ✔ | |
-| Code-Components Mention und GroupDetailList | ✔ | |
-| Benachrichtigungs-Flow | als Anleitung | Flow anlegen, siehe unten |
-| Verbindung zu Dataverse | | beim Anlegen des Flows |
-| Serverseitige Synchronisierung, freigegebenes Postfach | | ✔ |
+| | Hauptlösung | Zusatzpaket | selbst zu stellen |
+|---|---|---|---|
+| Tabelle `ayonto_mention` samt Ansicht | ✔ | | |
+| Code-Components Mention und GroupDetailList | ✔ | | |
+| Benachrichtigungs-Flow | | ✔ (ausgeschaltet) | oder von Hand, siehe unten |
+| Verbindung zu Dataverse | | wird beim Import erfragt | oder beim Anlegen des Flows |
+| Serverseitige Synchronisierung, freigegebenes Postfach | | | ✔ |
+
+Die **Hauptlösung** fragt beim Import nach nichts. Das **Zusatzpaket** stellt genau eine Frage:
+welche Dataverse-Verbindung der Flow benutzen soll. Wer es nicht importiert, bekommt sie nie zu
+sehen.
 
 **Ein externer Dienst ist nirgends dabei.** Beide Code-Components deklarieren
 `<external-service-usage enabled="false" />` und sprechen ausschließlich mit der
@@ -126,10 +174,35 @@ andere.
 | **Sender**, **Message** | `senderUserId`, `emailContent` | leer lassen |
 | **Org url**, **App id** | `orgUrl`, `appId` | leer lassen — der Link entsteht im Flow |
 
-**Die Beschriftungen sind englisch, auch im deutschen Designer.** Eine deutsche Sprachdatei liegt
-zwar im Paket, aber die Lösung deklariert nur Englisch (`<Languages><Language>1033</Language>`),
-und der Designer zeigt deshalb die englischen Namen — unabhängig davon, in welcher Sprache die
-Oberfläche steht. Die Tabelle oben nennt sie so, wie sie wirklich dastehen.
+**Die Tabelle oben nennt die englischen Beschriftungen** — die sehen Sie, solange die Umgebung
+nicht auf Deutsch eingerichtet ist. Warum, steht weiter unten unter
+[Warum der Designer englisch spricht](#warum-der-designer-englisch-spricht); dort steht auch, was
+zu tun ist, damit die deutschen erscheinen.
+
+### Warum der Designer englisch spricht
+
+Im Paket liegt zu jedem Code-Component eine englische **und** eine deutsche Sprachdatei
+(`…1033.resx` und `…1031.resx`). Welche davon jemand zu sehen bekommt, entscheidet nicht das
+Paket, sondern die Umgebung: Die Plattform wählt die Sprachdatei nach der **Spracheinstellung des
+Benutzers**, und zwar aus den Sprachen, die **in der Organisation verfügbar** sind
+([RESX-Webressourcen](https://learn.microsoft.com/power-apps/developer/model-driven-apps/resx-web-resources)).
+Ist Deutsch in der Umgebung nicht bereitgestellt, bleibt es bei der Basissprache — hier Englisch.
+
+Damit die deutschen Beschriftungen erscheinen:
+
+1. **Sprache in der Umgebung ergänzen**, im Power Platform Admin Center unter *Einstellungen →
+   Produkt → Sprachen*. Das dauert laut Microsoft eine Stunde oder länger.
+2. **Danach erst die Lösung importieren.** Die Reihenfolge ist nicht beliebig: „To display the
+   translated labels for the languages imported into an environment from a solution, the language
+   must be added in the environment *before* you import the solution"
+   ([Regions- und Spracheinstellungen](https://learn.microsoft.com/power-platform/admin/enable-languages)).
+   Wer die Lösung schon drin hat, importiert sie nach dem Ergänzen der Sprache noch einmal.
+3. **Persönliche Sprache des Benutzers** auf Deutsch stellen — sie, nicht die Sprache des Browsers,
+   entscheidet.
+
+Ein Schlüssel, den die deutsche Datei nicht führt, fällt übrigens **nicht** auf Englisch zurück,
+sondern kommt leer zurück. Deshalb hält `check-guide.py` bei jedem Bau beide Dateien gegeneinander:
+Zu jedem englischen Text muss ein deutscher dastehen, sonst bricht der Lauf ab.
 
 ### Die zwei Fallen, die am meisten Zeit kosten
 
