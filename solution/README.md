@@ -120,11 +120,16 @@ andere.
 | **Record id** | `entityId` | **An Tabellenspalte binden**, Primärschlüsselspalte wählen |
 | **Table name** | `entityName` | Haken **aus**, statischer Wert `<zieltabelle>` |
 | **Send e-mail** | `sendEmail` | **Yes** |
-| **Send Teams** | `sendTeams` | **No**, solange kein zweiter Flow existiert |
+| **Send Teams message** | `sendTeams` | **No**, solange kein zweiter Flow existiert |
 | **Subject** | `emailSubject` | statischer Wert, z. B. `Sie wurden erwähnt` |
 | **Link label (e-mail)** | `emailLinkText` | statischer Wert, z. B. `Datensatz öffnen` |
 | **Sender**, **Message** | `senderUserId`, `emailContent` | leer lassen |
 | **Org url**, **App id** | `orgUrl`, `appId` | leer lassen — der Link entsteht im Flow |
+
+**Die Beschriftungen sind englisch, auch im deutschen Designer.** Eine deutsche Sprachdatei liegt
+zwar im Paket, aber die Lösung deklariert nur Englisch (`<Languages><Language>1033</Language>`),
+und der Designer zeigt deshalb die englischen Namen — unabhängig davon, in welcher Sprache die
+Oberfläche steht. Die Tabelle oben nennt sie so, wie sie wirklich dastehen.
 
 ### Die zwei Fallen, die am meisten Zeit kosten
 
