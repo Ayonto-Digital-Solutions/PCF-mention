@@ -45,7 +45,9 @@ npm start watch     # lokaler Test-Harness
 ```
 
 CI führt für beide Components und für Node 20 und 22 `lint`, `typecheck`, `test` und einen
-Production-Build aus (siehe [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+Production-Build aus und hält dabei jede Sprachdatei gegen die Basissprache — ein Schlüssel, den
+die Übersetzung nicht führt, kommt zur Laufzeit leer zurück statt auf Englisch
+(siehe [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## Release
 

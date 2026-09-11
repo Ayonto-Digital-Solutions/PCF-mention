@@ -21,8 +21,14 @@ from pathlib import Path
 
 CONTROL = "Controls/ayonto_Ayonto.MentionControl"
 
-# The language the solution declares. A resx for another language ships but never shows.
-SHIPPED_LANGUAGE = "1033"
+# The property table below is written against the English strings, because English is the base
+# language of the package. Which language a user actually sees is not decided here: the platform
+# picks the resx by the user's own language preference, from the languages the organization has
+# available — see solution/README.md, "Warum der Designer englisch spricht".
+BASE_LANGUAGE = "1033"
+# Shipped alongside. Every key the base has must have a translation here, because a key that is
+# missing from the user's language does not fall back — it comes back empty.
+TRANSLATIONS = ("1031",)
 
 # What the property table promises the form designer will say.
 LABELS = {
@@ -42,6 +48,66 @@ def wrong(message: str) -> None:
     problems.append(message)
 
 
+def slug(heading: str) -> str:
+    """The anchor GitHub gives a heading.
+
+    Lower case, punctuation dropped, then every space — each one on its own — becomes a hyphen.
+    Not a run of spaces, each space: a heading written "Schritt 1 — Die Komponente" loses the
+    dash and keeps the two spaces around it, so its anchor carries a double hyphen. Collapsing
+    them here would let a link that really is broken look fine.
+    """
+    text = heading.strip().lower()
+    text = re.sub(r"[`*_]", "", text)
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
+    return text.strip().replace(" ", "-")
+
+
+def check_links(documents: dict[str, str]) -> None:
+    """A link inside the documentation has to lead somewhere.
+
+    Renaming a heading is a two-line edit, and the link that pointed at it keeps looking like a
+    link — it just lands at the top of the page. Whoever follows it ends up reading the wrong
+    section, which is worse than no link at all.
+    """
+    for name, text in documents.items():
+        anchors = {slug(line.lstrip("#").strip()) for line in text.splitlines() if line.startswith("#")}
+        for target in sorted(set(re.findall(r"\]\(#([^)]+)\)", text))):
+            if target not in anchors:
+                wrong(f"{name} links to '#{target}', which is no heading in it")
+
+
+def check_translations(package: str) -> None:
+    """Every string the base language has must exist in the languages shipped beside it.
+
+    A key that is missing from the user's language is not answered with the English one. The
+    platform returns nothing for it, so the button, the label or the message it was meant to
+    carry simply comes up empty for that user — and only for that user, which is why nobody
+    notices. Adding a property and forgetting one line in the translation is all it takes.
+    """
+    with zipfile.ZipFile(package) as archive:
+        names = archive.namelist()
+
+        def keys(name: str) -> dict[str, str]:
+            root = ET.fromstring(archive.read(name).decode("utf-8-sig"))
+            return {d.get("name"): (d.findtext("value") or "") for d in root.iter("data")}
+
+        for base in sorted(n for n in names if n.endswith(f".{BASE_LANGUAGE}.resx")):
+            english = keys(base)
+            for language in TRANSLATIONS:
+                beside = base.replace(f".{BASE_LANGUAGE}.resx", f".{language}.resx")
+                if beside not in names:
+                    wrong(f"{base} ships without its {language} translation")
+                    continue
+                translated = keys(beside)
+                missing = sorted(key for key in english if not translated.get(key, "").strip())
+                if missing:
+                    wrong(
+                        f"{beside} has no text for {len(missing)} string(s) the base language "
+                        f"defines ({', '.join(missing[:3])}{', …' if len(missing) > 3 else ''}) — "
+                        "a user in that language gets nothing there, not the English word"
+                    )
+
+
 def main() -> None:
     arguments = [a for a in sys.argv[1:] if a != "--expect-controls"]
     expect_controls = "--expect-controls" in sys.argv[1:]
@@ -59,12 +125,15 @@ def main() -> None:
         if has_control:
             manifest = ET.fromstring(archive.read(f"{CONTROL}/ControlManifest.xml").decode("utf-8-sig"))
             strings = ET.fromstring(
-                archive.read(f"{CONTROL}/strings/MentionControl.{SHIPPED_LANGUAGE}.resx").decode("utf-8-sig")
+                archive.read(f"{CONTROL}/strings/MentionControl.{BASE_LANGUAGE}.resx").decode("utf-8-sig")
             )
             bundle = archive.read(f"{CONTROL}/bundle.js").decode("utf-8", "replace")
 
     if expect_controls and not has_control:
         wrong("the package carries no Mention control, so the documentation cannot be checked against it")
+
+    check_links(documents)
+    check_translations(package)
 
     entity = next(customizations.iter("Entity"), None)
     described = entity.find("./EntityInfo/entity") if entity is not None else None

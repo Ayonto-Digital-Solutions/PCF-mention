@@ -228,6 +228,20 @@ def main() -> None:
     if entities is not None and len(entities) > 0:
         fail("src/Other/Customizations.xml must keep <Entities /> childless — the packer drops the folder otherwise")
 
+    # A flow described inside <Workflows> is a mistake SolutionPackager answers with a line in its
+    # log and nothing else: "has unexpected children in Customizations.xml; this component's
+    # specific processing will be skipped". The build stays green and the package comes out
+    # without the component. It cost a whole round to find, so it is refused here.
+    #
+    # A modern cloud flow cannot be packed from this format at all — it is supported only in the
+    # YAML source control format, under modernflows/. See solution/README.md.
+    if customizations.findall("./Workflows/Workflow"):
+        fail(
+            "src/Other/Customizations.xml describes a flow inside <Workflows> — SolutionPackager "
+            "skips the whole component then and says so only in its log. A modern flow belongs in "
+            "the YAML source format under modernflows/, not here"
+        )
+
     # A flow is two things: the entry that names it and the definition it points at. A entry whose
     # file is missing packs without complaint and imports as a flow that does nothing.
     flows = customizations.findall("./Workflows/Workflow")

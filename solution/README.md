@@ -18,6 +18,19 @@ Die fertige Definition zum Nachschlagen liegt unter
 [`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird beim
 Bauen gegen die Tabelle geprüft, gehört aber nicht zur Lösung.
 
+> **Warum der Flow nicht als fertiges Paket beiliegt.** Nicht aus Bequemlichkeit: Ein moderner
+> Cloud-Flow lässt sich aus dem klassischen XML-Quellformat, in dem diese Lösung liegt, überhaupt
+> nicht paketieren. SolutionPackager unterstützt ihn ausschließlich im YAML-Quellformat, unter
+> `modernflows/` — „Modern flows … YAML format only … not supported in XML format"
+> ([YAML-Quellformat](https://learn.microsoft.com/power-platform/alm/solution-source-control-yaml-format)).
+> Und dieser Ordner entsteht nicht von Hand, sondern über `pac solution clone` aus einer
+> Umgebung, in der der Flow bereits existiert.
+>
+> Ein Versuch, ihn trotzdem im XML-Format mitzuliefern, packt **ohne Fehler** und liefert ein
+> Paket ohne die Komponente aus; im Log steht dann nur `this component's specific processing will
+> be skipped` bzw. `Following root components are not defined in customizations`. Die CI liest das
+> Log deshalb mit und bricht ab, wenn eine dieser Zeilen auftaucht.
+
 > Die Schritte hier sind gegen einen **deutschsprachigen Designer** geschrieben und in einer echten
 > Umgebung durchgelaufen. Platzhalter stehen in spitzen Klammern: `<zieltabelle>` ist der logische
 > Name der Tabelle, auf deren Formular die Komponente sitzt.
@@ -126,10 +139,35 @@ andere.
 | **Sender**, **Message** | `senderUserId`, `emailContent` | leer lassen |
 | **Org url**, **App id** | `orgUrl`, `appId` | leer lassen — der Link entsteht im Flow |
 
-**Die Beschriftungen sind englisch, auch im deutschen Designer.** Eine deutsche Sprachdatei liegt
-zwar im Paket, aber die Lösung deklariert nur Englisch (`<Languages><Language>1033</Language>`),
-und der Designer zeigt deshalb die englischen Namen — unabhängig davon, in welcher Sprache die
-Oberfläche steht. Die Tabelle oben nennt sie so, wie sie wirklich dastehen.
+**Die Tabelle oben nennt die englischen Beschriftungen** — die sehen Sie, solange die Umgebung
+nicht auf Deutsch eingerichtet ist. Warum, steht unter
+[Warum der Designer englisch spricht](#warum-der-designer-englisch-spricht); dort steht auch, was
+zu tun ist, damit die deutschen erscheinen.
+
+### Warum der Designer englisch spricht
+
+Im Paket liegt zu jedem Code-Component eine englische **und** eine deutsche Sprachdatei
+(`…1033.resx` und `…1031.resx`). Welche davon jemand zu sehen bekommt, entscheidet nicht das
+Paket, sondern die Umgebung: Die Plattform wählt die Sprachdatei nach der **Spracheinstellung des
+Benutzers**, und zwar aus den Sprachen, die **in der Organisation verfügbar** sind
+([RESX-Webressourcen](https://learn.microsoft.com/power-apps/developer/model-driven-apps/resx-web-resources)).
+Ist Deutsch in der Umgebung nicht bereitgestellt, bleibt es bei der Basissprache — hier Englisch.
+
+Damit die deutschen Beschriftungen erscheinen:
+
+1. **Sprache in der Umgebung ergänzen**, im Power Platform Admin Center unter *Einstellungen →
+   Produkt → Sprachen*. Das dauert laut Microsoft eine Stunde oder länger.
+2. **Danach erst die Lösung importieren.** Die Reihenfolge ist nicht beliebig: „To display the
+   translated labels for the languages imported into an environment from a solution, the language
+   must be added in the environment *before* you import the solution"
+   ([Regions- und Spracheinstellungen](https://learn.microsoft.com/power-platform/admin/enable-languages)).
+   Wer die Lösung schon drin hat, importiert sie nach dem Ergänzen der Sprache noch einmal.
+3. **Persönliche Sprache des Benutzers** auf Deutsch stellen — sie, nicht die Sprache des Browsers,
+   entscheidet.
+
+Ein Schlüssel, den die deutsche Datei nicht führt, fällt übrigens **nicht** auf Englisch zurück,
+sondern kommt leer zurück. Deshalb werden beide Dateien bei jedem Bau gegeneinander gehalten: Zu
+jedem englischen Text muss ein deutscher dastehen, sonst bricht der Lauf ab.
 
 ### Die zwei Fallen, die am meisten Zeit kosten
 

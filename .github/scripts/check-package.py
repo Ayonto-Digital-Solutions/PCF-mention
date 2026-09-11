@@ -174,17 +174,28 @@ def main() -> None:
             wrong(f"the flow '{flow['name']}' has no definition file '{payload}' in the package")
 
     # --- connection references and environment variables ---------------------
-    text = "\n".join(
-        zipfile.ZipFile(args.package).read(name).decode("utf-8", "replace")
-        for name in files
-        if name.endswith((".xml", ".json"))
-    )
+    # Read the declaration, not the text of the package. A text match proves nothing here: a flow
+    # names the connection it wants to use inside its own definition, so forgetting it in
+    # customizations.xml leaves the name in the .zip all the same — and a package whose flow
+    # arrives unbound would pass without a word.
+    packed_references = {
+        (reference.get("connectionreferencelogicalname") or "").lower()
+        for reference in customizations.iter("connectionreference")
+    }
     for reference in contract["connectionReferences"]:
-        if reference not in text:
-            wrong(f"the connection reference '{reference}' is not in the package")
+        if reference.lower() not in packed_references:
+            wrong(
+                f"the connection reference '{reference}' is not declared in the package "
+                "— the flow that binds it would arrive unbound"
+            )
+
+    packed_variables = {
+        (variable.get("schemaname") or "").lower()
+        for variable in customizations.iter("environmentvariabledefinition")
+    }
     for variable in contract["environmentVariables"]:
-        if variable not in text:
-            wrong(f"the environment variable '{variable}' is not in the package")
+        if variable.lower() not in packed_variables:
+            wrong(f"the environment variable '{variable}' is not declared in the package")
 
     if problems:
         for problem in problems:

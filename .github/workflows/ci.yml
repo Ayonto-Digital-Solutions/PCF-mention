@@ -49,6 +49,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # Ein Schlüssel, den die Übersetzung nicht führt, fällt nicht auf Englisch zurück — er
+      # kommt leer zurück, und nur für die Benutzer in dieser Sprache. Das fällt sonst niemandem
+      # auf, deshalb wird es hier gezählt statt erst am fertigen Paket.
+      - name: Every string has a translation
+        working-directory: .
+        run: python3 .github/scripts/check-strings.py ${{ matrix.control }}/${{ matrix.control }}Control
+
       - name: Build
         run: npm run build -- --buildMode production
 
@@ -158,9 +165,23 @@ jobs:
 
       - name: Pack it and check what came out
         run: |
+          set -o pipefail
+
+          # SolutionPackager meldet eine übersprungene Komponente als Zeile im Log und packt
+          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so wäre ein Flow
+          # ohne seine Komponente rausgegangen. Also wird das Log gelesen.
+          check_pack_log() {
+            if grep -qE "will be skipped|not defined in customizations" "$1"; then
+              echo "::error::SolutionPackager skipped a component — the package is incomplete"
+              grep -E "will be skipped|not defined in customizations" "$1"
+              exit 1
+            fi
+          }
+
           rm -rf /tmp/pack
           cp -r solution /tmp/pack
-          ( cd /tmp/pack && dotnet build -c Release )
+          ( cd /tmp/pack && dotnet build -c Release ) | tee /tmp/pack.log
+          check_pack_log /tmp/pack.log
           zip=$(find /tmp/pack/bin -name '*.zip' | head -1)
           echo "$zip"
           python3 .github/scripts/check-package.py "$zip"
