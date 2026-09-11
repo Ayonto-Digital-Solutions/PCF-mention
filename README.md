@@ -96,41 +96,38 @@ Fertige `.zip`-Dateien liegen bewusst nicht im Repository: die früheren waren a
 Umgebung und einen Platzhalter-Publisher gebunden und ließen sich aus dem Quellstand nicht
 reproduzieren.
 
-## SendGrid notification provider
+## Benachrichtigungen
 
-Die Lösung liefert den Benachrichtigungsweg mit: Tabelle, Cloud-Flow, beide Connection References
-und beide Environment Variables sind Bestandteil des Pakets. Wer sie importiert, muss nichts
-nachbauen — nur zuweisen, was in keine Lösung gehört.
+Die Lösung liefert den Benachrichtigungsweg mit: Tabelle, Cloud-Flow, die Dataverse-Connection-
+Reference und drei Environment Variables sind Bestandteil des Pakets.
+
+**Versendet wird über Dataverse selbst.** Der Flow legt eine E-Mail-Aktivität mit Absender und
+Empfänger als Aktivitätsparteien an und löst die Dataverse-Aktion `SendEmail` aus. Kein externer
+Connector, kein API-Schlüssel, keine Domain außerhalb der Umgebung — die einzige Verbindung, nach
+der der Import fragt, ist Dataverse. Beide Code-Components deklarieren zudem
+`<external-service-usage enabled="false" />`.
 
 | mitgeliefert | von der Zielumgebung zu stellen |
 |---|---|
 | Tabelle `ayonto_mention` samt Ansicht | Verbindung Dataverse |
-| Flow *Ayonto – Send Mention Notification* | Verbindung SendGrid (trägt den API-Key) |
-| Connection References für beide Connectoren | Wert der Absenderadresse |
-| Environment Variables für Absender, Umgebungs-URL und App-ID | verifizierter Absender bei SendGrid |
+| Flow *Ayonto – Send Mention Notification* (E-Mail-Zweig) | serverseitige Synchronisierung, freigegebenes Postfach |
+| Connection Reference Dataverse | — |
+| Environment Variables für Absender, Umgebungs-URL und App-ID | alle drei optional |
 
-Der Flow löst auf **neue** Zeilen mit `ayonto_deliverystatus = New` aus, verschickt über SendGrid
-und schreibt `Sent` oder `Failed` in dieselbe Zeile zurück. Dass er nur auf neue Zeilen hört, ist
-die Bedingung dafür: die Rückschreibung ändert die Zeile, die ihn ausgelöst hat.
+Voraussetzung des Dataverse-Versands ist ein Postfach, das freigegeben und für den Versand
+aktiviert ist. Wo das fehlt, tritt ein Connector an die Stelle der beiden Dataverse-Aktionen —
+beschrieben in [solution/external-mail-provider.md](solution/external-mail-provider.md), deutsch
+und englisch und ohne einen bestimmten Anbieter zu nennen.
 
 Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und
 Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Der Flow bedient davon den
-**E-Mail-Zweig**; weitere Kanäle ergänzt man im Schalter `Kanal`, statt sie mitgeliefert zu
-bekommen. Zwei Gründe: eine Aktion für einen Connector, den die Zielumgebung nicht freigegeben
-hat, blockiert den Import der ganzen Lösung — und wie eine Chat-Nachricht aussieht, ist eine
-Hausentscheidung.
+**E-Mail-Zweig**; weitere Kanäle ergänzt man im Schalter `Kanal`.
 
 Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde, und dafür ist
 nichts einzutragen: der Flow liest die ausgelöste Zeile zurück und nimmt die Umgebungsadresse aus
 deren `@odata.id`. Den Link selbst nimmt er aus `ayonto_recordurl`, wenn die Komponente einen
 geschrieben hat, und baut ihn sonst aus Tabelle und Zeilen-ID. Kennt auch die Zeile keinen
 Datensatz, entfällt der Absatz, statt einen toten Link zu zeigen.
-
-Der API-Key steht ausschließlich in der SendGrid-Verbindung — nicht im Flow, nicht in einer
-Environment Variable, nicht in der Lösung, und damit auch in keiner Kopie davon. Eine
-Teams-Aktion enthält der Flow bewusst nicht: ein Connector, den die Zielumgebung nicht lizenziert
-oder freigegeben hat, blockiert den Import der ganzen Lösung. Wie man einen zweiten Kanal
-trotzdem ergänzt, steht im Einrichtungsdokument.
 
 Einrichtung, Umbau eines vorhandenen Flows und alle Ausdrücke zum Kopieren:
 **[solution/README.md](solution/README.md)**.

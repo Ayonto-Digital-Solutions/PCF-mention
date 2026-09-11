@@ -1,0 +1,13 @@
+<environmentvariabledefinition schemaname="ayonto_MentionSenderUser">
+  <displayname default="Ayonto Mention Sender User">
+    <label description="Ayonto Mention Sender User" languagecode="1033" />
+  </displayname>
+  <description default="Optional. Id of the user or queue the notification is sent from. Leave empty to send it from whoever wrote the mention. The sending identity needs a mailbox that is approved and enabled for sending.">
+    <label description="Optional. Id of the user or queue the notification is sent from. Leave empty to send it from whoever wrote the mention. The sending identity needs a mailbox that is approved and enabled for sending." languagecode="1033" />
+  </description>
+  <introducedversion>1.0.0.0</introducedversion>
+  <iscustomizable>1</iscustomizable>
+  <isrequired>0</isrequired>
+  <secretstore>0</secretstore>
+  <type>100000000</type>
+</environmentvariabledefinition>

@@ -1,9 +1,17 @@
 # Benachrichtigungs-Flow einrichten
 
-Die Lösung bringt eine Tabelle `ayonto_mention`, einen Cloud-Flow, der daraus E-Mails macht, zwei
-Connection References und zwei Environment Variables mit. Was sie **nicht** mitbringen kann, sind
-die Verbindungen selbst und die Absenderadresse — die gehören in die Zielumgebung und werden dort
-einmalig gesetzt.
+Die Lösung bringt eine Tabelle `ayonto_mention`, einen Cloud-Flow, der daraus E-Mails macht, eine
+Connection Reference und drei Environment Variables mit.
+
+**Versendet wird über Dataverse selbst.** Der Flow legt eine E-Mail-Aktivität an und löst die
+Dataverse-Aktion `SendEmail` aus — kein externer Connector, keine Schlüssel, nichts, was die
+Umgebung verlässt. Die einzige Verbindung, nach der der Import fragt, ist Dataverse: Ihr eigener
+Tenant.
+
+Wo die Voraussetzung dafür fehlt — serverseitige Synchronisierung mit einem freigegebenen
+Postfach — tritt ein Connector an die Stelle der beiden Dataverse-Aktionen. Das ist in
+[external-mail-provider.md](external-mail-provider.md) beschrieben, deutsch und englisch, ohne
+einen bestimmten Anbieter zu nennen.
 
 Dieses Dokument beschreibt beides: den mitgelieferten Flow konfigurieren, und einen vorhandenen
 Flow auf diese Tabelle umbauen. Alle Ausdrücke stehen so da, dass man sie direkt in den Designer
@@ -17,7 +25,9 @@ Mention-Component
        └─ Flow löst auf neue Zeilen aus
             ├─ Zeile lesen, Umgebungsadresse und Datensatzlink ermitteln
             └─ Schalter auf ayonto_channel
-                 ├─ Email → Versand (Scope) → Mail-Connector
+                 ├─ Email → Versand (Scope)
+                 │            ├─ E-Mail-Aktivität anlegen (Absender + Empfänger als Party)
+                 │            └─ Dataverse-Aktion SendEmail auslösen
                  │            ├─ erfolgreich    → Status = Sent
                  │            └─ fehlgeschlagen → Status = Failed + Grund
                  └─ sonst  → Status = Failed, „kein Zweig für diesen Kanal"
@@ -38,16 +48,15 @@ kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bed
 | Tabelle `ayonto_mention` samt Ansicht | ✔ | |
 | Flow *Ayonto – Send Mention Notification* | ✔ (E-Mail-Zweig) | einschalten; weitere Kanäle selbst ergänzen |
 | Connection Reference Dataverse | ✔ | Verbindung zuweisen |
-| Connection Reference Mail-Connector | ✔ | Verbindung zuweisen (API-Key) |
-| Environment Variable Absenderadresse | ✔ (ohne Wert) | Wert setzen |
-| Environment Variable Absendername | ✔ (Vorgabewert) | bei Bedarf ändern |
+| Environment Variable Absender (Benutzer/Warteschlange) | ✔ (ohne Wert) | optional, leer = die erwähnende Person |
 | Environment Variable Umgebungs-URL | ✔ (ohne Wert) | nur als Übersteuerung, normalerweise leer |
 | Environment Variable App-ID | ✔ (ohne Wert) | optional, damit der Link in der richtigen App öffnet |
-| Verifizierter Absender beim Mail-Dienst | | ✔ |
+| Serverseitige Synchronisierung, freigegebenes Postfach | | ✔ |
 
-Der API-Key des Mail-Dienstes lebt **ausschließlich in der Verbindung**. Nicht im Flow, nicht in
-einer Environment Variable, nicht in der Lösung — sonst stünde er im Export und damit in jeder
-Kopie der Lösung.
+**Ein externer Dienst ist nicht dabei.** Kein API-Schlüssel, keine Verbindung zu einem Dritten,
+keine Domain außerhalb Ihrer Umgebung. Auch die beiden Code-Components deklarieren
+`<external-service-usage enabled="false" />` und sprechen ausschließlich mit der
+Dataverse-Web-API ihrer eigenen Umgebung.
 
 ## Was in den Einstellungen der Komponente steht
 
@@ -70,13 +79,12 @@ unten), und Zeilen, die niemand abholt, sollen nicht ungefragt entstehen.
 
 ## Weg A — den mitgelieferten Flow verwenden
 
-1. Lösung importieren. Der Import fragt nach den beiden Verbindungen; wo noch keine existiert,
-   legt man sie im Dialog an.
-2. **Environment Variables** setzen: Absenderadresse (Pflicht, ohne Vorgabe) und Absendername.
-   Die Adresse muss beim Mail-Dienst als *Verified Sender* eingetragen sein, sonst weist er den
-   Versand mit 403 ab — der häufigste Fehler beim ersten Lauf, und er sieht aus wie ein
-   Verbindungsproblem. Die Umgebungsadresse muss **nicht** eingetragen werden, die App-ID nur,
-   wenn der Link in einer bestimmten App öffnen soll — siehe
+1. Lösung importieren. Der Import fragt nach **einer** Verbindung — Dataverse. Das ist kein
+   Zugriff von außen: der Dialog belegt den Platzhalter, den die Lösung mitbringt, mit einer
+   Verbindung in Ihrer Umgebung.
+2. **Environment Variables** sind alle drei optional. Absender leer lassen heißt: die Mail kommt
+   von der Person, die erwähnt hat. Die Umgebungsadresse muss **nicht** eingetragen werden, die
+   App-ID nur, wenn der Link in einer bestimmten App öffnen soll — siehe
    [Der Link auf den Datensatz](#der-link-auf-den-datensatz).
 3. Flow **einschalten**. Ein importierter Flow ist zunächst aus.
 4. Test: eine Zeile in `ayonto_mention` von Hand anlegen, `ayonto_useremail` auf die eigene
@@ -119,14 +127,26 @@ Wer mehr als einen Kanal bedient, setzt davor einen **Schalter** auf
 und legt Scope und Rückschreibung in den jeweiligen Fall. Der `if(empty(…))` sorgt dafür, dass
 eine von Hand angelegte Zeile ohne Kanal weiterhin als E-Mail behandelt wird.
 
+In den Scope kommen zwei Dataverse-Aktionen:
+
+**Zeile hinzufügen** auf Tabelle *E-Mails* (`emails`):
+
 | Feld | Wert |
 |---|---|
-| Von | Environment Variable Absenderadresse |
-| Von-Name | Environment Variable Absendername |
-| An | `ayonto_useremail` aus dem Trigger |
-| Betreff | siehe unten |
-| Text | siehe unten |
-| Ist HTML | Ja |
+| Betreff | `@{coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')}` |
+| Beschreibung | der HTML-Ausdruck weiter unten |
+| `email_activity_parties` | Absender und Empfänger, siehe [Ausdrücke](#ausdrücke-zum-kopieren) |
+
+**Eine gebundene Aktion ausführen** danach: Tabelle *E-Mails*, Zeilen-ID
+`@{outputs('E_Mail_anlegen')?['body/activityid']}`, Aktionsname `SendEmail`, Parameter
+`IssueSend` = `true`.
+
+Empfänger und Absender sind hier **Benutzer-IDs**, keine Mailadressen: eine Aktivitätspartei
+verweist auf einen Systembenutzer. Die Zeile trägt beides — `ayonto_userid` für diesen Weg,
+`ayonto_useremail` für einen Connector.
+
+Für einen externen Versanddienst statt dieser beiden Aktionen siehe
+[external-mail-provider.md](external-mail-provider.md).
 
 ### 4. Statusrückschreibung
 
@@ -158,14 +178,19 @@ Wie in Weg A, Schritt 3 und 4.
 
 ## Was der Flow bewusst offen lässt
 
-Der mitgelieferte Flow übernimmt den Großteil: Trigger, Entdopplung über den Kanal,
-Umgebungsadresse, Datensatzlink, Versand per Mail, Statusrückschreibung. **Nicht** übernimmt er
-den zweiten Kanal — und das ist Absicht:
+Der mitgelieferte Flow übernimmt den Großteil: Trigger, Kanalschalter, Umgebungsadresse,
+Datensatzlink, Versand über Dataverse, Statusrückschreibung. Zwei Dinge übernimmt er bewusst
+nicht.
 
-* Eine Aktion für einen Connector, den die Zielumgebung nicht lizenziert oder freigegeben hat,
-  blockiert den Import der ganzen Lösung.
-* Wie eine Chat-Nachricht in einer Organisation aussieht, ist eine Hausentscheidung. Ein
-  mitgelieferter Zweig wäre eine Vorgabe, die man erst wieder loswerden muss.
+**Den zweiten Kanal.** Eine Aktion für einen Connector, den die Zielumgebung nicht lizenziert oder
+freigegeben hat, blockiert den Import der ganzen Lösung — und wie eine Chat-Nachricht in einer
+Organisation aussieht, ist eine Hausentscheidung. Ein mitgelieferter Zweig wäre eine Vorgabe, die
+man erst wieder loswerden muss.
+
+**Den Versand über einen externen Dienst.** Aus demselben Grund, und weil damit ein API-Schlüssel
+ins Spiel käme. Wo der Dataverse-Versand nicht in Frage kommt, steht der Umbau in
+[external-mail-provider.md](external-mail-provider.md) — deutsch und englisch, ohne einen
+bestimmten Anbieter zu nennen.
 
 ### Den Teams-Zweig ergänzen
 
@@ -322,23 +347,59 @@ Eintragen der Umgebungsadresse in jeder Umgebung.
 Die beiden `if(empty(…))` sind der Grund, warum die Mail auch dann lesbar bleibt, wenn weder
 Spalte noch Environment Variable einen Link hergeben: statt eines toten Links fehlt der Absatz.
 
+**Absender und Empfänger als Aktivitätsparteien**
+
+```json
+[
+  { "partyid_systemuser@odata.bind": "/systemusers(<Absender>)",  "participationtypemask": 1 },
+  { "partyid_systemuser@odata.bind": "/systemusers(<Empfänger>)", "participationtypemask": 2 }
+]
+```
+
+`1` ist der Absender, `2` der Empfänger im An-Feld — so führt es die
+[ActivityParty-Dokumentation](https://learn.microsoft.com/power-apps/developer/data-platform/activityparty-entity).
+Im Flow stehen dort Ausdrücke:
+
+```
+@concat('/systemusers(', outputs('Absender_bestimmen'), ')')
+@concat('/systemusers(', triggerOutputs()?['body/ayonto_userid'], ')')
+```
+
+**Absender bestimmen** (Compose)
+
+```
+@if(empty(parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)')),
+    triggerOutputs()?['body/ayonto_mentionedbyid'],
+    parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)'))
+```
+
+Leer gelassen kommt die Mail also von der Person, die erwähnt hat. Deren Postfach muss dafür
+freigegeben und für den Versand aktiviert sein — sonst entsteht ein Entwurf und `SendEmail`
+schlägt fehl. Wo das nicht für alle gilt, trägt man eine Warteschlange oder ein Dienstkonto in die
+Environment Variable ein.
+
 **Fehlertext für `ayonto_deliverydetail`**
+
+Im Scope stehen zwei Aktionen, also muss die fehlgeschlagene herausgesucht werden statt geraten.
+Dafür im Fehlerzweig **vor** der Rückschreibung eine Aktion *Array filtern*: Von
+`@result('Versand')`, Bedingung `@item()?['status']` **ist nicht gleich** `Succeeded`. Dann liest
+der Detailtext:
 
 ```
 @substring(
-  string(first(result('Versand'))?['error']), 0,
-  min(480, length(string(first(result('Versand'))?['error'])))
+  string(first(body('Fehler_ermitteln'))?['error']), 0,
+  min(480, length(string(first(body('Fehler_ermitteln'))?['error'])))
 )
 ```
 
+Ohne diesen Filter griffe `first(result('Versand'))` womöglich die erfolgreiche Aktion heraus,
+deren `error` leer ist — und in der Zeile stünde `Failed` ohne Grund.
+
 Zwei Details daran sind nicht kosmetisch. Nur `?['error']`, nie das ganze `result()` — das enthält
-auch die *Inputs* der Aktion, also Empfängeradresse und Nachrichtentext, die dann in einer Spalte
+auch die *Inputs* der Aktion, also Empfänger und Nachrichtentext, die dann in einer Spalte
 stünden, die jeder Leseberechtigte sieht. Und der Schnitt auf 480 Zeichen, weil die Spalte 500
 fasst: ein zu langes Update schlägt fehl, und dann bleibt die Zeile auf `New` stehen, als wäre nie
 etwas passiert.
-
-Der Ausdruck gilt für einen Scope mit **einer** Aktion. Stehen mehrere Aktionen parallel darin,
-siehe den nächsten Abschnitt.
 
 ## Spalten der Tabelle
 
@@ -372,7 +433,8 @@ sich im Designer nicht zeigt und erst zur Laufzeit auffällt.
 | Flow läuft nicht an | Änderungstyp oder Zeilenfilter passen nicht; Flow ist aus |
 | Flow grün, keine Mail | Spaltenname falsch geschrieben — Dataverse liefert `null` statt eines Fehlers |
 | Betreff immer der Ersatztext | `trigger()` statt `triggerOutputs()` |
-| Mail-Dienst lehnt mit 403 ab | Absenderadresse ist kein verifizierter Absender |
+| `SendEmail` schlägt fehl, E-Mail bleibt Entwurf | Postfach des Absenders ist nicht freigegeben oder nicht für den Versand aktiviert |
+| Anlegen der E-Mail schlägt fehl | `ayonto_userid` oder der Absender ist leer — eine Aktivitätspartei braucht eine Benutzer-ID |
 | Zeile bleibt auf `New` | Rückschreibung fehlt, oder der Detailtext war länger als die Spalte |
 | kein Link in der Mail | `ayonto_recordtable` oder `ayonto_recordid` ist leer — die Komponente kennt den Datensatz nicht |
 | Link öffnet die falsche App | App-ID fehlt — Dataverse nimmt dann die Standard-App |

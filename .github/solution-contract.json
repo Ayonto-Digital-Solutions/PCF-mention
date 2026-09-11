@@ -54,13 +54,11 @@
     }
   ],
   "connectionReferences": [
-    "ayonto_sharedcommondataserviceforapps_mention",
-    "ayonto_sharedsendgrid_mention"
+    "ayonto_sharedcommondataserviceforapps_mention"
   ],
   "environmentVariables": [
-    "ayonto_MentionSenderAddress",
-    "ayonto_MentionSenderName",
     "ayonto_MentionEnvironmentUrl",
-    "ayonto_MentionAppId"
+    "ayonto_MentionAppId",
+    "ayonto_MentionSenderUser"
   ]
 }
