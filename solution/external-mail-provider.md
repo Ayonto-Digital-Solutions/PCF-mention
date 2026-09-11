@@ -2,8 +2,8 @@
 
 **[Deutsch](#deutsch)** · **[English](#english)**
 
-Der mitgelieferte Flow versendet über Dataverse selbst. Dieses Dokument beschreibt, wie man
-stattdessen einen externen E-Mail-Dienst anbindet — ohne einen bestimmten Anbieter zu nennen, weil
+Der in [README.md](README.md) beschriebene Flow versendet über Dataverse selbst. Dieses Dokument
+beschreibt, wie man stattdessen einen externen E-Mail-Dienst anbindet — ohne einen bestimmten Anbieter zu nennen, weil
 das Vorgehen bei allen gleich ist.
 
 ---

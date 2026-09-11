@@ -22,27 +22,6 @@
         "$connections": {
           "defaultValue": {},
           "type": "Object"
-        },
-        "Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)": {
-          "defaultValue": "",
-          "type": "String",
-          "metadata": {
-            "schemaName": "ayonto_MentionEnvironmentUrl"
-          }
-        },
-        "Ayonto Mention App Id (ayonto_MentionAppId)": {
-          "defaultValue": "",
-          "type": "String",
-          "metadata": {
-            "schemaName": "ayonto_MentionAppId"
-          }
-        },
-        "Ayonto Mention Sender User (ayonto_MentionSenderUser)": {
-          "defaultValue": "",
-          "type": "String",
-          "metadata": {
-            "schemaName": "ayonto_MentionSenderUser"
-          }
         }
       },
       "triggers": {
@@ -78,7 +57,7 @@
           "metadata": {
             "operationMetadataId": "5a5ec291-7193-4fd4-c25c-0ebf6a7b8c95"
           },
-          "inputs": "@if(empty(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), concat('https://', uriHost(outputs('Datensatz_lesen')?['body/@odata.id'])), if(endsWith(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), '/'), substring(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), 0, sub(length(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), 1)), parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')))"
+          "inputs": "@concat('https://', uriHost(outputs('Datensatz_lesen')?['body/@odata.id']))"
         },
         "Datensatzlink": {
           "type": "Compose",
@@ -90,7 +69,7 @@
           "metadata": {
             "operationMetadataId": "6b6fd3a2-82a4-40e5-d36d-1fa07b8c9da6"
           },
-          "inputs": "@if(not(empty(triggerOutputs()?['body/ayonto_recordurl'])), triggerOutputs()?['body/ayonto_recordurl'], if(or(empty(outputs('Umgebungsadresse')), or(empty(triggerOutputs()?['body/ayonto_recordtable']), empty(triggerOutputs()?['body/ayonto_recordid']))), '', concat(outputs('Umgebungsadresse'), '/main.aspx?', if(empty(parameters('Ayonto Mention App Id (ayonto_MentionAppId)')), '', concat('appid=', parameters('Ayonto Mention App Id (ayonto_MentionAppId)'), '&')), 'pagetype=entityrecord&etn=', triggerOutputs()?['body/ayonto_recordtable'], '&id=', triggerOutputs()?['body/ayonto_recordid'])))"
+          "inputs": "@if(not(empty(triggerOutputs()?['body/ayonto_recordurl'])), triggerOutputs()?['body/ayonto_recordurl'], if(or(empty(outputs('Umgebungsadresse')), or(empty(triggerOutputs()?['body/ayonto_recordtable']), empty(triggerOutputs()?['body/ayonto_recordid']))), '', concat(outputs('Umgebungsadresse'), '/main.aspx?pagetype=entityrecord&etn=', triggerOutputs()?['body/ayonto_recordtable'], '&id=', triggerOutputs()?['body/ayonto_recordid'])))"
         },
         "Datensatz_lesen": {
           "type": "OpenApiConnection",
@@ -139,7 +118,7 @@
                       "metadata": {
                         "operationMetadataId": "a1a0b6e6-c6e8-4429-b7ab-5de3a0cb1eba"
                       },
-                      "inputs": "@if(empty(parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)')), triggerOutputs()?['body/ayonto_mentionedbyid'], parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)'))"
+                      "inputs": "@triggerOutputs()?['body/ayonto_mentionedbyid']"
                     },
                     "E_Mail_anlegen": {
                       "type": "OpenApiConnection",

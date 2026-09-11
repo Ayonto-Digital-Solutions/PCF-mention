@@ -153,6 +153,14 @@ jobs:
           fi
           cp "${managed}"   "dist/AyontoPcfControls_${version}_managed.zip"
           cp "${unmanaged}" "dist/AyontoPcfControls_${version}.zip"
+
+          # The flow is not in the package — it is built from these documents, so they belong
+          # with the download rather than only in the repository.
+          pip install --quiet markdown
+          python3 .github/scripts/build-docs-pdf.py \
+            "dist/Ayonto-Mention-Benachrichtigung_${version}.pdf" \
+            solution/README.md solution/external-mail-provider.md
+
           ls -l dist
 
       - uses: actions/upload-artifact@v4
