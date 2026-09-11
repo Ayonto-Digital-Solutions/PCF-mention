@@ -12,6 +12,7 @@ Usage: build-docs-pdf.py <out.pdf> <doc.md> [<doc.md> ...]
 """
 
 import html
+import re
 import shutil
 import subprocess
 import sys
@@ -37,9 +38,20 @@ table { border-collapse: collapse; width: 100%; margin: .8em 0; page-break-insid
 th, td { border: 1px solid #ccc; padding: .35em .55em; text-align: left; vertical-align: top; }
 th { background: #f0f0f0; }
 a { color: #1a4f8a; text-decoration: none; }
+.was-link { font-family: "DejaVu Sans Mono", ui-monospace, monospace; font-size: 9.4pt; }
 hr { border: 0; border-top: 1px solid #ccc; margin: 1.6em 0; }
 .doc + .doc { page-break-before: always; }
 """
+
+
+# A link to a neighbouring file resolves against wherever the HTML sat while it was printed,
+# which is a temporary directory on a build machine. Inside the PDF that target exists nowhere,
+# and it carries a build path along for no reason. The file name stays, as text.
+LOCAL_LINK = re.compile(r'<a href="(?!https?:|#|mailto:)[^"]*">(.*?)</a>', re.S)
+
+
+def flatten_local_links(body: str) -> str:
+    return LOCAL_LINK.sub(r"<span class=\"was-link\">\1</span>", body)
 
 
 def chrome() -> str:
@@ -66,7 +78,7 @@ def main() -> None:
             source.read_text(encoding="utf-8"),
             extensions=["tables", "fenced_code", "toc", "sane_lists"],
         )
-        parts.append(f'<section class="doc">{body}</section>')
+        parts.append(f'<section class="doc">{flatten_local_links(body)}</section>')
 
     page = (
         "<!doctype html><html lang='de'><head><meta charset='utf-8'>"
