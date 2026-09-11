@@ -54,7 +54,24 @@ OWN_PREFIXES = frozenset(
 )
 LOGICAL_NAME = re.compile(r"[\"']([a-z][a-z0-9]{1,7})_([a-z][a-z0-9_]*)[\"']")
 # Only where Dataverse logical names actually live. Elsewhere an underscore is just an underscore.
-NAMED_PLACES = ("solution/", "Mention/", "GroupDetailList/", ".github/solution-contract.json")
+NAMED_PLACES = ("solution/", "Mention/", "GroupDetailList/", ".github/solution-contract.json", "README.md")
+
+# A link into a host nobody outside one organisation can reach names that organisation — a logo
+# on an intranet, a portal, an internal wiki. Documentation written from a real setup carries
+# those without anyone noticing. Only the hosts this project genuinely refers to are allowed; a
+# placeholder host such as contoso.crm4.dynamics.com is already covered by NEUTRAL above.
+LINKED_HOST = re.compile(r"https?://([A-Za-z0-9._-]+)")
+OWN_HOSTS = frozenset(
+    {
+        "learn.microsoft.com",
+        "schemas.microsoft.com",
+        "schema.management.azure.com",
+        "github.com",
+        "help.github.com",
+        "raw.githubusercontent.com",
+        "www.w3.org",
+    }
+)
 
 
 def tracked_files() -> list[Path]:
@@ -85,6 +102,16 @@ def main() -> None:
 
             if not str(path).startswith(NAMED_PLACES):
                 continue
+
+            for hit in LINKED_HOST.finditer(line):
+                host = hit.group(1)
+                if host in OWN_HOSTS or NEUTRAL.search(host) or "." not in host:
+                    continue
+                findings.append(
+                    f"{path}:{number} links to '{host}' — a host that is not this project's "
+                    "does not belong in documentation other people read"
+                )
+
             for hit in LOGICAL_NAME.finditer(line):
                 name = hit.group(0)
                 # A system relationship carries the table it belongs to further along its name,

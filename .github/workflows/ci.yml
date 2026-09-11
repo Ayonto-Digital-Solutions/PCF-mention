@@ -77,9 +77,12 @@ jobs:
           url="https://someorg.c""rm4.dynamics.com"
           secret="api""_key: \"abcdef0123456789abcdef\""
           prefix="\"z""z_mention\""
+          # A link into a host nobody outside one organisation can reach — a logo on an intranet,
+          # a portal — is how a real setup leaks into documentation written from it.
+          host="https://www.beispiel""konzern.example.invalid/logo.png"
           # Written under Mention/, because a publisher prefix is only looked for where Dataverse
           # logical names live — at the repository root an underscore is just an underscore.
-          for leak in "$key" "$url" "$secret" "$prefix"; do
+          for leak in "$key" "$url" "$secret" "$prefix" "$host"; do
             printf '%s\n' "$leak" > Mention/zz-leak-probe.md
             git add Mention/zz-leak-probe.md
             if python3 .github/scripts/check-no-secrets.py; then
@@ -130,7 +133,7 @@ jobs:
               "typo": (flow, "body/ayonto_userid", "body/ayonto_usrid"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
               "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
-              "outputs": (flow, '"Datensatzlink": {', '"Datensatzlink_": {'),
+              "outputs": (flow, '"Record_Link": {', '"Record_Link_": {'),
           }
           for name, (where, before, after) in cases.items():
               target = Path(f"/tmp/mutant-{name}")
