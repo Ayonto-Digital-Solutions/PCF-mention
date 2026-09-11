@@ -20,6 +20,7 @@ function makeWebApi(recorded: Recorded[] = [], entities: Record<string, unknown>
 }
 
 const REQUEST = {
+	channel: "Email" as const,
 	recipient: { id: "11111111-1111-1111-1111-111111111111", name: "Anna Berger", email: "anna@contoso.com" },
 	senderUserId: "{22222222-2222-2222-2222-222222222222}",
 	subject: "Sie wurden erwähnt",
@@ -28,6 +29,7 @@ const REQUEST = {
 	entityName: "Account",
 	entityId: "33333333-3333-3333-3333-333333333333",
 	recordName: "Contoso AG",
+	linkText: "Datensatz öffnen",
 };
 
 describe("MentionLogService", () => {
@@ -38,6 +40,8 @@ describe("MentionLogService", () => {
 		expect(recorded).toHaveLength(1);
 		expect(recorded[0].table).toBe("ayonto_mention");
 		expect(recorded[0].row).toEqual({
+			ayonto_channel: "Email",
+			ayonto_linktext: "Datensatz öffnen",
 			ayonto_name: "@Anna Berger · Contoso AG",
 			ayonto_userid: "11111111-1111-1111-1111-111111111111",
 			ayonto_username: "Anna Berger",
@@ -64,6 +68,7 @@ describe("MentionLogService", () => {
 	it("leaves out what it does not have, rather than writing empty columns", async () => {
 		const recorded: Recorded[] = [];
 		await new MentionLogService(makeWebApi(recorded)).write({
+			channel: "Email",
 			recipient: { id: REQUEST.recipient.id, name: "Anna Berger" },
 			senderUserId: "",
 			subject: "Erwähnt",
@@ -73,6 +78,7 @@ describe("MentionLogService", () => {
 		expect(recorded[0].row).not.toHaveProperty("ayonto_useremail");
 		expect(recorded[0].row).not.toHaveProperty("ayonto_recordtable");
 		expect(recorded[0].row).not.toHaveProperty("ayonto_mentionedbyid");
+		expect(recorded[0].row).not.toHaveProperty("ayonto_linktext");
 		expect(recorded[0].row.ayonto_name).toBe("@Anna Berger");
 	});
 

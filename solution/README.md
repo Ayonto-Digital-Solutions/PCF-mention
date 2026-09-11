@@ -13,24 +13,30 @@ kopieren kann.
 
 ```
 Mention-Component
-  └─ legt eine Zeile je erwähnter Person in ayonto_mention an   (ayonto_deliverystatus = New)
+  └─ legt je erwähnter Person und je eingeschaltetem Kanal eine Zeile an   (Status = New)
        └─ Flow löst auf neue Zeilen aus
             ├─ Zeile lesen, Umgebungsadresse und Datensatzlink ermitteln
-            ├─ Versand (Scope)
-            │    └─ E-Mail über den Mail-Connector
-            ├─ erfolgreich   → ayonto_deliverystatus = Sent
-            └─ fehlgeschlagen → ayonto_deliverystatus = Failed, ayonto_deliverydetail = Grund
+            └─ Schalter auf ayonto_channel
+                 ├─ Email → Versand (Scope) → Mail-Connector
+                 │            ├─ erfolgreich    → Status = Sent
+                 │            └─ fehlgeschlagen → Status = Failed + Grund
+                 └─ sonst  → Status = Failed, „kein Zweig für diesen Kanal"
 ```
 
 Die Zeile ist das Bindeglied. Das Component kennt keinen Versandweg und keinen Connector; es
-schreibt, wer was in welchem Datensatz erwähnt hat, und der Flow entscheidet, was daraus wird.
+schreibt, wer was in welchem Datensatz erwähnt hat und über welchen Kanal es hinaus soll, und der
+Flow entscheidet, was daraus wird.
+
+**Eine Zeile je Kanal.** Wer per Mail *und* per Chat benachrichtigt wird, bekommt zwei Zeilen.
+Das ist kein Umweg, sondern der Grund, warum `ayonto_deliverystatus` etwas aussagt: eine Spalte
+kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 
 ## Was mitgeliefert wird und was die Umgebung stellt
 
 | | mitgeliefert | von der Administration zu stellen |
 |---|---|---|
 | Tabelle `ayonto_mention` samt Ansicht | ✔ | |
-| Flow *Ayonto – Send Mention Notification* | ✔ | einschalten |
+| Flow *Ayonto – Send Mention Notification* | ✔ (E-Mail-Zweig) | einschalten; weitere Kanäle selbst ergänzen |
 | Connection Reference Dataverse | ✔ | Verbindung zuweisen |
 | Connection Reference Mail-Connector | ✔ | Verbindung zuweisen (API-Key) |
 | Environment Variable Absenderadresse | ✔ (ohne Wert) | Wert setzen |
@@ -42,6 +48,25 @@ schreibt, wer was in welchem Datensatz erwähnt hat, und der Flow entscheidet, w
 Der API-Key des Mail-Dienstes lebt **ausschließlich in der Verbindung**. Nicht im Flow, nicht in
 einer Environment Variable, nicht in der Lösung — sonst stünde er im Export und damit in jeder
 Kopie der Lösung.
+
+## Was in den Einstellungen der Komponente steht
+
+Jeder Kanal hat seinen eigenen Schalter und seine eigene Formulierung, weil eine Chat-Nachricht
+woanders gelesen wird als eine Mail und selten denselben Wortlaut will.
+
+| Einstellung | E-Mail | Teams |
+|---|---|---|
+| Ein / Aus | `sendEmail` | `sendTeams` |
+| Betreff | `emailSubject` | `teamsSubject` |
+| Text | `emailContent` | `teamsContent` |
+| Text für den Link | `emailLinkText` | `teamsLinkText` |
+
+Was ein Kanal nicht für sich sagt, übernimmt er von der E-Mail — denselben Text zweimal
+einzutragen ist der häufigere Fall. Bleibt auch dort etwas leer, greift die Vorgabe der
+Komponente. Der Link selbst wird immer dynamisch gebaut, in keiner Einstellung steht eine URL.
+
+`sendTeams` steht ab Werk auf **Nein**: der mitgelieferte Flow bedient den Kanal nicht (siehe
+unten), und Zeilen, die niemand abholt, sollen nicht ungefragt entstehen.
 
 ## Weg A — den mitgelieferten Flow verwenden
 
@@ -89,6 +114,11 @@ Läufe, weil er serverseitig filtert.
 Die Versandaktion in einen **Bereich (Scope)** namens `Versand` legen. Der Scope ist die
 Voraussetzung für Schritt 4: er bündelt Erfolg und Fehler an einer Stelle.
 
+Wer mehr als einen Kanal bedient, setzt davor einen **Schalter** auf
+`@if(empty(triggerOutputs()?['body/ayonto_channel']), 'Email', triggerOutputs()?['body/ayonto_channel'])`
+und legt Scope und Rückschreibung in den jeweiligen Fall. Der `if(empty(…))` sorgt dafür, dass
+eine von Hand angelegte Zeile ohne Kanal weiterhin als E-Mail behandelt wird.
+
 | Feld | Wert |
 |---|---|
 | Von | Environment Variable Absenderadresse |
@@ -125,6 +155,60 @@ niemand erfährt davon. Insbesondere:
 ### 6. Einschalten und testen
 
 Wie in Weg A, Schritt 3 und 4.
+
+## Was der Flow bewusst offen lässt
+
+Der mitgelieferte Flow übernimmt den Großteil: Trigger, Entdopplung über den Kanal,
+Umgebungsadresse, Datensatzlink, Versand per Mail, Statusrückschreibung. **Nicht** übernimmt er
+den zweiten Kanal — und das ist Absicht:
+
+* Eine Aktion für einen Connector, den die Zielumgebung nicht lizenziert oder freigegeben hat,
+  blockiert den Import der ganzen Lösung.
+* Wie eine Chat-Nachricht in einer Organisation aussieht, ist eine Hausentscheidung. Ein
+  mitgelieferter Zweig wäre eine Vorgabe, die man erst wieder loswerden muss.
+
+### Den Teams-Zweig ergänzen
+
+Im Schalter **Kanal** einen Fall `Teams` hinzufügen, mit demselben Aufbau wie der E-Mail-Fall:
+
+1. Ein **Bereich (Scope)**, zum Beispiel `Versand_Teams`, mit der Aktion *Nachricht in einem Chat
+   oder Kanal veröffentlichen*.
+   * Empfänger: `@{triggerOutputs()?['body/ayonto_useremail']}`
+   * Nachricht: siehe unten
+2. *Zeile aktualisieren* nach `Versand_Teams` → **erfolgreich**: `ayonto_deliverystatus` = `Sent`
+3. *Zeile aktualisieren* nach `Versand_Teams` → **fehlgeschlagen**, **Timeout**:
+   `ayonto_deliverystatus` = `Failed`, Detail wie beim E-Mail-Zweig, nur mit `result('Versand_Teams')`
+
+Der Scope braucht einen eigenen Namen, weil `result('…')` einen Bereich beim Namen nennt und zwei
+gleichnamige nicht unterscheidbar wären.
+
+Nachrichtentext:
+
+```
+<p><b>@{coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')}</b></p>
+<p>@{triggerOutputs()?['body/ayonto_message']}</p>
+@{if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
+     concat('<p><b>Datensatz:</b> ', triggerOutputs()?['body/ayonto_recordname'], '</p>'))}
+@{if(empty(outputs('Datensatzlink')), '',
+     concat('<p><a href="', outputs('Datensatzlink'), '">',
+            if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen',
+               triggerOutputs()?['body/ayonto_linktext']), '</a></p>'))}
+```
+
+Chat-Connectoren lösen eine Person über ihre Mailadresse auf: weicht die Dataverse-Adresse eines
+Benutzers von seinem Anmeldenamen ab, wird er nicht gefunden — die erste Stelle zum Nachsehen,
+wenn die Mail ankommt und die Nachricht nicht.
+
+Solange der Zweig fehlt, landen Teams-Zeilen im Standardfall des Schalters und werden als `Failed`
+mit dem Grund „kein Zweig für diesen Kanal" vermerkt. Sie verschwinden also nicht stillschweigend.
+
+### Managed oder unmanaged importieren
+
+Der Release baut beides. Wer den Flow anpassen will — und der Teams-Zweig ist genau das —,
+importiert die **unmanaged** Lösung: darin ist der Flow direkt bearbeitbar. Eine managed Lösung
+bekommt für jede Änderung eine unmanaged Ebene darüber, die bei jedem Update wieder gegen die
+neue Version geprüft werden will. Für eine Lösung, die ausdrücklich nur den Großteil vorgibt,
+ist das der umständlichere Weg.
 
 ## Der Link auf den Datensatz
 
@@ -229,7 +313,9 @@ Eintragen der Umgebungsadresse in jeder Umgebung.
   if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
      concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')),
   if(empty(outputs('Datensatzlink')), '',
-     concat('<p><a href="', outputs('Datensatzlink'), '">Datensatz öffnen</a></p>'))
+     concat('<p><a href="', outputs('Datensatzlink'), '">',
+            if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen',
+               triggerOutputs()?['body/ayonto_linktext']), '</a></p>'))
 )
 ```
 
@@ -254,51 +340,6 @@ etwas passiert.
 Der Ausdruck gilt für einen Scope mit **einer** Aktion. Stehen mehrere Aktionen parallel darin,
 siehe den nächsten Abschnitt.
 
-## Optional: ein zweiter Kanal neben der E-Mail
-
-Manche Organisationen wollen die Benachrichtigung zusätzlich als Chat-Nachricht. Der mitgelieferte
-Flow tut das bewusst nicht: eine Aktion für einen Connector, den die Zielumgebung nicht lizenziert
-oder freigegeben hat, blockiert den Import der ganzen Lösung. Wer den Kanal braucht, ergänzt ihn
-im eigenen Environment.
-
-Nachrichtentext dafür:
-
-```
-<p><b>Sie wurden erwähnt</b></p>
-<p>@{triggerOutputs()?['body/ayonto_message']}</p>
-@{if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
-     concat('<p><b>Datensatz:</b> ', triggerOutputs()?['body/ayonto_recordname'], '</p>'))}
-@{if(empty(outputs('Datensatzlink')), '',
-     concat('<p><a href="', outputs('Datensatzlink'), '">Datensatz öffnen</a></p>'))}
-```
-
-Als Empfänger dient `ayonto_useremail`. Chat-Connectoren lösen eine Person über ihre Mailadresse
-auf: weicht die Dataverse-Adresse eines Benutzers von seinem Anmeldenamen ab, wird er nicht
-gefunden — die erste Stelle zum Nachsehen, wenn die Mail ankommt und die Nachricht nicht.
-
-**Wo die Aktion steht, ist eine Entscheidung.** `ayonto_deliverystatus` hat einen Wert für die
-ganze Zeile, also muss feststehen, wofür er steht:
-
-*Empfohlen — neben dem Scope:* Die Chat-Aktion bekommt *Ausführen nach* = nichts, läuft also
-parallel direkt am Trigger. Im Scope `Versand` steht weiterhin nur die Mail. Der Status bedeutet
-dann genau eine Sache, und der Fehlerausdruck oben bleibt eindeutig. Ein Fehler im zweiten Kanal
-steht dafür nur in der Laufhistorie.
-
-*Wenn auch der zweite Kanal zählen soll:* beide Aktionen parallel **in** den Scope, und im
-Fehlerzweig vor dem Update eine Aktion *Array filtern* einsetzen — Von `@result('Versand')`,
-Bedingung `@item()?['status']` **ist nicht gleich** `Succeeded`. Der Detailtext liest dann:
-
-```
-@substring(
-  string(first(body('Array_filtern'))?['error']), 0,
-  min(480, length(string(first(body('Array_filtern'))?['error'])))
-)
-```
-
-Ohne diesen Filter wäre `first(result('Versand'))` bei zwei parallelen Aktionen ein Zufallstreffer
-— womöglich die erfolgreiche, deren `error` leer ist, und man stünde mit `Failed` und leerem
-Detail da.
-
 ## Spalten der Tabelle
 
 | Spalte | Typ | Länge | Inhalt |
@@ -313,8 +354,10 @@ Detail da.
 | `ayonto_recordid` | Text | 64 | ID des Datensatzes |
 | `ayonto_recordname` | Text | 400 | Anzeigename des Datensatzes |
 | `ayonto_recordurl` | Text | 500 | fertiger Deep-Link |
+| `ayonto_channel` | Text | 32 | **`Email` oder `Teams`** — welchen Weg diese Zeile meint |
 | `ayonto_subject` | Text | 200 | Betreff |
 | `ayonto_message` | Mehrzeilig | 2000 | Nachrichtentext |
+| `ayonto_linktext` | Text | 100 | Beschriftung des Links auf den Datensatz |
 | `ayonto_deliverystatus` | Text | 64 | `New`, `Sent`, `Failed` |
 | `ayonto_deliverydetail` | Text | 500 | Fehlertext des Flows |
 
@@ -334,6 +377,8 @@ sich im Designer nicht zeigt und erst zur Laufzeit auffällt.
 | kein Link in der Mail | `ayonto_recordtable` oder `ayonto_recordid` ist leer — die Komponente kennt den Datensatz nicht |
 | Link öffnet die falsche App | App-ID fehlt — Dataverse nimmt dann die Standard-App |
 | Flow läuft endlos | Trigger steht auf „Hinzugefügt oder Geändert" |
+| Status `Failed`, Detail „kein Zweig für diesen Kanal" | die Komponente schickt einen Kanal, für den der Schalter keinen Fall hat |
+| zwei Benachrichtigungen je Erwähnung | beide Kanäle sind eingeschaltet — je Kanal eine Zeile, so gewollt |
 
 Die ersten drei Zeilen dieser Tabelle prüft `check-solution.py` beim Bauen: es hält jede Spalte,
 die ein Flow liest, gegen die Spalten, die die Tabellen tatsächlich deklarieren, und weist

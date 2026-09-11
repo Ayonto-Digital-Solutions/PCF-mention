@@ -95,8 +95,17 @@ def check_flow(
     def collect(actions: dict) -> None:
         for action_name, action in actions.items():
             named.add(action_name)
-            if isinstance(action, dict) and isinstance(action.get("actions"), dict):
-                collect(action["actions"])
+            if not isinstance(action, dict):
+                continue
+            # A scope holds its actions directly; a condition holds them under else as well, and a
+            # switch under each case and under default. An action that lives only in a branch is
+            # still an action other expressions may name.
+            branches = [action.get("actions"), (action.get("else") or {}).get("actions")]
+            branches += [(case or {}).get("actions") for case in (action.get("cases") or {}).values()]
+            branches.append((action.get("default") or {}).get("actions"))
+            for branch in branches:
+                if isinstance(branch, dict):
+                    collect(branch)
 
     collect(definition.get("properties", {}).get("definition", {}).get("actions", {}))
     for referenced in sorted(set(re.findall(r"(?:outputs|result|body)\('([^']+)'\)", text))):

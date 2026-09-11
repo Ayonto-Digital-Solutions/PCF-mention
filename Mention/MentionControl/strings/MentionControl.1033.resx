@@ -240,4 +240,49 @@
   <data name="Notification_DefaultBody" xml:space="preserve">
     <value>You were mentioned on a record.</value>
   </data>
+  <data name="EmailLinkText_Name" xml:space="preserve">
+    <value>Link label (e-mail)</value>
+  </data>
+  <data name="EmailLinkText_Desc" xml:space="preserve">
+    <value>Text of the link to the record in the e-mail. Defaults to „Open record“.</value>
+  </data>
+  <data name="SendTeams_Name" xml:space="preserve">
+    <value>Send Teams message</value>
+  </data>
+  <data name="SendTeams_Desc" xml:space="preserve">
+    <value>Whether a mentioned user is also notified in a chat message.</value>
+  </data>
+  <data name="SendTeams_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="SendTeams_Yes_Desc" xml:space="preserve">
+    <value>Notify the mentioned user in a chat message.</value>
+  </data>
+  <data name="SendTeams_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="SendTeams_No_Desc" xml:space="preserve">
+    <value>Do not send a chat message.</value>
+  </data>
+  <data name="TeamsSubject_Name" xml:space="preserve">
+    <value>Subject (Teams)</value>
+  </data>
+  <data name="TeamsSubject_Desc" xml:space="preserve">
+    <value>Headline of the chat message. Falls back to the e-mail subject.</value>
+  </data>
+  <data name="TeamsContent_Name" xml:space="preserve">
+    <value>Message (Teams)</value>
+  </data>
+  <data name="TeamsContent_Desc" xml:space="preserve">
+    <value>Body of the chat message. Falls back to the e-mail message. The link to the record is appended.</value>
+  </data>
+  <data name="TeamsLinkText_Name" xml:space="preserve">
+    <value>Link label (Teams)</value>
+  </data>
+  <data name="TeamsLinkText_Desc" xml:space="preserve">
+    <value>Text of the link to the record in the chat message. Defaults to „Open record“.</value>
+  </data>
+  <data name="Default_LinkText" xml:space="preserve">
+    <value>Open record</value>
+  </data>
 </root>

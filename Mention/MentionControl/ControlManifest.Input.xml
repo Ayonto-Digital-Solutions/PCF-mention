@@ -78,6 +78,51 @@
               usage="input"
               required="false" />
 
+    <property name="emailLinkText"
+              display-name-key="EmailLinkText_Name"
+              description-key="EmailLinkText_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <!--
+      A second channel, off by default. Its own switch, subject, text and link label, because a
+      chat message is read in a different place than a mail and rarely wants the same wording.
+      The row carries which channel it is for, so one mention that goes out both ways writes two
+      rows and each reports its own delivery status.
+    -->
+    <property name="sendTeams"
+              display-name-key="SendTeams_Name"
+              description-key="SendTeams_Desc"
+              of-type="Enum"
+              usage="input"
+              required="false"
+              default-value="1">
+      <value name="Yes" display-name-key="SendTeams_Yes" description-key="SendTeams_Yes_Desc">0</value>
+      <value name="No" display-name-key="SendTeams_No" description-key="SendTeams_No_Desc">1</value>
+    </property>
+
+    <property name="teamsSubject"
+              display-name-key="TeamsSubject_Name"
+              description-key="TeamsSubject_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="teamsContent"
+              display-name-key="TeamsContent_Name"
+              description-key="TeamsContent_Desc"
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="teamsLinkText"
+              display-name-key="TeamsLinkText_Name"
+              description-key="TeamsLinkText_Desc"
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <!--
       Base URL of the environment, used to build the deep link to the record inside the
       notification e-mail. Accessing the browser Window object from a code component is not

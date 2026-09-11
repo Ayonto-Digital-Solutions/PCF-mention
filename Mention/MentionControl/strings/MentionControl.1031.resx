@@ -240,4 +240,49 @@
   <data name="Notification_DefaultBody" xml:space="preserve">
     <value>Sie wurden in einem Datensatz erwähnt.</value>
   </data>
+  <data name="EmailLinkText_Name" xml:space="preserve">
+    <value>Linktext (E-Mail)</value>
+  </data>
+  <data name="EmailLinkText_Desc" xml:space="preserve">
+    <value>Text des Links auf den Datensatz in der E-Mail. Standard ist „Datensatz öffnen“.</value>
+  </data>
+  <data name="SendTeams_Name" xml:space="preserve">
+    <value>Teams-Nachricht senden</value>
+  </data>
+  <data name="SendTeams_Desc" xml:space="preserve">
+    <value>Legt fest, ob eine erwähnte Person zusätzlich per Chat-Nachricht benachrichtigt wird.</value>
+  </data>
+  <data name="SendTeams_Yes" xml:space="preserve">
+    <value>Ja</value>
+  </data>
+  <data name="SendTeams_Yes_Desc" xml:space="preserve">
+    <value>Erwähnte Person per Chat-Nachricht benachrichtigen.</value>
+  </data>
+  <data name="SendTeams_No" xml:space="preserve">
+    <value>Nein</value>
+  </data>
+  <data name="SendTeams_No_Desc" xml:space="preserve">
+    <value>Keine Chat-Nachricht senden.</value>
+  </data>
+  <data name="TeamsSubject_Name" xml:space="preserve">
+    <value>Betreff (Teams)</value>
+  </data>
+  <data name="TeamsSubject_Desc" xml:space="preserve">
+    <value>Überschrift der Chat-Nachricht. Ersatzweise gilt der E-Mail-Betreff.</value>
+  </data>
+  <data name="TeamsContent_Name" xml:space="preserve">
+    <value>Nachricht (Teams)</value>
+  </data>
+  <data name="TeamsContent_Desc" xml:space="preserve">
+    <value>Text der Chat-Nachricht. Ersatzweise gilt der E-Mail-Text. Der Link auf den Datensatz wird angehängt.</value>
+  </data>
+  <data name="TeamsLinkText_Name" xml:space="preserve">
+    <value>Linktext (Teams)</value>
+  </data>
+  <data name="TeamsLinkText_Desc" xml:space="preserve">
+    <value>Text des Links auf den Datensatz in der Chat-Nachricht. Standard ist „Datensatz öffnen“.</value>
+  </data>
+  <data name="Default_LinkText" xml:space="preserve">
+    <value>Datensatz öffnen</value>
+  </data>
 </root>
