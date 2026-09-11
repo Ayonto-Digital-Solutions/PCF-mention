@@ -113,11 +113,11 @@ Der Flow löst auf **neue** Zeilen mit `ayonto_deliverystatus = New` aus, versch
 und schreibt `Sent` oder `Failed` in dieselbe Zeile zurück. Dass er nur auf neue Zeilen hört, ist
 die Bedingung dafür: die Rückschreibung ändert die Zeile, die ihn ausgelöst hat.
 
-Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde. Er stammt aus
-`ayonto_recordurl`, das die Komponente schreibt; ist die Spalte leer — weil auf der Komponente
-keine Umgebungs-URL konfiguriert wurde —, baut der Flow den Link aus Umgebungs-URL, Tabelle und
-Zeilen-ID selbst. Liefert keine der beiden Quellen etwas, entfällt der Absatz, statt einen toten
-Link zu zeigen.
+Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde, und dafür ist
+nichts einzutragen: der Flow liest die ausgelöste Zeile zurück und nimmt die Umgebungsadresse aus
+deren `@odata.id`. Den Link selbst nimmt er aus `ayonto_recordurl`, wenn die Komponente einen
+geschrieben hat, und baut ihn sonst aus Tabelle und Zeilen-ID. Kennt auch die Zeile keinen
+Datensatz, entfällt der Absatz, statt einen toten Link zu zeigen.
 
 Der API-Key steht ausschließlich in der SendGrid-Verbindung — nicht im Flow, nicht in einer
 Environment Variable, nicht in der Lösung, und damit auch in keiner Kopie davon. Eine
