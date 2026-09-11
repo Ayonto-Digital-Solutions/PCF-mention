@@ -113,7 +113,8 @@ dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-Link.
    Text, dem Datensatz und einem fertigen Link darauf.
 3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
-   auf `Sent` oder `Failed` zurück.
+   auf `Sent` oder `Failed` zurück. Ein solcher Flow kommt mit der Lösung; einrichten, umbauen und
+   alle Ausdrücke zum Kopieren stehen in [solution/README.md](../solution/README.md).
 
 Benachrichtigt wird die Person, die in der Vorschlagsliste gewählt wurde — nicht der Name, der
 dabei in den Text geschrieben wird. Das Component merkt sich zu jeder eingefügten Erwähnung deren

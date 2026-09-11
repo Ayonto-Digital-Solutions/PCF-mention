@@ -1,0 +1,123 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_commondataserviceforapps": {
+        "api": { "name": "shared_commondataserviceforapps" },
+        "connection": { "connectionReferenceLogicalName": "ayonto_sharedcommondataserviceforapps_mention" },
+        "runtimeSource": "embedded"
+      },
+      "shared_sendgrid": {
+        "api": { "name": "shared_sendgrid" },
+        "connection": { "connectionReferenceLogicalName": "ayonto_sharedsendgrid_mention" },
+        "runtimeSource": "embedded"
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": { "defaultValue": {}, "type": "SecureObject" },
+        "$connections": { "defaultValue": {}, "type": "Object" },
+        "Ayonto Mention Sender Address (ayonto_MentionSenderAddress)": {
+          "defaultValue": "",
+          "type": "String",
+          "metadata": { "schemaName": "ayonto_MentionSenderAddress" }
+        },
+        "Ayonto Mention Sender Name (ayonto_MentionSenderName)": {
+          "defaultValue": "",
+          "type": "String",
+          "metadata": { "schemaName": "ayonto_MentionSenderName" }
+        }
+      },
+      "triggers": {
+        "Wenn_eine_Erwaehnung_angelegt_wird": {
+          "type": "OpenApiConnectionWebhook",
+          "metadata": { "operationMetadataId": "0b0f9f6c-2c4e-4a8f-9d07-5f6a1b2c3d40" },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "SubscribeWebhookTrigger"
+            },
+            "parameters": {
+              "subscriptionRequest/message": 1,
+              "subscriptionRequest/entityname": "ayonto_mention",
+              "subscriptionRequest/scope": 4,
+              "subscriptionRequest/filterexpression": "ayonto_deliverystatus eq 'New'"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Versand": {
+          "type": "Scope",
+          "runAfter": {},
+          "metadata": { "operationMetadataId": "1c1a8e5d-3d5f-4b90-8e18-6a7b2c3d4e51" },
+          "actions": {
+            "E_Mail_senden_V4": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "metadata": { "operationMetadataId": "2d2b9f6e-4e60-4ca1-9f29-7b8c3d4e5f62" },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sendgrid",
+                  "connectionName": "shared_sendgrid",
+                  "operationId": "SendEmailV4"
+                },
+                "parameters": {
+                  "request/from": "@parameters('Ayonto Mention Sender Address (ayonto_MentionSenderAddress)')",
+                  "request/fromname": "@parameters('Ayonto Mention Sender Name (ayonto_MentionSenderName)')",
+                  "request/to": "@triggerOutputs()?['body/ayonto_useremail']",
+                  "request/subject": "@coalesce(triggerOutputs()?['body/ayonto_subject'], 'Sie wurden erwähnt')",
+                  "request/text": "@concat('<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>', if(empty(triggerOutputs()?['body/ayonto_recordname']), '', concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')), if(empty(triggerOutputs()?['body/ayonto_recordurl']), '', concat('<p><a href=\"', triggerOutputs()?['body/ayonto_recordurl'], '\">Datensatz öffnen</a></p>')))",
+                  "request/ishtml": true
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          }
+        },
+        "Als_gesendet_vermerken": {
+          "type": "OpenApiConnection",
+          "runAfter": { "Versand": ["Succeeded"] },
+          "metadata": { "operationMetadataId": "3e3ca07f-5f71-4db2-a03a-8c9d4e5f6a73" },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "UpdateOnlyRecord"
+            },
+            "parameters": {
+              "entityName": "ayonto_mentions",
+              "recordId": "@triggerOutputs()?['body/ayonto_mentionid']",
+              "item/ayonto_deliverystatus": "Sent"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Als_fehlgeschlagen_vermerken": {
+          "type": "OpenApiConnection",
+          "runAfter": { "Versand": ["Failed", "TimedOut"] },
+          "metadata": { "operationMetadataId": "4f4db180-6082-4ec3-b14b-9dae5f6a7b84" },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "UpdateOnlyRecord"
+            },
+            "parameters": {
+              "entityName": "ayonto_mentions",
+              "recordId": "@triggerOutputs()?['body/ayonto_mentionid']",
+              "item/ayonto_deliverystatus": "Failed",
+              "item/ayonto_deliverydetail": "@substring(string(first(result('Versand'))?['error']), 0, min(480, length(string(first(result('Versand'))?['error']))))"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

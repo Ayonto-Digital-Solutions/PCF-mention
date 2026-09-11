@@ -1,0 +1,62 @@
+{
+  "comment": [
+    "What every packed AyontoPcfControls solution must carry. check-package.py holds the built",
+    "zip against this. A component listed here and missing from the package fails the build —",
+    "2.2.0 shipped a table without its view because nothing read the package itself."
+  ],
+  "uniqueName": "AyontoPcfControls",
+  "publisher": {
+    "uniqueName": "Ayonto",
+    "prefix": "ayonto"
+  },
+  "tables": {
+    "ayonto_mention": {
+      "columns": [
+        "ayonto_mentionid",
+        "ayonto_name",
+        "ayonto_userid",
+        "ayonto_username",
+        "ayonto_useremail",
+        "ayonto_mentionedbyid",
+        "ayonto_recordtable",
+        "ayonto_recordid",
+        "ayonto_recordname",
+        "ayonto_recordurl",
+        "ayonto_subject",
+        "ayonto_message",
+        "ayonto_deliverystatus",
+        "ayonto_deliverydetail"
+      ],
+      "views": [
+        "Active Mentions"
+      ]
+    }
+  },
+  "relationships": [
+    "business_unit_ayonto_mention",
+    "lk_ayonto_mention_createdby",
+    "lk_ayonto_mention_modifiedby",
+    "owner_ayonto_mention",
+    "team_ayonto_mention",
+    "user_ayonto_mention"
+  ],
+  "controls": [
+    "ayonto_Ayonto.MentionControl",
+    "ayonto_Ayonto.GroupDetailListControl"
+  ],
+  "controlsOnlyWhenReferenced": true,
+  "workflows": [
+    {
+      "name": "Ayonto - Send Mention Notification",
+      "clientDataFile": "AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+    }
+  ],
+  "connectionReferences": [
+    "ayonto_sharedcommondataserviceforapps_mention",
+    "ayonto_sharedsendgrid_mention"
+  ],
+  "environmentVariables": [
+    "ayonto_MentionSenderAddress",
+    "ayonto_MentionSenderName"
+  ]
+}

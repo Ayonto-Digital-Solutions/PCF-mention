@@ -66,6 +66,30 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Nothing in here that a public repository must not carry
+        run: |
+          python3 .github/scripts/check-no-secrets.py
+
+          # And prove that guard guards, on each shape it is meant to catch. The samples are
+          # assembled here rather than written out, so the patterns never sit in a tracked file
+          # and trip the very check they exist to test.
+          key="S""G.abcdefghijklmnop.qrstuvwxyz012345"
+          url="https://someorg.c""rm4.dynamics.com"
+          secret="api""_key: \"abcdef0123456789abcdef\""
+          prefix="\"z""z_mention\""
+          # Written under Mention/, because a publisher prefix is only looked for where Dataverse
+          # logical names live — at the repository root an underscore is just an underscore.
+          for leak in "$key" "$url" "$secret" "$prefix"; do
+            printf '%s\n' "$leak" > Mention/zz-leak-probe.md
+            git add Mention/zz-leak-probe.md
+            if python3 .github/scripts/check-no-secrets.py; then
+              echo "::error::check-no-secrets.py let this through: $leak"
+              git rm -qf Mention/zz-leak-probe.md
+              exit 1
+            fi
+            git rm -qf Mention/zz-leak-probe.md
+          done
+
       - name: Check the solution source
         run: |
           python3 .github/scripts/check-solution.py
@@ -90,6 +114,37 @@ jobs:
             echo "::error::check-solution.py accepted a SavedQueries folder the packer ignores"
             exit 1
           fi
+
+          # Three mistakes that are silent everywhere else. A column name that does not exist,
+          # which Dataverse answers with null rather than an error; a column read through
+          # trigger() instead of triggerOutputs(), which is always empty; and a column length in
+          # the README that no longer matches the table it is copied from. The first two leave a
+          # flow that runs green and delivers nothing.
+          python3 - <<'MUTATE'
+          import re
+          import shutil
+          from pathlib import Path
+
+          flow = "src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+          cases = {
+              "typo": (flow, "body/ayonto_useremail", "body/ayonto_usermail"),
+              "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
+              "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
+          }
+          for name, (where, before, after) in cases.items():
+              target = Path(f"/tmp/mutant-{name}")
+              shutil.rmtree(target, ignore_errors=True)
+              shutil.copytree("solution", target)
+              text = (target / where).read_text(encoding="utf-8")
+              assert before in text, f"{name}: the source no longer contains {before!r}"
+              (target / where).write_text(text.replace(before, after), encoding="utf-8")
+          MUTATE
+          for mutant in /tmp/mutant-*; do
+            if SOLUTION_ROOT="$mutant" python3 .github/scripts/check-solution.py; then
+              echo "::error::check-solution.py read past the mistake in $mutant"
+              exit 1
+            fi
+          done
 
       - name: Pack it and check what came out
         run: |
