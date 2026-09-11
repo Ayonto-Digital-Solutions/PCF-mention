@@ -58,6 +58,35 @@ keine Domain außerhalb Ihrer Umgebung. Auch die beiden Code-Components deklarie
 `<external-service-usage enabled="false" />` und sprechen ausschließlich mit der
 Dataverse-Web-API ihrer eigenen Umgebung.
 
+## Unter welchem Konto der Flow läuft
+
+Der Import fragt nach einer Dataverse-Verbindung. Frühere Versionen taten das nicht, weil sie nur
+die Code-Components und die Tabelle enthielten: ein Code-Component läuft in der Browsersitzung des
+angemeldeten Benutzers und spricht über `context.webAPI` mit dessen eigenen Rechten. Ein Flow hat
+keine Sitzung — er läuft im Hintergrund, auch wenn niemand angemeldet ist — und braucht deshalb
+eine eigene Identität.
+
+Er benutzt sie für vier Dinge, alle innerhalb der Umgebung: auf neue Zeilen horchen, die
+ausgelöste Zeile zurücklesen, die E-Mail anlegen und senden, den Status zurückschreiben.
+
+**Nehmen Sie dafür ein Dienstkonto**, kein persönliches. Sonst steht der Versand still, sobald
+diese Person das Unternehmen verlässt. Das Konto braucht Lese- und Schreibrechte auf
+`ayonto_mention` sowie das Anlegen und Senden von E-Mail-Aktivitäten.
+
+### Absender und Verbindungskonto sind zweierlei
+
+Der Flow setzt als Absender standardmäßig die Person, die erwähnt hat — nicht das Konto, unter dem
+er läuft. Im Namen eines anderen zu senden verlangt in Dataverse das Recht **„Send Email as
+Another User"** ([`prvSendAsUser`](https://learn.microsoft.com/power-platform/admin/miscellaneous-privileges)).
+Ohne das schlägt `SendEmail` fehl, und die Zeile steht mit dem Grund auf `Failed`.
+
+Zwei Wege, beide in Ordnung:
+
+* dem Dienstkonto das Recht geben — dann kommt die Benachrichtigung von der erwähnenden Person,
+  was Empfänger meist erwarten
+* `ayonto_MentionSenderUser` auf genau dieses Konto setzen — dann sendet es in eigenem Namen und
+  braucht keine Delegierung, dafür steht in jeder Mail derselbe Absender
+
 ## Was in den Einstellungen der Komponente steht
 
 Jeder Kanal hat seinen eigenen Schalter und seine eigene Formulierung, weil eine Chat-Nachricht
@@ -430,6 +459,7 @@ sich im Designer nicht zeigt und erst zur Laufzeit auffällt.
 
 | Symptom | Ursache |
 |---|---|
+| `SendEmail` scheitert mit einem Rechtefehler | das Verbindungskonto darf nicht im Namen eines anderen senden — siehe [Absender und Verbindungskonto](#absender-und-verbindungskonto-sind-zweierlei) |
 | Flow läuft nicht an | Änderungstyp oder Zeilenfilter passen nicht; Flow ist aus |
 | Flow grün, keine Mail | Spaltenname falsch geschrieben — Dataverse liefert `null` statt eines Fehlers |
 | Betreff immer der Ersatztext | `trigger()` statt `triggerOutputs()` |
