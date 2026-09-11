@@ -15,7 +15,6 @@ permissions:
 
 env:
   SOLUTION_DIR: AyontoPcfControls
-  FLOW_DIR: AyontoMentionFlow
 
 jobs:
   solution:
@@ -98,12 +97,9 @@ jobs:
       # needs a RootComponent in Solution.xml, and nothing in the build would add one.
       - name: Assemble the solution project
         run: |
-          python3 .github/scripts/check-solution.py solution solution-flow
-          rm -rf "${SOLUTION_DIR}" "${FLOW_DIR}"
+          python3 .github/scripts/check-solution.py
+          rm -rf "${SOLUTION_DIR}"
           cp -r solution "${SOLUTION_DIR}"
-          # Das Flow-Paket bekommt keinen Verweis auf ein Code-Component: es enthält nur den
-          # Flow und die eine Verbindung, die er braucht.
-          cp -r solution-flow "${FLOW_DIR}"
           cd "${SOLUTION_DIR}"
           pac solution add-reference --path ../Mention
           pac solution add-reference --path ../GroupDetailList
@@ -116,16 +112,15 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          python3 - "${VERSION}.0" "$SOLUTION_DIR/src/Other/Solution.xml" "$FLOW_DIR/src/Other/Solution.xml" <<'PY'
+          python3 - "$SOLUTION_DIR/src/Other/Solution.xml" "${VERSION}.0" <<'PY'
           import re, sys
-          version, *paths = sys.argv[1:]
-          for path in paths:
-              text = open(path, encoding="utf-8").read()
-              patched, count = re.subn(r"<Version>[^<]*</Version>", f"<Version>{version}</Version>", text)
-              if count != 1:
-                  raise SystemExit(f"expected exactly one <Version> in {path}, found {count}")
-              open(path, "w", encoding="utf-8").write(patched)
-              print(f"{path}: version set to {version}")
+          path, version = sys.argv[1], sys.argv[2]
+          text = open(path, encoding="utf-8").read()
+          patched, count = re.subn(r"<Version>[^<]*</Version>", f"<Version>{version}</Version>", text)
+          if count != 1:
+              raise SystemExit(f"expected exactly one <Version> in {path}, found {count}")
+          open(path, "w", encoding="utf-8").write(patched)
+          print(f"{path}: version set to {version}")
           PY
 
       - name: Pack the solution
@@ -133,8 +128,8 @@ jobs:
           set -o pipefail
 
           # SolutionPackager meldet eine übersprungene Komponente als Zeile im Log und packt
-          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so ist der Flow
-          # beim ersten Anlauf ohne seine Komponente rausgegangen. Also wird das Log gelesen.
+          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so wäre ein Flow
+          # ohne seine Komponente rausgegangen. Also wird das Log gelesen.
           check_pack_log() {
             if grep -qE "will be skipped|not defined in customizations" "$1"; then
               echo "::error::SolutionPackager skipped a component — the package is incomplete"
@@ -145,12 +140,8 @@ jobs:
 
           ( cd "${SOLUTION_DIR}" && dotnet build -c Release ) | tee /tmp/managed.log   # managed
           ( cd "${SOLUTION_DIR}" && dotnet build -c Debug )   | tee /tmp/unmanaged.log # unmanaged
-          # Das Zusatzpaket geht nur unmanaged raus — managed ließe sich nicht mehr anpassen,
-          # und genau dafür ist es da. check-package.py liest das im fertigen ZIP nach.
-          ( cd "${FLOW_DIR}" && dotnet build -c Debug ) | tee /tmp/flow.log
-          for log in /tmp/managed.log /tmp/unmanaged.log /tmp/flow.log; do
-            check_pack_log "$log"
-          done
+          check_pack_log /tmp/managed.log
+          check_pack_log /tmp/unmanaged.log
 
       # 2.2.0 shipped a table without its view: the packer took the SavedQueries folder and said
       # nothing. Nothing goes out again without reading the package that is about to go out.
@@ -163,11 +154,6 @@ jobs:
             python3 .github/scripts/check-guide.py "$zip" \
               solution/README.md solution/external-mail-provider.md --expect-controls
           done
-
-          flow=$(find "${FLOW_DIR}/bin/Debug" -name '*.zip' | head -1)
-          echo "== Flow: ${flow}"
-          SOLUTION_ROOT="${FLOW_DIR}" python3 .github/scripts/check-package.py "$flow" \
-            --contract .github/flow-solution-contract.json
 
       - name: Collect the artifacts
         env:
@@ -185,16 +171,6 @@ jobs:
           cp "${managed}"   "dist/AyontoPcfControls_${version}_managed.zip"
           cp "${unmanaged}" "dist/AyontoPcfControls_${version}.zip"
 
-          # Das optionale Zusatzpaket. Wer nur die Tabelle und die Components will, lädt es nicht
-          # herunter und wird beim Import nach keiner Verbindung gefragt.
-          flow=$(find "${FLOW_DIR}/bin/Debug" -name '*.zip' | head -1)
-          if [ -z "${flow}" ]; then
-            echo "the flow package was not produced" >&2
-            find "${FLOW_DIR}/bin" -type f >&2 || true
-            exit 1
-          fi
-          cp "${flow}" "dist/AyontoMentionFlow_${version}.zip"
-
           # The flow is not in the package — it is built from these documents, so they belong
           # with the download rather than only in the repository.
           pip install --quiet markdown
@@ -207,7 +183,6 @@ jobs:
           for expected in \
             "dist/AyontoPcfControls_${version}_managed.zip" \
             "dist/AyontoPcfControls_${version}.zip" \
-            "dist/AyontoMentionFlow_${version}.zip" \
             "dist/Ayonto-Mention-Benachrichtigung_${version}.pdf"; do
             if [ ! -s "${expected}" ]; then
               echo "::error::${expected} was not produced"

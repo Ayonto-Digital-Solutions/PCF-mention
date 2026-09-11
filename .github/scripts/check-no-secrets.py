@@ -54,15 +54,7 @@ OWN_PREFIXES = frozenset(
 )
 LOGICAL_NAME = re.compile(r"[\"']([a-z][a-z0-9]{1,7})_([a-z][a-z0-9_]*)[\"']")
 # Only where Dataverse logical names actually live. Elsewhere an underscore is just an underscore.
-NAMED_PLACES = (
-    "solution/",
-    "solution-flow/",
-    "Mention/",
-    "GroupDetailList/",
-    ".github/solution-contract.json",
-    ".github/flow-solution-contract.json",
-    "README.md",
-)
+NAMED_PLACES = ("solution/", "Mention/", "GroupDetailList/", ".github/solution-contract.json", "README.md")
 
 # A link into a host nobody outside one organisation can reach names that organisation — a logo
 # on an intranet, a portal, an internal wiki. Documentation written from a real setup carries

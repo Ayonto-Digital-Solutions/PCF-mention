@@ -127,12 +127,9 @@ Link baut das Component beziehungsweise der Flow.
    Statusspalte kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
-   auf `Sent` oder `Failed` zurück. Dieser Flow ist **nicht** Teil der Lösung — deshalb fragt ihr
-   Import nach keiner Verbindung. Es gibt ihn auf zwei Wegen: als **optionales Zusatzpaket**
-   `AyontoMentionFlow_<version>.zip` am Release (ein Import, eine Frage nach der
-   Dataverse-Verbindung, unmanaged und damit anpassbar) oder zum Selberbauen nach
-   [solution/README.md](../solution/README.md), Schritt für Schritt und mit allen Ausdrücken zum
-   Kopieren.
+   auf `Sent` oder `Failed` zurück. Dieser Flow ist **nicht** Teil der Lösung: ihn anzulegen
+   beschreibt [solution/README.md](../solution/README.md), Schritt für Schritt und mit allen
+   Ausdrücken zum Kopieren. So fragt der Import der Lösung nach keiner Verbindung.
 
 Benachrichtigt wird die Person, die in der Vorschlagsliste gewählt wurde — nicht der Name, der
 dabei in den Text geschrieben wird. Das Component merkt sich zu jeder eingefügten Erwähnung deren

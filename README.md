@@ -60,17 +60,9 @@ hängt sie an das GitHub-Release
 
 * `AyontoPcfControls_X.Y.Z.zip` — unmanaged, für Entwicklungsumgebungen
 * `AyontoPcfControls_X.Y.Z_managed.zip` — managed, für Test und Produktion
-* `AyontoMentionFlow_X.Y.Z.zip` — **optional**, nur der Benachrichtigungs-Flow, immer unmanaged
-* `Ayonto-Mention-Benachrichtigung_X.Y.Z.pdf` — die Anleitung zum Flow als PDF
 
-Die beiden ersten enthalten `Ayonto.MentionControl`, `Ayonto.GroupDetailListControl` und die
-Tabelle `ayonto_mention`, in die Erwähnungen geschrieben werden, Publisher `ayonto`. Ihr Import
-fragt nach **keiner** Verbindung.
-
-Das dritte ist ein Paket für sich: darin steckt nur der Flow und die eine Dataverse-Verbindung,
-die er benutzt. Wer den Flow nicht will, lädt es nicht herunter; wer ihn will, spart sich den
-Nachbau aus der Anleitung. Unmanaged bleibt es, weil Betreff, Text und Versandweg eine
-Hausentscheidung sind und eine managed Lösung sich nicht mehr ändern ließe.
+Beide enthalten `Ayonto.MentionControl`, `Ayonto.GroupDetailListControl` und die Tabelle
+`ayonto_mention`, in die Erwähnungen geschrieben werden, Publisher `ayonto`.
 Die Solution wird bewusst im Workflow gebaut und nicht im Repository gehalten: sie ist ein
 Build-Ergebnis, und der Workflow hat die .NET-Toolchain, die `pac` dafür braucht.
 
@@ -87,12 +79,11 @@ pac solution add-reference --path ../GroupDetailList
 dotnet build -c Release          # managed;  -c Debug erzeugt unmanaged
 ```
 
-Die beiden Solution-Projekte liegen unter [`solution/`](solution/) und
-[`solution-flow/`](solution-flow/) im Repository statt aus `pac solution init` zu entstehen: Die
-mitgelieferte Tabelle braucht einen `RootComponent`-Eintrag in `Solution.xml`, und den ergänzt der
-Build nicht von selbst. `.github/scripts/check-solution.py` prüft bei jedem Pull Request beide
-Quellen zusammen — Tabellenordner gegen Eintrag, und den Flow des Zusatzpakets gegen die Tabelle
-der Hauptlösung, denn die Spalten, die er liest, stehen im anderen Paket.
+Das Solution-Projekt liegt unter [`solution/`](solution/) im Repository statt aus
+`pac solution init` zu entstehen: Die mitgelieferte Tabelle braucht einen `RootComponent`-Eintrag
+in `Solution.xml`, und den ergänzt der Build nicht von selbst. `.github/scripts/check-solution.py`
+prüft bei jedem Pull Request, dass Tabellenordner und Eintrag zusammenpassen — sonst packt die
+Lösung stillschweigend ohne die Tabelle.
 
 ## Deployen
 
@@ -126,7 +117,7 @@ deklarieren zudem `<external-service-usage enabled="false" />`.
 |---|---|
 | **[solution/README.md](solution/README.md)** | Den Flow anlegen, Schritt für Schritt, mit allen Ausdrücken zum Kopieren |
 | **[solution/external-mail-provider.md](solution/external-mail-provider.md)** | Versand über einen externen Dienst statt Dataverse — deutsch und englisch, ohne Anbieternamen |
-| [solution-flow/](solution-flow) | dieselbe Definition als eigenes, optionales Lösungspaket — importieren statt nachbauen; sie wird bei jedem Bau gegen die Tabelle geprüft |
+| [solution/examples/](solution/examples) | die fertige Flow-Definition zum Nachschlagen; sie wird beim Bauen gegen die Tabelle geprüft und ist nicht Teil der Lösung |
 
 Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und
 Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Eine Statusspalte kann nicht
