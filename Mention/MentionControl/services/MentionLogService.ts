@@ -14,10 +14,20 @@ export const DEFAULT_MENTION_TABLE = "ayonto_mention";
 /** Value the row carries until a flow reports what became of it. */
 const STATUS_NEW = "New";
 
+/**
+ * The ways a notification can go out. The row says which one it is for, so a mention that goes
+ * out both ways writes two rows and each carries its own delivery status — one column cannot say
+ * "the mail arrived but the chat message did not".
+ */
+export const CHANNELS = ["Email", "Teams"] as const;
+export type MentionChannel = (typeof CHANNELS)[number];
+
 /** Column lengths, so a long name or a long message is cut here rather than refused by Dataverse. */
 const LIMITS = {
 	name: 200,
 	id: 64,
+	channel: 32,
+	linktext: 100,
 	username: 200,
 	useremail: 200,
 	recordtable: 128,
@@ -30,8 +40,12 @@ const LIMITS = {
 export interface MentionRequest {
 	readonly recipient: UserSuggestion;
 	readonly senderUserId: string;
+	/** Which way this one goes out. */
+	readonly channel: MentionChannel;
 	readonly subject: string;
 	readonly message: string;
+	/** What the link to the record is called in the notification. */
+	readonly linkText?: string;
 	readonly recordUrl?: string;
 	readonly entityName?: string;
 	readonly entityId?: string;
@@ -139,8 +153,10 @@ export class MentionLogService {
 		put("recordid", normalizeGuid(request.entityId ?? ""), LIMITS.id);
 		put("recordname", request.recordName, LIMITS.recordname);
 		put("recordurl", request.recordUrl, LIMITS.recordurl);
+		put("channel", request.channel, LIMITS.channel);
 		put("subject", request.subject, LIMITS.subject);
 		put("message", request.message, LIMITS.message);
+		put("linktext", request.linkText, LIMITS.linktext);
 		put("deliverystatus", STATUS_NEW, LIMITS.id);
 
 		return row;

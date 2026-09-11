@@ -11,6 +11,8 @@ interface ContextOptions {
 	disabled?: boolean;
 	offline?: boolean;
 	sendEmail?: "0" | "1";
+	sendTeams?: "0" | "1";
+	wording?: Partial<Record<"emailSubject" | "emailLinkText" | "teamsSubject" | "teamsLinkText", string>>;
 	entityName?: string;
 	entityId?: string;
 	/** What a model-driven host reports about the record the component sits on. */
@@ -26,9 +28,14 @@ function makeContext(options: ContextOptions = {}) {
 			entityId: text(options.entityId ?? ""),
 			entityName: text(options.entityName ?? ""),
 			sendEmail: { raw: options.sendEmail ?? "0", type: "Enum" },
+			sendTeams: { raw: options.sendTeams ?? "1", type: "Enum" },
 			senderUserId: text(""),
-			emailSubject: text(""),
+			emailSubject: text(options.wording?.emailSubject ?? ""),
 			emailContent: text(""),
+			emailLinkText: text(options.wording?.emailLinkText ?? ""),
+			teamsSubject: text(options.wording?.teamsSubject ?? ""),
+			teamsContent: text(""),
+			teamsLinkText: text(options.wording?.teamsLinkText ?? ""),
 			orgUrl: text(""),
 			appId: text(""),
 			mentionTable: text(""),
@@ -232,6 +239,80 @@ describe("MentionControl notification timing", () => {
 			ayonto_recordid: "33333333-3333-3333-3333-333333333333",
 			ayonto_deliverystatus: "New",
 		});
+	});
+
+	it("writes one row per switched-on channel, so each reports its own delivery", async () => {
+		// One status column cannot say "the mail arrived but the chat message did not".
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+			sendTeams: "0",
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
+
+		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange([RECIPIENT.id]);
+		const pending = props.onMention(RECIPIENT);
+
+		control.destroy();
+		await pending;
+
+		expect(createRecord).toHaveBeenCalledTimes(2);
+		const channels = createRecord.mock.calls.map(
+			(call) => (call[1] as Record<string, string>).ayonto_channel
+		);
+		expect(channels).toEqual(["Email", "Teams"]);
+	});
+
+	it("writes nothing for a channel that is switched off", async () => {
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+			sendEmail: "1",
+			sendTeams: "0",
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
+
+		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange([RECIPIENT.id]);
+		const pending = props.onMention(RECIPIENT);
+
+		control.destroy();
+		await pending;
+
+		expect(createRecord).toHaveBeenCalledTimes(1);
+		expect((createRecord.mock.calls[0][1] as Record<string, string>).ayonto_channel).toBe("Teams");
+	});
+
+	it("lets a channel word it its own way, and falls back to the e-mail wording", async () => {
+		// A chat message is read somewhere else than a mail. Configuring the same text twice is
+		// the more common case, so only what a channel says for itself overrides.
+		const { control, context, props } = mount({
+			entityName: "account",
+			entityId: "33333333-3333-3333-3333-333333333333",
+			sendTeams: "0",
+			wording: {
+				emailSubject: "Sie wurden erwähnt",
+				emailLinkText: "Datensatz öffnen",
+				teamsSubject: "Kurz für dich",
+			},
+		});
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
+
+		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange([RECIPIENT.id]);
+		const pending = props.onMention(RECIPIENT);
+
+		control.destroy();
+		await pending;
+
+		const rows = createRecord.mock.calls.map((call) => call[1] as Record<string, string>);
+		expect(rows[0]).toMatchObject({ ayonto_subject: "Sie wurden erwähnt", ayonto_linktext: "Datensatz öffnen" });
+		// Its own subject, but the e-mail's link label — that one it does not say for itself.
+		expect(rows[1]).toMatchObject({ ayonto_subject: "Kurz für dich", ayonto_linktext: "Datensatz öffnen" });
 	});
 
 	it("does not send for a mention that was taken back before the form closed", async () => {

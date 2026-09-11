@@ -22,7 +22,7 @@ jeweiligen README unter „Was sich geändert hat".
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
 | Bundle jetzt | 25 KiB | 14 KiB |
-| Tests | 156 | 85 |
+| Tests | 159 | 85 |
 
 ## Voraussetzungen
 
@@ -112,6 +112,13 @@ nachbauen — nur zuweisen, was in keine Lösung gehört.
 Der Flow löst auf **neue** Zeilen mit `ayonto_deliverystatus = New` aus, verschickt über SendGrid
 und schreibt `Sent` oder `Failed` in dieselbe Zeile zurück. Dass er nur auf neue Zeilen hört, ist
 die Bedingung dafür: die Rückschreibung ändert die Zeile, die ihn ausgelöst hat.
+
+Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und
+Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Der Flow bedient davon den
+**E-Mail-Zweig**; weitere Kanäle ergänzt man im Schalter `Kanal`, statt sie mitgeliefert zu
+bekommen. Zwei Gründe: eine Aktion für einen Connector, den die Zielumgebung nicht freigegeben
+hat, blockiert den Import der ganzen Lösung — und wie eine Chat-Nachricht aussieht, ist eine
+Hausentscheidung.
 
 Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde, und dafür ist
 nichts einzutragen: der Flow liest die ausgelöste Zeile zurück und nimmt die Umgebungsadresse aus

@@ -22,8 +22,10 @@
         "ayonto_recordid",
         "ayonto_recordname",
         "ayonto_recordurl",
+        "ayonto_channel",
         "ayonto_subject",
         "ayonto_message",
+        "ayonto_linktext",
         "ayonto_deliverystatus",
         "ayonto_deliverydetail"
       ],

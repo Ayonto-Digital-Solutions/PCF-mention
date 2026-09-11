@@ -5,6 +5,7 @@ import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } fro
 import {
 	MentionLogService,
 	type LoggedMention,
+	type MentionChannel,
 	type MentionRequest,
 } from "./services/MentionLogService";
 import { NotificationScheduler } from "./services/NotificationScheduler";
@@ -17,11 +18,12 @@ import { mentionBlocker } from "./utils/availability";
 import { interpolate } from "./utils/format";
 import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
 
-/** Value of the sendEmail choice that switches notifications on. */
-const SEND_EMAIL_ENABLED = "0";
+/** Value of a channel's choice property that switches it on. */
+const CHANNEL_ENABLED = "0";
 
 const DEFAULT_SUBJECT_KEY = "Notification_DefaultSubject";
 const DEFAULT_BODY_KEY = "Notification_DefaultBody";
+const DEFAULT_LINK_TEXT_KEY = "Default_LinkText";
 
 /**
  * How long a notification waits before it goes out.
@@ -39,7 +41,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private userSearch: UserSearchService;
 	private mentions: MentionLogService;
 
-	private scheduler: NotificationScheduler<MentionRequest>;
+	private scheduler: NotificationScheduler<MentionRequest[]>;
 	private value = "";
 	/** The value the platform was carrying before the edit it has not caught up with yet. */
 	private staleValue: string | undefined;
@@ -100,7 +102,13 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		this.mentions = new MentionLogService(context.webAPI, context.parameters.mentionTable.raw ?? undefined);
 		this.scheduler = new NotificationScheduler(
 			NOTIFICATION_DELAY_MS,
-			async (request: MentionRequest) => this.mentions.write(request),
+			async (requests: MentionRequest[]) => {
+				// One row per channel, written in order. A channel that fails to write does not
+				// stop the other — the person should hear about the mention on whichever way works.
+				for (const request of requests) {
+					await this.mentions.write(request);
+				}
+			},
 			(userId: string) => this.writtenMentions.has(userId)
 		);
 	}
@@ -215,7 +223,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	private mentionNotice(): string | undefined {
 		const blocker = mentionBlocker({
 			isOffline: this.isOffline(),
-			notificationsEnabled: this.context.parameters.sendEmail.raw === SEND_EMAIL_ENABLED,
+			notificationsEnabled: this.enabledChannels().length > 0,
 			entityNameConfigured: this.recordEntityName !== undefined,
 			hasRecordId: this.recordId.length > 0,
 		});
@@ -239,7 +247,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	}
 
 	private readonly onMention = async (user: UserSuggestion): Promise<void> => {
-		if (this.isDisposed || this.context.parameters.sendEmail.raw !== SEND_EMAIL_ENABLED) {
+		if (this.isDisposed || this.enabledChannels().length === 0) {
 			return;
 		}
 		if (this.mentionNotice() !== undefined) {
@@ -255,20 +263,51 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		// follows only decides whether to send it.
 		await this.scheduler.schedule({
 			key: recipientId,
-			payload: this.buildRequest(user, recipientId),
+			payload: this.buildRequests(user, recipientId),
 		});
 	};
 
-	private buildRequest(user: UserSuggestion, recipientId: string): MentionRequest {
+	/** The channels the maker switched on, in the order their rows are written. */
+	private enabledChannels(): MentionChannel[] {
+		const parameters = this.context.parameters;
+		const channels: MentionChannel[] = [];
+		if (parameters.sendEmail.raw === CHANNEL_ENABLED) {
+			channels.push("Email");
+		}
+		if (parameters.sendTeams.raw === CHANNEL_ENABLED) {
+			channels.push("Teams");
+		}
+		return channels;
+	}
+
+	/**
+	 * One request per switched-on channel.
+	 *
+	 * Each carries its own subject, text and link label, because a chat message is read somewhere
+	 * else than a mail and rarely wants the same wording. Where a channel says nothing of its own,
+	 * the e-mail wording stands in — configuring the same text twice is the more common case.
+	 */
+	private buildRequests(user: UserSuggestion, recipientId: string): MentionRequest[] {
 		const parameters = this.context.parameters;
 		const entityName = this.recordEntityName;
 		const entityId = this.recordId.length > 0 ? this.recordId : undefined;
 
-		return {
+		const subject = this.configured(parameters.emailSubject.raw) ?? this.resource(DEFAULT_SUBJECT_KEY);
+		const message = this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY);
+		const linkText = this.configured(parameters.emailLinkText.raw) ?? this.resource(DEFAULT_LINK_TEXT_KEY);
+
+		const wording: Record<MentionChannel, { subject: string; message: string; linkText: string }> = {
+			Email: { subject, message, linkText },
+			Teams: {
+				subject: this.configured(parameters.teamsSubject.raw) ?? subject,
+				message: this.configured(parameters.teamsContent.raw) ?? message,
+				linkText: this.configured(parameters.teamsLinkText.raw) ?? linkText,
+			},
+		};
+
+		const shared = {
 			recipient: { ...user, id: recipientId },
 			senderUserId: normalizeGuid(parameters.senderUserId.raw) || normalizeGuid(this.context.userSettings.userId),
-			subject: this.configured(parameters.emailSubject.raw) ?? this.resource(DEFAULT_SUBJECT_KEY),
-			message: this.configured(parameters.emailContent.raw) ?? this.resource(DEFAULT_BODY_KEY),
 			recordName: this.recordName,
 			recordUrl: buildRecordUrl({
 				orgUrl: parameters.orgUrl.raw,
@@ -279,6 +318,8 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			entityName,
 			entityId,
 		};
+
+		return this.enabledChannels().map((channel) => ({ ...shared, channel, ...wording[channel] }));
 	}
 
 	private resource(key: string): string {

@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 156 Tests
+npm test                              # 159 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -78,11 +78,16 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `field` | ja | Die gebundene Textspalte. `SingleLine.Text`, `SingleLine.TextArea` oder `Multiple`. |
 | `entityId` | für den Datensatzbezug | **An die Primärschlüsselspalte der Tabelle binden** (z. B. `accountid`). |
 | `entityName` | für den Datensatzbezug | Logischer Tabellenname, z. B. `account`. Als statischer Wert setzbar oder an `entitylogicalname` gebunden. |
-| `sendEmail` | ja | `Ja` (Standard) schreibt je erwähnter Person eine Zeile in die Benachrichtigungstabelle, `Nein` schreibt nur den Text. |
+| `sendEmail` | ja | `Ja` (Standard) schreibt je erwähnter Person eine Zeile für den Kanal `Email`, `Nein` nicht. |
+| `emailSubject` | nein | Betreff der E-Mail. |
+| `emailContent` | nein | Text der E-Mail. |
+| `emailLinkText` | nein | Beschriftung des Links auf den Datensatz. Standard „Datensatz öffnen". |
+| `sendTeams` | nein | `Ja` schreibt zusätzlich eine Zeile für den Kanal `Teams`. Standard `Nein`. |
+| `teamsSubject` | nein | Betreff der Chat-Nachricht. Leer = der E-Mail-Betreff. |
+| `teamsContent` | nein | Text der Chat-Nachricht. Leer = der E-Mail-Text. |
+| `teamsLinkText` | nein | Beschriftung des Links in der Chat-Nachricht. Leer = die der E-Mail. |
 | `senderUserId` | nein | GUID des absendenden Benutzers. Ohne Angabe der angemeldete Benutzer. |
-| `emailSubject` | nein | Betreff der Benachrichtigung. |
-| `emailContent` | nein | Text der Benachrichtigung. Der Datensatz-Link wird angehängt. |
-| `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Nötig für den Link auf den Datensatz. |
+| `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Ohne sie baut der Flow den Link selbst. |
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
 
@@ -100,7 +105,14 @@ melden, keine unterstützte Konfiguration: Wer sich darauf verlässt, hat keine 
 der nächsten Version noch da ist. Was im Panel steht, gewinnt ohnehin.
 
 Ohne Datensatzbezug funktioniert das Component weiter, die Benachrichtigung wird dann nur nicht mit
-dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-Link.
+dem Datensatz verknüpft. `orgUrl` ist dagegen kein Muss mehr: bleibt es leer, liest der
+mitgelieferte Flow die Umgebungsadresse aus der Zeile selbst — siehe
+[solution/README.md](../solution/README.md#der-link-auf-den-datensatz).
+
+**Jeder Kanal hat seine eigene Formulierung**, weil eine Chat-Nachricht woanders gelesen wird als
+eine Mail. Was ein Kanal nicht für sich sagt, übernimmt er von der E-Mail; ist auch dort nichts
+gesetzt, greift die Vorgabe des Components. Eine URL steht in keiner dieser Einstellungen — den
+Link baut das Component beziehungsweise der Flow.
 
 [faq]: https://learn.microsoft.com/power-apps/developer/component-framework/faq#how-can-i-access-the-record-id-or-table-name
 [context]: https://learn.microsoft.com/power-apps/developer/component-framework/reference/context
@@ -109,8 +121,10 @@ dem Datensatz verknüpft. Ohne `orgUrl` enthält sie keinen Deep-Link.
 
 1. Eine Person wird aus der Vorschlagsliste gewählt; `@Vorname Nachname` wird in den Text geschrieben.
 2. Nach der Karenzzeit legt das Component über `context.webAPI.createRecord` eine Zeile **je
-   erwähnter Person** in der Tabelle **`ayonto_mention`** an — mit Empfänger, Absender, Betreff,
-   Text, dem Datensatz und einem fertigen Link darauf.
+   erwähnter Person und je eingeschaltetem Kanal** in der Tabelle **`ayonto_mention`** an — mit
+   Empfänger, Absender, Kanal, Betreff, Text, Linkbeschriftung, dem Datensatz und einem fertigen
+   Link darauf. Wer per Mail und per Chat benachrichtigt wird, bekommt zwei Zeilen: eine
+   Statusspalte kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
    auf `Sent` oder `Failed` zurück. Ein solcher Flow kommt mit der Lösung; einrichten, umbauen und
@@ -156,7 +170,8 @@ Was in einer Zeile steht:
 | `ayonto_mentionedbyid` | wer erwähnt hat |
 | `ayonto_recordtable`, `ayonto_recordid`, `ayonto_recordname` | der Datensatz |
 | `ayonto_recordurl` | fertiger Deep-Link, sofern `orgUrl` gesetzt ist |
-| `ayonto_subject`, `ayonto_message` | Betreff und Text aus der Konfiguration |
+| `ayonto_channel` | `Email` oder `Teams` — welchen Weg diese Zeile meint |
+| `ayonto_subject`, `ayonto_message`, `ayonto_linktext` | Betreff, Text und Linkbeschriftung dieses Kanals |
 | `ayonto_deliverystatus` | `New`, bis der Flow zurückschreibt |
 | `ayonto_deliverydetail` | Fehlertext des Flows |
 
@@ -227,7 +242,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 156 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 159 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 
