@@ -2,40 +2,12 @@
 <ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Entities />
   <Roles />
-  <Workflows>
-    <!-- Der Eintrag benennt den Flow, die Datei darunter enthält ihn. Beides muss dieselbe
-         WorkflowId tragen wie der RootComponent in Solution.xml, sonst packt der Packer
-         kommentarlos einen Flow, den die Lösung nicht führt.
-         Category 5 = modernes Cloud-Flow, Scope 4 = Organisation, StateCode 0 = ausgeschaltet:
-         Der Flow kommt bewusst inaktiv an, damit niemand Benachrichtigungen verschickt, bevor
-         die Verbindung und der Wortlaut geprüft sind. -->
-    <Workflow WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90}" Name="Ayonto - Send Mention Notification">
-      <JsonFileName>/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json</JsonFileName>
-      <Type>1</Type>
-      <Subprocess>0</Subprocess>
-      <Category>5</Category>
-      <Mode>0</Mode>
-      <Scope>4</Scope>
-      <OnDemand>0</OnDemand>
-      <TriggerOnCreate>0</TriggerOnCreate>
-      <TriggerOnDelete>0</TriggerOnDelete>
-      <AsyncAutodelete>0</AsyncAutodelete>
-      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
-      <StateCode>0</StateCode>
-      <StatusCode>1</StatusCode>
-      <RunAs>1</RunAs>
-      <IsTransacted>1</IsTransacted>
-      <IntroducedVersion>1.0.0.0</IntroducedVersion>
-      <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
-      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
-      <ModernFlowType>0</ModernFlowType>
-      <PrimaryEntity>none</PrimaryEntity>
-      <LocalizedNames>
-        <LocalizedName languagecode="1033" description="Ayonto - Send Mention Notification" />
-      </LocalizedNames>
-    </Workflow>
-  </Workflows>
+  <!-- Childless, mit Absicht: Steht der Flow als Kind hier drin, meldet SolutionPackager
+       "has unexpected children in Customizations.xml; this component's specific processing
+       will be skipped" und packt die Komponente nicht — der Lauf bleibt grün, und im Paket
+       fehlt, was den Flow ausmacht. Die Beschreibung liegt deshalb als eigene Datei neben
+       ihrer Definition unter src/Workflows, wo der Packer sie als Sharded Component liest. -->
+  <Workflows />
   <FieldSecurityProfiles />
   <Templates />
   <EntityMaps />

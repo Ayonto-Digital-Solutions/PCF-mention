@@ -231,15 +231,38 @@ def read_root(root: Path) -> dict:
     if packed_entities is not None and len(packed_entities) > 0:
         fail("src/Other/Customizations.xml must keep <Entities /> childless — the packer drops the folder otherwise")
 
-    # A flow is two things: the entry that names it and the definition it points at. A entry whose
-    # file is missing packs without complaint and imports as a flow that does nothing.
-    flows = customizations.findall("./Workflows/Workflow")
-    for flow in flows:
+    # A flow described inside <Workflows> is the mistake SolutionPackager answers with a line in
+    # its log and nothing else: "has unexpected children in Customizations.xml; this component's
+    # specific processing will be skipped". The build stays green, and the package comes out
+    # without the component. The description belongs in its own file under src/Workflows, where
+    # the packer reads it as a sharded component.
+    if customizations.findall("./Workflows/Workflow"):
+        fail(
+            "src/Other/Customizations.xml describes a flow inside <Workflows> — SolutionPackager "
+            "skips the whole component then and says so only in its log. Keep <Workflows /> "
+            "childless and put the description in its own file under src/Workflows"
+        )
+
+    # A flow is two things: the file that describes it and the definition it points at. A
+    # description whose file is missing packs without complaint and imports as a flow that does
+    # nothing.
+    workflows = root / "src/Workflows"
+    flow_files = sorted(workflows.glob("*.xml")) if workflows.is_dir() else []
+    flows = [ET.parse(path).getroot() for path in flow_files]
+    for path, flow in zip(flow_files, flows):
+        if flow.tag != "Workflow":
+            fail(f"Workflows/{path.name} is a <{flow.tag}>, not a <Workflow>")
         named = (flow.findtext("JsonFileName") or flow.findtext("XamlFileName") or "").lstrip("/")
         if not named:
             fail(f"the flow '{flow.get('Name')}' names no definition file")
         if not (root / "src" / named).is_file():
             fail(f"the flow '{flow.get('Name')}' points at src/{named}, which is not there")
+
+    # A definition nothing describes is packed as a file and imported as nothing.
+    described = {(flow.findtext("JsonFileName") or "").lstrip("/").rsplit("/", 1)[-1] for flow in flows}
+    for definition in sorted(workflows.glob("*.json")) if workflows.is_dir() else []:
+        if definition.name not in described:
+            fail(f"Workflows/{definition.name} is described by no .xml beside it — nothing imports it")
 
     # The id in Solution.xml, the id on the entry and the id in the file name are three places
     # the same GUID has to stand. Where they drift the packer says nothing and the import
@@ -249,7 +272,7 @@ def read_root(root: Path) -> dict:
         for component in solution.iter("RootComponent")
         if component.get("type") == WORKFLOW_COMPONENT_TYPE
     }
-    for flow in flows:
+    for path, flow in zip(flow_files, flows):
         flow_id = (flow.get("WorkflowId") or "").strip("{}").lower()
         if flow_id not in listed:
             fail(
@@ -258,8 +281,9 @@ def read_root(root: Path) -> dict:
             )
         listed.discard(flow_id)
         named = (flow.findtext("JsonFileName") or "").lstrip("/")
-        if named and flow_id not in named.lower():
-            fail(f"the flow '{flow.get('Name')}' is stored as {named}, which does not carry its id {flow_id}")
+        for where in (path.name, named):
+            if where and flow_id not in where.lower():
+                fail(f"the flow '{flow.get('Name')}' is stored as {where}, which does not carry its id {flow_id}")
     for orphan in sorted(listed):
         fail(f'Solution.xml names a <RootComponent type="29"> {orphan}, but no flow in Customizations.xml has that id')
 

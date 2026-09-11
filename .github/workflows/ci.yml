@@ -125,13 +125,15 @@ jobs:
             exit 1
           fi
 
-          # Seven mistakes that are silent everywhere else. A column name that does not exist,
+          # Eight mistakes that are silent everywhere else. A column name that does not exist,
           # which Dataverse answers with null rather than an error; a column read through
           # trigger() instead of triggerOutputs(), which is always empty; a renamed action that
           # an expression still reaches for, so what it carried disappears from the message; a
           # column length in the README that no longer matches the table it is copied from; and
-          # three ways the flow package can come apart — an id the solution does not list, a file
-          # name that no longer carries it, and a connection the package never declares.
+          # four ways the flow package can come apart — a flow described inside <Workflows>,
+          # which makes the packer skip the whole component with nothing but a line in its log,
+          # an id the solution does not list, a file name that no longer carries it, and a
+          # connection the package never declares.
           #
           # The flow lives in one package and the table it reads in the other, so both are copied
           # and both are handed to the check: one of them alone would call every column unknown.
@@ -139,15 +141,16 @@ jobs:
           import shutil
           from pathlib import Path
 
-          flow = "solution-flow/src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+          stem = "solution-flow/src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90"
+          flow, described = f"{stem}.json", f"{stem}.xml"
           entry = "solution-flow/src/Other/Customizations.xml"
           cases = {
               "typo": (flow, "body/ayonto_userid", "body/ayonto_usrid"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
               "outputs": (flow, '"Record_Link": {', '"Record_Link_": {'),
               "length": ("solution/README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
-              "flowid": (entry, 'WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90}"', 'WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f99}"'),
-              "filename": (entry, "/Workflows/AyontoSendMentionNotification-4f2b7c81", "/Workflows/Flow-4f2b7c81"),
+              "flowid": (described, 'WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90}"', 'WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f99}"'),
+              "filename": (described, "/Workflows/AyontoSendMentionNotification-4f2b7c81", "/Workflows/Flow-4f2b7c81"),
               "unbound": (entry, 'connectionreferencelogicalname="ayonto_sharedcommondataserviceforapps_mention"', 'connectionreferencelogicalname="ayonto_something_else"'),
           }
           for name, (where, before, after) in cases.items():
@@ -159,6 +162,28 @@ jobs:
               text = (target / where).read_text(encoding="utf-8")
               assert before in text, f"{name}: the source no longer contains {before!r}"
               (target / where).write_text(text.replace(before, after), encoding="utf-8")
+
+          # The one the packer answers with a log line and a green build: the flow described
+          # inside <Workflows> instead of in its own file. That is how it was written first, and
+          # the package came out without the component.
+          inline = Path("/tmp/mutant-inline")
+          shutil.rmtree(inline, ignore_errors=True)
+          inline.mkdir(parents=True)
+          for tree in ("solution", "solution-flow"):
+              shutil.copytree(tree, inline / tree)
+          shard = inline / described
+          body = "\n".join(
+              line for line in shard.read_text(encoding="utf-8").splitlines()
+              if not line.startswith(("<?xml", "<!--", "     "))
+          )
+          customizations = inline / entry
+          customizations.write_text(
+              customizations.read_text(encoding="utf-8").replace(
+                  "  <Workflows />", "  <Workflows>\n" + body + "\n  </Workflows>"
+              ),
+              encoding="utf-8",
+          )
+          shard.unlink()
           MUTATE
           for mutant in /tmp/mutant-*; do
             if python3 .github/scripts/check-solution.py "$mutant/solution" "$mutant/solution-flow"; then
@@ -175,9 +200,23 @@ jobs:
 
       - name: Pack it and check what came out
         run: |
+          set -o pipefail
+
+          # SolutionPackager meldet eine übersprungene Komponente als Zeile im Log und packt
+          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so ist der Flow
+          # beim ersten Anlauf ohne seine Komponente rausgegangen. Also wird das Log gelesen.
+          check_pack_log() {
+            if grep -qE "will be skipped|not defined in customizations" "$1"; then
+              echo "::error::SolutionPackager skipped a component — the package is incomplete"
+              grep -E "will be skipped|not defined in customizations" "$1"
+              exit 1
+            fi
+          }
+
           rm -rf /tmp/pack
           cp -r solution /tmp/pack
-          ( cd /tmp/pack && dotnet build -c Release )
+          ( cd /tmp/pack && dotnet build -c Release ) | tee /tmp/pack.log
+          check_pack_log /tmp/pack.log
           zip=$(find /tmp/pack/bin -name '*.zip' | head -1)
           echo "$zip"
           python3 .github/scripts/check-package.py "$zip"
@@ -210,10 +249,24 @@ jobs:
 
       - name: Pack the flow package and check what came out
         run: |
+          set -o pipefail
+
+          # SolutionPackager meldet eine übersprungene Komponente als Zeile im Log und packt
+          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so ist der Flow
+          # beim ersten Anlauf ohne seine Komponente rausgegangen. Also wird das Log gelesen.
+          check_pack_log() {
+            if grep -qE "will be skipped|not defined in customizations" "$1"; then
+              echo "::error::SolutionPackager skipped a component — the package is incomplete"
+              grep -E "will be skipped|not defined in customizations" "$1"
+              exit 1
+            fi
+          }
+
           # Unmanaged, immer: das Paket lebt davon, angepasst zu werden.
           rm -rf /tmp/pack-flow
           cp -r solution-flow /tmp/pack-flow
-          ( cd /tmp/pack-flow && dotnet build -c Debug )
+          ( cd /tmp/pack-flow && dotnet build -c Debug ) | tee /tmp/pack-flow.log
+          check_pack_log /tmp/pack-flow.log
           zip=$(find /tmp/pack-flow/bin -name '*.zip' | head -1)
           echo "$zip"
           SOLUTION_ROOT=/tmp/pack-flow python3 .github/scripts/check-package.py "$zip" \

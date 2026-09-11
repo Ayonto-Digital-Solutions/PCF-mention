@@ -130,11 +130,27 @@ jobs:
 
       - name: Pack the solution
         run: |
-          ( cd "${SOLUTION_DIR}" && dotnet build -c Release )   # managed
-          ( cd "${SOLUTION_DIR}" && dotnet build -c Debug )     # unmanaged
+          set -o pipefail
+
+          # SolutionPackager meldet eine übersprungene Komponente als Zeile im Log und packt
+          # trotzdem — Rückgabewert 0, Build grün, Paket unvollständig. Genau so ist der Flow
+          # beim ersten Anlauf ohne seine Komponente rausgegangen. Also wird das Log gelesen.
+          check_pack_log() {
+            if grep -qE "will be skipped|not defined in customizations" "$1"; then
+              echo "::error::SolutionPackager skipped a component — the package is incomplete"
+              grep -E "will be skipped|not defined in customizations" "$1"
+              exit 1
+            fi
+          }
+
+          ( cd "${SOLUTION_DIR}" && dotnet build -c Release ) | tee /tmp/managed.log   # managed
+          ( cd "${SOLUTION_DIR}" && dotnet build -c Debug )   | tee /tmp/unmanaged.log # unmanaged
           # Das Zusatzpaket geht nur unmanaged raus — managed ließe sich nicht mehr anpassen,
           # und genau dafür ist es da. check-package.py liest das im fertigen ZIP nach.
-          ( cd "${FLOW_DIR}" && dotnet build -c Debug )
+          ( cd "${FLOW_DIR}" && dotnet build -c Debug ) | tee /tmp/flow.log
+          for log in /tmp/managed.log /tmp/unmanaged.log /tmp/flow.log; do
+            check_pack_log "$log"
+          done
 
       # 2.2.0 shipped a table without its view: the packer took the SavedQueries folder and said
       # nothing. Nothing goes out again without reading the package that is about to go out.

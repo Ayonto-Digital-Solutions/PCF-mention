@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Die Beschreibung des Flows, als eigene Datei neben seiner Definition. SolutionPackager liest
+     sie als Sharded Component; als Kind von <Workflows> in Customizations.xml würde er die
+     Komponente kommentarlos überspringen.
+     WorkflowId muss dieselbe sein wie im RootComponent in Solution.xml und im Namen beider
+     Dateien. Category 5 = modernes Cloud-Flow, Scope 4 = Organisation, StateCode 0 =
+     ausgeschaltet: Der Flow kommt bewusst inaktiv an, damit niemand Benachrichtigungen
+     verschickt, bevor Verbindung und Wortlaut geprüft sind. -->
+<Workflow WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90}" Name="Ayonto - Send Mention Notification">
+  <JsonFileName>/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json</JsonFileName>
+  <Type>1</Type>
+  <Subprocess>0</Subprocess>
+  <Category>5</Category>
+  <Mode>0</Mode>
+  <Scope>4</Scope>
+  <OnDemand>0</OnDemand>
+  <TriggerOnCreate>0</TriggerOnCreate>
+  <TriggerOnDelete>0</TriggerOnDelete>
+  <AsyncAutodelete>0</AsyncAutodelete>
+  <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+  <StateCode>0</StateCode>
+  <StatusCode>1</StatusCode>
+  <RunAs>1</RunAs>
+  <IsTransacted>1</IsTransacted>
+  <IntroducedVersion>1.0.0.0</IntroducedVersion>
+  <IsCustomizable>1</IsCustomizable>
+  <BusinessProcessType>0</BusinessProcessType>
+  <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+  <ModernFlowType>0</ModernFlowType>
+  <PrimaryEntity>none</PrimaryEntity>
+  <LocalizedNames>
+    <LocalizedName languagecode="1033" description="Ayonto - Send Mention Notification" />
+  </LocalizedNames>
+</Workflow>
