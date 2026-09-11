@@ -125,7 +125,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          flow = "src/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+          flow = "examples/mention-notification-flow.json"
           cases = {
               "typo": (flow, "body/ayonto_userid", "body/ayonto_usrid"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
@@ -146,6 +146,12 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Render the documentation
+        run: |
+          pip install --quiet markdown
+          python3 .github/scripts/build-docs-pdf.py /tmp/docs.pdf \
+            solution/README.md solution/external-mail-provider.md
 
       - name: Pack it and check what came out
         run: |

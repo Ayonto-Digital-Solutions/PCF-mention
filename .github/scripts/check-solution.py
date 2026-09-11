@@ -43,6 +43,7 @@ def check_flow(
     columns: set[str],
     references: set[str],
     variables: set[str],
+    bound: bool = True,
 ) -> None:
     """Holds a flow definition against the tables, references and variables around it.
 
@@ -114,6 +115,11 @@ def check_flow(
                 f"the flow '{name}' reads {referenced!r}, which is no action in it — "
                 "the expression resolves to null and whatever it carried is silently gone"
             )
+
+    # An example flow is not part of the solution, so nothing in the solution declares what it
+    # binds to. Everything above still holds for it: those are mistakes in the flow itself.
+    if not bound:
+        return
 
     for reference in sorted(set(re.findall(r'"connectionReferenceLogicalName":\s*"([^"]+)"', text))):
         if reference.lower() not in references:
@@ -270,8 +276,26 @@ def main() -> None:
 
     check_column_table(lengths)
 
+    # The flow is not shipped — it is built by hand from the documentation. The definition the
+    # documentation is written against stays here so its column names and expressions are held
+    # against the table just the same; it is outside src/, so the packer never sees it.
+    examples = sorted((ROOT / "examples").glob("*.json")) if (ROOT / "examples").is_dir() else []
+    for example in examples:
+        check_flow(
+            example,
+            f"examples/{example.name}",
+            prefix=prefix,
+            tables=tables,
+            sets=sets,
+            columns=columns,
+            references=reference_names,
+            variables=variable_names,
+            bound=False,
+        )
+
     print(
-        f"solution source: {len(folders)} table(s) declared and present, {len(flows)} flow(s), "
+        f"solution source: {len(folders)} table(s) declared and present, "
+        f"{len(flows)} flow(s), {len(examples)} example flow(s), "
         f"{len(references)} connection reference(s), {len(variables)} environment variable(s), "
         "XML well-formed"
     )

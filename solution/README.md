@@ -1,28 +1,35 @@
-# Benachrichtigungs-Flow einrichten
+# Benachrichtigungs-Flow bauen
 
-Die Lösung bringt eine Tabelle `ayonto_mention`, einen Cloud-Flow, der daraus E-Mails macht, eine
-Connection Reference und drei Environment Variables mit.
+Die Lösung bringt die Tabelle `ayonto_mention` samt Ansicht und die beiden Code-Components mit —
+**mehr nicht**. Der Import fragt nach keiner einzigen Verbindung, weil nichts darin eine braucht.
 
-**Versendet wird über Dataverse selbst.** Der Flow legt eine E-Mail-Aktivität an und löst die
-Dataverse-Aktion `SendEmail` aus — kein externer Connector, keine Schlüssel, nichts, was die
-Umgebung verlässt. Die einzige Verbindung, nach der der Import fragt, ist Dataverse: Ihr eigener
-Tenant.
+Den Flow, der aus einer Zeile eine Benachrichtigung macht, bauen Sie selbst. Das ist Absicht:
 
-Wo die Voraussetzung dafür fehlt — serverseitige Synchronisierung mit einem freigegebenen
-Postfach — tritt ein Connector an die Stelle der beiden Dataverse-Aktionen. Das ist in
-[external-mail-provider.md](external-mail-provider.md) beschrieben, deutsch und englisch, ohne
-einen bestimmten Anbieter zu nennen.
+* Ein Flow bringt eine Verbindung mit, und die muss beim Import belegt werden. Wer die
+  Benachrichtigung gar nicht braucht, soll darüber nicht stolpern.
+* Wie eine Benachrichtigung aussieht und über welchen Weg sie hinausgeht, ist eine
+  Hausentscheidung. Ein mitgelieferter Flow wäre eine Vorgabe, die man erst wieder loswerden muss.
 
-Dieses Dokument beschreibt beides: den mitgelieferten Flow konfigurieren, und einen vorhandenen
-Flow auf diese Tabelle umbauen. Alle Ausdrücke stehen so da, dass man sie direkt in den Designer
-kopieren kann.
+**Der Standardweg ist Dataverse selbst**: der Flow legt eine E-Mail-Aktivität an und löst die
+Aktion `SendEmail` aus. Kein externer Connector, kein API-Schlüssel, nichts, was die Umgebung
+verlässt. Diese Anleitung beschreibt genau das, Schritt für Schritt, mit allen Ausdrücken zum
+Kopieren.
+
+Wo die Voraussetzung fehlt — serverseitige Synchronisierung mit einem freigegebenen Postfach —
+tritt ein Connector an die Stelle der beiden Dataverse-Aktionen. Das steht in
+[external-mail-provider.md](external-mail-provider.md), deutsch und englisch, ohne einen
+bestimmten Anbieter zu nennen.
+
+Die fertige Definition zum Nachschlagen liegt unter
+[`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird
+beim Bauen gegen die Tabelle geprüft, gehört aber nicht zur Lösung und wird nicht mitgeliefert.
 
 ## Wie die Benachrichtigung läuft
 
 ```
 Mention-Component
   └─ legt je erwähnter Person und je eingeschaltetem Kanal eine Zeile an   (Status = New)
-       └─ Flow löst auf neue Zeilen aus
+       └─ Ihr Flow löst auf neue Zeilen aus
             ├─ Zeile lesen, Umgebungsadresse und Datensatzlink ermitteln
             └─ Schalter auf ayonto_channel
                  ├─ Email → Versand (Scope)
@@ -41,30 +48,27 @@ Flow entscheidet, was daraus wird.
 Das ist kein Umweg, sondern der Grund, warum `ayonto_deliverystatus` etwas aussagt: eine Spalte
 kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 
-## Was mitgeliefert wird und was die Umgebung stellt
+## Was mitgeliefert wird und was Sie bauen
 
-| | mitgeliefert | von der Administration zu stellen |
+| | mitgeliefert | selbst zu bauen oder zu stellen |
 |---|---|---|
 | Tabelle `ayonto_mention` samt Ansicht | ✔ | |
-| Flow *Ayonto – Send Mention Notification* | ✔ (E-Mail-Zweig) | einschalten; weitere Kanäle selbst ergänzen |
-| Connection Reference Dataverse | ✔ | Verbindung zuweisen |
-| Environment Variable Absender (Benutzer/Warteschlange) | ✔ (ohne Wert) | optional, leer = die erwähnende Person |
-| Environment Variable Umgebungs-URL | ✔ (ohne Wert) | nur als Übersteuerung, normalerweise leer |
-| Environment Variable App-ID | ✔ (ohne Wert) | optional, damit der Link in der richtigen App öffnet |
+| Code-Components Mention und GroupDetailList | ✔ | |
+| Benachrichtigungs-Flow | als Anleitung | Flow anlegen, siehe unten |
+| Connection Reference Dataverse | | beim Anlegen des Flows |
 | Serverseitige Synchronisierung, freigegebenes Postfach | | ✔ |
 
-**Ein externer Dienst ist nicht dabei.** Kein API-Schlüssel, keine Verbindung zu einem Dritten,
-keine Domain außerhalb Ihrer Umgebung. Auch die beiden Code-Components deklarieren
+**Ein externer Dienst ist nirgends dabei.** Beide Code-Components deklarieren
 `<external-service-usage enabled="false" />` und sprechen ausschließlich mit der
 Dataverse-Web-API ihrer eigenen Umgebung.
 
 ## Unter welchem Konto der Flow läuft
 
-Der Import fragt nach einer Dataverse-Verbindung. Frühere Versionen taten das nicht, weil sie nur
-die Code-Components und die Tabelle enthielten: ein Code-Component läuft in der Browsersitzung des
+Der Import der Lösung fragt nach nichts. Sobald Sie aber den Flow anlegen, verlangt er eine
+Dataverse-Verbindung — und das ist kein Zufall: ein Code-Component läuft in der Browsersitzung des
 angemeldeten Benutzers und spricht über `context.webAPI` mit dessen eigenen Rechten. Ein Flow hat
-keine Sitzung — er läuft im Hintergrund, auch wenn niemand angemeldet ist — und braucht deshalb
-eine eigene Identität.
+keine Sitzung. Er läuft im Hintergrund, auch wenn niemand angemeldet ist, und braucht deshalb eine
+eigene Identität.
 
 Er benutzt sie für vier Dinge, alle innerhalb der Umgebung: auf neue Zeilen horchen, die
 ausgelöste Zeile zurücklesen, die E-Mail anlegen und senden, den Status zurückschreiben.
@@ -75,17 +79,18 @@ diese Person das Unternehmen verlässt. Das Konto braucht Lese- und Schreibrecht
 
 ### Absender und Verbindungskonto sind zweierlei
 
-Der Flow setzt als Absender standardmäßig die Person, die erwähnt hat — nicht das Konto, unter dem
-er läuft. Im Namen eines anderen zu senden verlangt in Dataverse das Recht **„Send Email as
-Another User"** ([`prvSendAsUser`](https://learn.microsoft.com/power-platform/admin/miscellaneous-privileges)).
+Der Flow setzt als Absender die Person, die erwähnt hat — nicht das Konto, unter dem er läuft. Im
+Namen eines anderen zu senden verlangt in Dataverse das Recht **„Send Email as Another User"**
+([`prvSendAsUser`](https://learn.microsoft.com/power-platform/admin/miscellaneous-privileges)).
 Ohne das schlägt `SendEmail` fehl, und die Zeile steht mit dem Grund auf `Failed`.
 
 Zwei Wege, beide in Ordnung:
 
 * dem Dienstkonto das Recht geben — dann kommt die Benachrichtigung von der erwähnenden Person,
   was Empfänger meist erwarten
-* `ayonto_MentionSenderUser` auf genau dieses Konto setzen — dann sendet es in eigenem Namen und
-  braucht keine Delegierung, dafür steht in jeder Mail derselbe Absender
+* im Compose `Absender bestimmen` statt `ayonto_mentionedbyid` die ID des Dienstkontos oder einer
+  Warteschlange eintragen — dann sendet es in eigenem Namen und braucht keine Delegierung, dafür
+  steht in jeder Mail derselbe Absender
 
 ## Was in den Einstellungen der Komponente steht
 
@@ -106,29 +111,17 @@ Komponente. Der Link selbst wird immer dynamisch gebaut, in keiner Einstellung s
 `sendTeams` steht ab Werk auf **Nein**: der mitgelieferte Flow bedient den Kanal nicht (siehe
 unten), und Zeilen, die niemand abholt, sollen nicht ungefragt entstehen.
 
-## Weg A — den mitgelieferten Flow verwenden
+## Den Flow anlegen
 
-1. Lösung importieren. Der Import fragt nach **einer** Verbindung — Dataverse. Das ist kein
-   Zugriff von außen: der Dialog belegt den Platzhalter, den die Lösung mitbringt, mit einer
-   Verbindung in Ihrer Umgebung.
-2. **Environment Variables** sind alle drei optional. Absender leer lassen heißt: die Mail kommt
-   von der Person, die erwähnt hat. Die Umgebungsadresse muss **nicht** eingetragen werden, die
-   App-ID nur, wenn der Link in einer bestimmten App öffnen soll — siehe
-   [Der Link auf den Datensatz](#der-link-auf-den-datensatz).
-3. Flow **einschalten**. Ein importierter Flow ist zunächst aus.
-4. Test: eine Zeile in `ayonto_mention` von Hand anlegen, `ayonto_useremail` auf die eigene
-   Adresse, `ayonto_message` mit Text, `ayonto_deliverystatus` = `New`.
+Sechs Schritte. Wer bereits einen Benachrichtigungs-Flow hat, baut ihn nach derselben Reihenfolge
+um — Schritt 5 ist dann der einzige zusätzliche.
 
-## Weg B — einen vorhandenen Flow umbauen
+### 1. In einer Lösung anlegen
 
-Wer bereits einen Benachrichtigungs-Flow hat, braucht den mitgelieferten nicht. Der Umbau in der
-Reihenfolge, in der er am wenigsten weh tut:
-
-### 1. Den Flow in einer Lösung öffnen
-
-Nicht unter *Meine Flows*, sondern innerhalb einer nicht verwalteten Lösung. Nur dort bekommt er
-Connection References statt fest verdrahteter Verbindungen, und nur so lässt er sich später
-weitergeben.
+Nicht unter *Meine Flows*, sondern innerhalb einer **nicht verwalteten Lösung**: *Neu →
+Automatisierung → Cloud Flow → Automatisiert*. Nur dort bekommt der Flow eine Connection Reference
+statt einer fest verdrahteten Verbindung, und nur so lässt er sich später in eine andere Umgebung
+mitnehmen.
 
 ### 2. Trigger
 
@@ -190,36 +183,36 @@ Zwei Aktionen *Zeile aktualisieren* auf Tabelle **Mention**, Zeilen-ID
 Ohne diese beiden Aktionen bleibt jede Zeile für immer auf `New`. Man sieht dann weder, dass
 etwas verschickt wurde, noch dass etwas schiefging.
 
-### 5. Reste des alten Flows entfernen
+### 5. Nur beim Umbau: Reste des alten Flows entfernen
 
 Was auf Spalten des alten Prozesses zugreift, muss weg — Dataverse beantwortet eine Spalte, die es
 nicht gibt, mit `null` statt mit einem Fehler. Der Flow läuft dann grün und verschickt nichts, und
 niemand erfährt davon. Insbesondere:
 
 * Variablen und Compose-Schritte, die einen Link zusammenbauen. Der Deep-Link steht fertig in
-  `ayonto_recordurl` — das Component setzt ihn samt App-ID, sofern `orgUrl` konfiguriert ist.
+  `ayonto_recordurl`, sonst baut ihn Schritt 2.
 * Anzeigetexte, die Felder des alten Prozesses lesen.
 * Fest eingetragene Absenderadressen und BCC-Einträge.
 
 ### 6. Einschalten und testen
 
-Wie in Weg A, Schritt 3 und 4.
+Flow **einschalten** — ein neu angelegter Flow ist an, ein importierter zunächst aus. Dann eine
+Zeile in `ayonto_mention` von Hand anlegen: `ayonto_userid` auf die eigene Benutzer-ID,
+`ayonto_useremail` auf die eigene Adresse, `ayonto_message` mit Text, `ayonto_channel` auf
+`Email`, `ayonto_deliverystatus` auf `New`. Kommt die Mail und steht die Zeile danach auf `Sent`,
+ist der Flow fertig.
 
-## Was der Flow bewusst offen lässt
+## Weitere Kanäle und andere Versandwege
 
-Der mitgelieferte Flow übernimmt den Großteil: Trigger, Kanalschalter, Umgebungsadresse,
-Datensatzlink, Versand über Dataverse, Statusrückschreibung. Zwei Dinge übernimmt er bewusst
-nicht.
+Die Anleitung oben beschreibt den E-Mail-Zweig über Dataverse. Zwei Erweiterungen sind vorgesehen,
+beide im selben Schalter:
 
-**Den zweiten Kanal.** Eine Aktion für einen Connector, den die Zielumgebung nicht lizenziert oder
-freigegeben hat, blockiert den Import der ganzen Lösung — und wie eine Chat-Nachricht in einer
-Organisation aussieht, ist eine Hausentscheidung. Ein mitgelieferter Zweig wäre eine Vorgabe, die
-man erst wieder loswerden muss.
+**Ein zweiter Kanal**, etwa eine Chat-Nachricht — siehe unten. Der Schalter auf `ayonto_channel`
+ist genau dafür da; die Komponente schreibt je eingeschaltetem Kanal eine eigene Zeile.
 
-**Den Versand über einen externen Dienst.** Aus demselben Grund, und weil damit ein API-Schlüssel
-ins Spiel käme. Wo der Dataverse-Versand nicht in Frage kommt, steht der Umbau in
-[external-mail-provider.md](external-mail-provider.md) — deutsch und englisch, ohne einen
-bestimmten Anbieter zu nennen.
+**Ein externer Versanddienst** statt Dataverse, wo die serverseitige Synchronisierung fehlt. Der
+Umbau steht in [external-mail-provider.md](external-mail-provider.md) — deutsch und englisch, ohne
+einen bestimmten Anbieter zu nennen.
 
 ### Den Teams-Zweig ergänzen
 
@@ -258,11 +251,9 @@ mit dem Grund „kein Zweig für diesen Kanal" vermerkt. Sie verschwinden also n
 
 ### Managed oder unmanaged importieren
 
-Der Release baut beides. Wer den Flow anpassen will — und der Teams-Zweig ist genau das —,
-importiert die **unmanaged** Lösung: darin ist der Flow direkt bearbeitbar. Eine managed Lösung
-bekommt für jede Änderung eine unmanaged Ebene darüber, die bei jedem Update wieder gegen die
-neue Version geprüft werden will. Für eine Lösung, die ausdrücklich nur den Großteil vorgibt,
-ist das der umständlichere Weg.
+Der Release baut beides. Für die mitgelieferte Lösung — Tabelle und Components — ist **managed**
+der übliche Weg: daran ist nichts anzupassen. Der Flow entsteht ohnehin in einer eigenen,
+nicht verwalteten Lösung Ihrer Umgebung und bleibt dort jederzeit bearbeitbar.
 
 ## Der Link auf den Datensatz
 
@@ -288,8 +279,8 @@ ist schlechter als keiner.
 
 **Die App-ID.** Ein Datensatz kann in mehreren modellgesteuerten Apps vorkommen; welche davon die
 Mail öffnen soll, weiß die Plattform nicht. Ohne App-ID ist der Link gültig und öffnet die
-Standard-App des Benutzers. Wer eine bestimmte App will, trägt ihre ID in die Environment Variable
-`ayonto_MentionAppId` ein — einmal pro Umgebung.
+Standard-App des Benutzers. Wer eine bestimmte App will, ergänzt ihre ID im Compose
+`Datensatzlink` — oder legt sich dafür eine eigene Environment Variable an.
 
 **Die Umgebungsadresse auf dem Component.** Ein Code-Component darf das `window`-Objekt
 [nicht lesen](https://learn.microsoft.com/power-apps/developer/component-framework/faq#can-i-access-window-object-from-the-component),
@@ -308,8 +299,9 @@ Link, und die Benachrichtigung trägt ihn trotzdem.
 | `orgUrl` | Basis-URL der Umgebung — optional, der Flow kommt auch ohne aus |
 | `appId` | optional, damit der Link in der richtigen App öffnet |
 
-Die Environment Variable `ayonto_MentionEnvironmentUrl` ist eine reine Übersteuerung, für den Fall
-dass die App über einen anderen Host erreicht wird als die Web-API. Leer lassen ist der Normalfall.
+`orgUrl` und `appId` sind beides Bequemlichkeiten: ohne sie baut der Flow den Link selbst, nur
+eben ohne App-ID. Wird die App über einen anderen Host erreicht als die Web-API, tragen Sie den
+im Compose `Umgebungsadresse` fest ein statt ihn abzuleiten.
 
 ## Ausdrücke zum Kopieren
 
@@ -328,15 +320,10 @@ ayonto_deliverystatus eq 'New'
 `trigger()` statt `triggerOutputs()` ist hier ein beliebter Fehler: das liefert den Lauf, nicht die
 Zeile, der Ausdruck ist immer leer und es greift stillschweigend immer der Ersatztext.
 
-**Umgebungsadresse** (Compose; leitet sie aus der Zeile ab, die Variable übersteuert nur)
+**Umgebungsadresse** (Compose)
 
 ```
-@if(empty(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')),
-    concat('https://', uriHost(outputs('Datensatz_lesen')?['body/@odata.id'])),
-    if(endsWith(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), '/'),
-       substring(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)'), 0,
-                 sub(length(parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')), 1)),
-       parameters('Ayonto Mention Environment Url (ayonto_MentionEnvironmentUrl)')))
+@concat('https://', uriHost(outputs('Datensatz_lesen')?['body/@odata.id']))
 ```
 
 `Datensatz_lesen` ist eine Dataverse-Aktion *Zeile abrufen* auf `ayonto_mentions` mit der
@@ -352,29 +339,13 @@ Eintragen der Umgebungsadresse in jeder Umgebung.
           or(empty(triggerOutputs()?['body/ayonto_recordtable']),
              empty(triggerOutputs()?['body/ayonto_recordid']))),
        '',
-       concat(outputs('Umgebungsadresse'), '/main.aspx?',
-              if(empty(parameters('Ayonto Mention App Id (ayonto_MentionAppId)')), '',
-                 concat('appid=', parameters('Ayonto Mention App Id (ayonto_MentionAppId)'), '&')),
-              'pagetype=entityrecord&etn=', triggerOutputs()?['body/ayonto_recordtable'],
+       concat(outputs('Umgebungsadresse'), '/main.aspx?pagetype=entityrecord&etn=',
+              triggerOutputs()?['body/ayonto_recordtable'],
               '&id=', triggerOutputs()?['body/ayonto_recordid'])))
 ```
 
-**Nachrichtentext (HTML)**
-
-```
-@concat(
-  '<p>', coalesce(triggerOutputs()?['body/ayonto_message'], ''), '</p>',
-  if(empty(triggerOutputs()?['body/ayonto_recordname']), '',
-     concat('<p>Datensatz: ', triggerOutputs()?['body/ayonto_recordname'], '</p>')),
-  if(empty(outputs('Datensatzlink')), '',
-     concat('<p><a href="', outputs('Datensatzlink'), '">',
-            if(empty(triggerOutputs()?['body/ayonto_linktext']), 'Datensatz öffnen',
-               triggerOutputs()?['body/ayonto_linktext']), '</a></p>'))
-)
-```
-
-Die beiden `if(empty(…))` sind der Grund, warum die Mail auch dann lesbar bleibt, wenn weder
-Spalte noch Environment Variable einen Link hergeben: statt eines toten Links fehlt der Absatz.
+Soll der Link in einer bestimmten App öffnen, ergänzen Sie `appid=<ID der App>&` direkt hinter
+`main.aspx?`. Ohne App-ID öffnet Dataverse die Standard-App des Benutzers — ein gültiger Link.
 
 **Absender und Empfänger als Aktivitätsparteien**
 
@@ -397,9 +368,7 @@ Im Flow stehen dort Ausdrücke:
 **Absender bestimmen** (Compose)
 
 ```
-@if(empty(parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)')),
-    triggerOutputs()?['body/ayonto_mentionedbyid'],
-    parameters('Ayonto Mention Sender User (ayonto_MentionSenderUser)'))
+@triggerOutputs()?['body/ayonto_mentionedbyid']
 ```
 
 Leer gelassen kommt die Mail also von der Person, die erwähnt hat. Deren Postfach muss dafür

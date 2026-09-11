@@ -106,7 +106,7 @@ der nächsten Version noch da ist. Was im Panel steht, gewinnt ohnehin.
 
 Ohne Datensatzbezug funktioniert das Component weiter, die Benachrichtigung wird dann nur nicht mit
 dem Datensatz verknüpft. `orgUrl` ist dagegen kein Muss mehr: bleibt es leer, liest der
-mitgelieferte Flow die Umgebungsadresse aus der Zeile selbst — siehe
+Flow die Umgebungsadresse aus der Zeile selbst — siehe
 [solution/README.md](../solution/README.md#der-link-auf-den-datensatz).
 
 **Jeder Kanal hat seine eigene Formulierung**, weil eine Chat-Nachricht woanders gelesen wird als
@@ -127,8 +127,9 @@ Link baut das Component beziehungsweise der Flow.
    Statusspalte kann nicht gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 3. Ein Cloud-Flow, der auf neue Zeilen dieser Tabelle auslöst, verschickt die Benachrichtigung —
    per E-Mail, Teams oder was die Organisation sonst nutzt — und schreibt `ayonto_deliverystatus`
-   auf `Sent` oder `Failed` zurück. Ein solcher Flow kommt mit der Lösung; einrichten, umbauen und
-   alle Ausdrücke zum Kopieren stehen in [solution/README.md](../solution/README.md).
+   auf `Sent` oder `Failed` zurück. Dieser Flow ist **nicht** Teil der Lösung: ihn anzulegen
+   beschreibt [solution/README.md](../solution/README.md), Schritt für Schritt und mit allen
+   Ausdrücken zum Kopieren. So fragt der Import der Lösung nach keiner Verbindung.
 
 Benachrichtigt wird die Person, die in der Vorschlagsliste gewählt wurde — nicht der Name, der
 dabei in den Text geschrieben wird. Das Component merkt sich zu jeder eingefügten Erwähnung deren

@@ -98,39 +98,34 @@ reproduzieren.
 
 ## Benachrichtigungen
 
-Die Lösung liefert den Benachrichtigungsweg mit: Tabelle, Cloud-Flow, die Dataverse-Connection-
-Reference und drei Environment Variables sind Bestandteil des Pakets.
+Die Lösung liefert die Tabelle `ayonto_mention` samt Ansicht und die beiden Code-Components —
+**mehr nicht**. Der Import fragt nach keiner einzigen Verbindung, weil nichts darin eine braucht.
 
-**Versendet wird über Dataverse selbst.** Der Flow legt eine E-Mail-Aktivität mit Absender und
-Empfänger als Aktivitätsparteien an und löst die Dataverse-Aktion `SendEmail` aus. Kein externer
-Connector, kein API-Schlüssel, keine Domain außerhalb der Umgebung — die einzige Verbindung, nach
-der der Import fragt, ist Dataverse. Beide Code-Components deklarieren zudem
-`<external-service-usage enabled="false" />`.
+Den Flow, der aus einer Zeile eine Benachrichtigung macht, legt man selbst an. Das ist Absicht: ein
+Flow bringt eine Verbindung mit, die beim Import belegt werden muss, und wer die Benachrichtigung
+gar nicht braucht, soll darüber nicht stolpern. Wie eine Benachrichtigung aussieht, ist ohnehin
+eine Hausentscheidung.
 
-| mitgeliefert | von der Zielumgebung zu stellen |
+**Der beschriebene Standardweg ist Dataverse selbst**: der Flow legt eine E-Mail-Aktivität mit
+Absender und Empfänger als Aktivitätsparteien an und löst die Aktion `SendEmail` aus. Kein
+externer Connector, kein API-Schlüssel, keine Domain außerhalb der Umgebung. Beide Code-Components
+deklarieren zudem `<external-service-usage enabled="false" />`.
+
+| | |
 |---|---|
-| Tabelle `ayonto_mention` samt Ansicht | Verbindung Dataverse |
-| Flow *Ayonto – Send Mention Notification* (E-Mail-Zweig) | serverseitige Synchronisierung, freigegebenes Postfach |
-| Connection Reference Dataverse | — |
-| Environment Variables für Absender, Umgebungs-URL und App-ID | alle drei optional |
-
-Voraussetzung des Dataverse-Versands ist ein Postfach, das freigegeben und für den Versand
-aktiviert ist. Wo das fehlt, tritt ein Connector an die Stelle der beiden Dataverse-Aktionen —
-beschrieben in [solution/external-mail-provider.md](solution/external-mail-provider.md), deutsch
-und englisch und ohne einen bestimmten Anbieter zu nennen.
+| **[solution/README.md](solution/README.md)** | Den Flow anlegen, Schritt für Schritt, mit allen Ausdrücken zum Kopieren |
+| **[solution/external-mail-provider.md](solution/external-mail-provider.md)** | Versand über einen externen Dienst statt Dataverse — deutsch und englisch, ohne Anbieternamen |
+| [solution/examples/](solution/examples) | die fertige Flow-Definition zum Nachschlagen; sie wird beim Bauen gegen die Tabelle geprüft und ist nicht Teil der Lösung |
 
 Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und
-Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Der Flow bedient davon den
-**E-Mail-Zweig**; weitere Kanäle ergänzt man im Schalter `Kanal`.
+Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Eine Statusspalte kann nicht
+gleichzeitig „die Mail kam an" und „die Chat-Nachricht nicht" bedeuten.
 
 Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde, und dafür ist
 nichts einzutragen: der Flow liest die ausgelöste Zeile zurück und nimmt die Umgebungsadresse aus
 deren `@odata.id`. Den Link selbst nimmt er aus `ayonto_recordurl`, wenn die Komponente einen
 geschrieben hat, und baut ihn sonst aus Tabelle und Zeilen-ID. Kennt auch die Zeile keinen
 Datensatz, entfällt der Absatz, statt einen toten Link zu zeigen.
-
-Einrichtung, Umbau eines vorhandenen Flows und alle Ausdrücke zum Kopieren:
-**[solution/README.md](solution/README.md)**.
 
 ## Abhängigkeiten und Sicherheit
 
