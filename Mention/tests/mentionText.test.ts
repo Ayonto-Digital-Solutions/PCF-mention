@@ -6,6 +6,8 @@ import {
 	escapeHtml,
 	escapeODataLiteral,
 	findMentionTrigger,
+	mentionDeletionRange,
+	mentionSpans,
 	normalizeGuid,
 	reanchorMentions,
 	splitMentions,
@@ -330,5 +332,87 @@ describe("splitMentions", () => {
 			{ text: " and " },
 			{ text: "@Anna Berger", userId: "u1" },
 		]);
+	});
+});
+
+describe("mentionSpans", () => {
+	const users = new Map([["Anna Berger", "u1"]]);
+
+	it("says where the mentions sit", () => {
+		const text = "hi @Anna Berger, thanks";
+		const spans = mentionSpans(splitMentions(text, users));
+
+		expect(spans).toEqual([{ start: 3, end: 15 }]);
+		expect(text.slice(3, 15)).toBe("@Anna Berger");
+	});
+
+	it("passes over a name nobody could resolve", () => {
+		expect(mentionSpans(splitMentions("hi @Carla Meier", users))).toEqual([]);
+	});
+});
+
+describe("mentionDeletionRange", () => {
+	const spans = [{ start: 6, end: 18 }];
+	const text = "Bitte @Anna Berger prüfen";
+
+	/** What the textarea is left to delete. */
+	const taken = (range: { start: number; end: number } | null) =>
+		range === null ? null : text.slice(range.start, range.end);
+
+	it("takes the whole name when Backspace stands behind it", () => {
+		const range = mentionDeletionRange(text, 18, "backward", spans);
+		// The space behind the name goes with it, or the sentence keeps a double gap.
+		expect(range).toEqual({ start: 6, end: 19 });
+		expect(taken(range)).toBe("@Anna Berger ");
+	});
+
+	it("takes the whole name when Backspace stands inside it", () => {
+		expect(taken(mentionDeletionRange(text, 11, "backward", spans))).toBe(
+			"@Anna Berger ",
+		);
+	});
+
+	it("takes the whole name when Delete stands in front of it", () => {
+		expect(taken(mentionDeletionRange(text, 6, "forward", spans))).toBe(
+			"@Anna Berger ",
+		);
+	});
+
+	it("leaves Backspace in front of the mention alone", () => {
+		// The character in front of the "@" is not part of the name.
+		expect(mentionDeletionRange(text, 6, "backward", spans)).toBeNull();
+	});
+
+	it("leaves Delete behind the mention alone", () => {
+		expect(mentionDeletionRange(text, 18, "forward", spans)).toBeNull();
+	});
+
+	it("reports nothing where there is no mention", () => {
+		expect(mentionDeletionRange(text, 3, "backward", spans)).toBeNull();
+		expect(mentionDeletionRange(text, 22, "forward", spans)).toBeNull();
+	});
+
+	it("keeps the space that belonged to the text in front of it", () => {
+		// Nothing stands in front of this mention, so the space behind it is the sentence's.
+		expect(
+			mentionDeletionRange("@Anna Berger prüfen", 12, "backward", [
+				{ start: 0, end: 12 },
+			]),
+		).toEqual({ start: 0, end: 12 });
+	});
+
+	it("does not reach past the end of the text", () => {
+		expect(
+			mentionDeletionRange("Bitte @Anna Berger", 18, "backward", spans),
+		).toEqual({ start: 6, end: 18 });
+	});
+
+	it("finds the mention the caret is in when the text holds several", () => {
+		const many = "@Anna Berger und @Bob heute";
+		const found = mentionDeletionRange(many, 21, "backward", [
+			{ start: 0, end: 12 },
+			{ start: 17, end: 21 },
+		]);
+		expect(many.slice(found!.start, found!.end)).toBe("@Bob ");
 	});
 });

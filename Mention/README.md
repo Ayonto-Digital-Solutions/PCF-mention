@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 159 Tests
+npm test                              # 177 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -189,6 +189,28 @@ schlimmer als keiner. Aus demselben Grund bleibt ein Name ohne Link, wenn dieser
 zwei verschiedene Personen führt — außer für die Erwähnung, die gerade gesetzt wurde, denn zu der
 ist die Person bekannt.
 
+### Erwähnungen löschen
+
+Eine Erwähnung wird **als Ganzes** gelöscht. Rücktaste oder Entf mitten in `@Anna Berger` — oder
+unmittelbar dahinter bzw. davor — nimmt den ganzen Namen heraus, nicht einen Buchstaben. Steht
+links und rechts davon ein Leerzeichen, geht das hintere mit, damit im Satz keine doppelte Lücke
+zurückbleibt.
+
+Das ist nicht nur bequemer, es ist genauer: `@Anna Berge` erwähnt niemanden mehr. Wer einen
+gewählten Namen buchstabenweise wegradiert, hat schon nach dem ersten Anschlag Text stehen, der
+noch wie eine Erwähnung aussieht, während die Person aus der Benachrichtigung bereits herausgefallen
+ist. Mit dem Namen verschwindet deshalb auch die für ihn vorgemerkte Benachrichtigung — solange sie
+noch in der Karenzzeit wartet, geht sie gar nicht erst raus.
+
+Gelöscht wird dabei vom Textfeld selbst — das Component richtet den Tastendruck nur auf den ganzen
+Namen aus, statt den Text eigenhändig zu ändern. Rückgängig (Strg+Z) holt die Erwähnung deshalb
+zurück wie jede andere Eingabe auch.
+
+Als Erwähnung zählt dabei genau das, was das Component auch verlinken kann (siehe oben): eine
+Erwähnung, die gerade gesetzt wurde, oder eine, die dieser Datensatz schon führt. Ein `@Name`, den
+niemand auflösen kann, ist gewöhnlicher Text und wird auch so gelöscht. Und eine markierte
+Textstelle bleibt unangetastet: Wer etwas ausgewählt hat, hat damit bereits gesagt, was weg soll.
+
 ### Was die Umgebung dafür braucht
 
 * Der **Anwender** braucht Leserecht auf `systemuser` — sonst findet die Vorschlagsliste niemanden
@@ -243,7 +265,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 159 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 177 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
 
 Behobene Fehler aus 1.0:
 

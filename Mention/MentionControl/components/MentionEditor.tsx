@@ -22,6 +22,8 @@ import type {
 import {
 	applyMention,
 	findMentionTrigger,
+	mentionDeletionRange,
+	mentionSpans,
 	reanchorMentions,
 	splitMentions,
 	type InsertedMention,
@@ -511,10 +513,45 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 		],
 	);
 
+	const mentionSegments = React.useMemo(
+		() => splitMentions(text, knownMentions, insertedMentions.current),
+		[text, knownMentions],
+	);
+
 	const handleKeyDown = React.useCallback(
 		(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-			// The Enter that commits an IME candidate must not pick a suggestion.
-			if (!trigger || event.nativeEvent.isComposing) {
+			// The Enter that commits an IME candidate must not pick a suggestion, and the keys an
+			// IME is still working on are not deletions either.
+			if (event.nativeEvent.isComposing) {
+				return;
+			}
+
+			// A mention is deleted as a whole: the key is aimed at the whole name and the deleting
+			// is left to the textarea. Doing it here instead would take the step out of the undo
+			// history the field keeps, and Ctrl+Z would no longer bring the name back.
+			//
+			// This runs before the picker's keys, because it also has to work while no mention is
+			// open — which is the normal state of a name that was picked a while ago.
+			if (event.key === "Backspace" || event.key === "Delete") {
+				const element = event.currentTarget;
+				const caret = element.selectionStart ?? 0;
+				// A selection already says what is to go; only a bare caret is ambiguous.
+				const range =
+					caret === element.selectionEnd
+						? mentionDeletionRange(
+								text,
+								caret,
+								event.key === "Backspace" ? "backward" : "forward",
+								mentionSpans(mentionSegments),
+							)
+						: null;
+				if (range) {
+					element.setSelectionRange(range.start, range.end);
+					return;
+				}
+			}
+
+			if (!trigger) {
 				return;
 			}
 
@@ -550,12 +587,15 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					break;
 			}
 		},
-		[activeIndex, closeSuggestions, select, suggestions, trigger],
-	);
-
-	const mentionSegments = React.useMemo(
-		() => splitMentions(text, knownMentions, insertedMentions.current),
-		[text, knownMentions],
+		[
+			activeIndex,
+			closeSuggestions,
+			mentionSegments,
+			select,
+			suggestions,
+			text,
+			trigger,
+		],
 	);
 
 	const isOpen =
