@@ -5,7 +5,10 @@
     "2.2.0 shipped a table without its view because nothing read the package itself."
   ],
   "uniqueName": "AyontoPcfControls",
-  "publisher": { "uniqueName": "Ayonto", "prefix": "ayonto" },
+  "publisher": {
+    "uniqueName": "Ayonto",
+    "prefix": "ayonto"
+  },
   "tables": {
     "ayonto_mention": {
       "columns": [
@@ -24,7 +27,9 @@
         "ayonto_deliverystatus",
         "ayonto_deliverydetail"
       ],
-      "views": ["Active Mentions"]
+      "views": [
+        "Active Mentions"
+      ]
     }
   },
   "relationships": [
@@ -35,9 +40,23 @@
     "team_ayonto_mention",
     "user_ayonto_mention"
   ],
-  "controls": ["ayonto_Ayonto.MentionControl", "ayonto_Ayonto.GroupDetailListControl"],
+  "controls": [
+    "ayonto_Ayonto.MentionControl",
+    "ayonto_Ayonto.GroupDetailListControl"
+  ],
   "controlsOnlyWhenReferenced": true,
-  "workflows": [],
-  "connectionReferences": [],
-  "environmentVariables": []
+  "workflows": [
+    {
+      "name": "Ayonto - Send Mention Notification",
+      "clientDataFile": "AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json"
+    }
+  ],
+  "connectionReferences": [
+    "ayonto_sharedcommondataserviceforapps_mention",
+    "ayonto_sharedsendgrid_mention"
+  ],
+  "environmentVariables": [
+    "ayonto_MentionSenderAddress",
+    "ayonto_MentionSenderName"
+  ]
 }

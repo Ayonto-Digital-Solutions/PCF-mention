@@ -2,7 +2,34 @@
 <ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Entities />
   <Roles />
-  <Workflows />
+  <Workflows>
+    <Workflow WorkflowId="{4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90}" Name="Ayonto - Send Mention Notification">
+      <JsonFileName>/Workflows/AyontoSendMentionNotification-4f2b7c81-9a05-4d63-8e17-c6b3a5d24f90.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>0</StateCode>
+      <StatusCode>1</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.0</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="Ayonto - Send Mention Notification" />
+      </LocalizedNames>
+    </Workflow>
+  </Workflows>
   <FieldSecurityProfiles />
   <Templates />
   <EntityMaps />
@@ -11,6 +38,24 @@
   <optionsets />
   <CustomControls />
   <SolutionPluginAssemblies />
+  <connectionreferences>
+    <connectionreference connectionreferencelogicalname="ayonto_sharedcommondataserviceforapps_mention">
+      <connectionreferencedisplayname>Microsoft Dataverse - Ayonto Mention</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps</connectorid>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+    <connectionreference connectionreferencelogicalname="ayonto_sharedsendgrid_mention">
+      <connectionreferencedisplayname>SendGrid - Ayonto Mention</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_sendgrid</connectorid>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+  </connectionreferences>
   <EntityDataProviders />
   <Languages>
     <Language>1033</Language>

@@ -75,7 +75,31 @@ def main() -> None:
     if entities is not None and len(entities) > 0:
         fail("src/Other/Customizations.xml must keep <Entities /> childless — the packer drops the folder otherwise")
 
-    print(f"solution source: {len(folders)} table(s) declared and present, XML well-formed")
+    # A flow is two things: the entry that names it and the definition it points at. A entry whose
+    # file is missing packs without complaint and imports as a flow that does nothing.
+    flows = customizations.findall("./Workflows/Workflow")
+    for flow in flows:
+        named = (flow.findtext("JsonFileName") or flow.findtext("XamlFileName") or "").lstrip("/")
+        if not named:
+            fail(f"the flow '{flow.get('Name')}' names no definition file")
+        if not (ROOT / "src" / named).is_file():
+            fail(f"the flow '{flow.get('Name')}' points at src/{named}, which is not there")
+
+    references = customizations.findall("./connectionreferences/connectionreference")
+    variables = sorted((ROOT / "src/environmentvariabledefinitions").glob("*/environmentvariabledefinition.xml"))
+    for variable in variables:
+        declared_name = ET.parse(variable).getroot().get("schemaname", "")
+        if declared_name != variable.parent.name:
+            fail(
+                f"environmentvariabledefinitions/{variable.parent.name} declares the schema name "
+                f"'{declared_name}' — the folder and the name have to match"
+            )
+
+    print(
+        f"solution source: {len(folders)} table(s) declared and present, {len(flows)} flow(s), "
+        f"{len(references)} connection reference(s), {len(variables)} environment variable(s), "
+        "XML well-formed"
+    )
 
 
 if __name__ == "__main__":

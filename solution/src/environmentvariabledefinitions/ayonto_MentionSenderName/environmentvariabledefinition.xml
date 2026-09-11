@@ -1,0 +1,14 @@
+<environmentvariabledefinition schemaname="ayonto_MentionSenderName">
+  <defaultvalue>Mention notification</defaultvalue>
+  <displayname default="Ayonto Mention Sender Name">
+    <label description="Ayonto Mention Sender Name" languagecode="1033" />
+  </displayname>
+  <description default="Display name the mention notification appears under.">
+    <label description="Display name the mention notification appears under." languagecode="1033" />
+  </description>
+  <introducedversion>1.0.0.0</introducedversion>
+  <iscustomizable>1</iscustomizable>
+  <isrequired>0</isrequired>
+  <secretstore>0</secretstore>
+  <type>100000000</type>
+</environmentvariabledefinition>
