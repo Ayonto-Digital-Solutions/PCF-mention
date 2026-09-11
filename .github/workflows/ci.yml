@@ -115,11 +115,11 @@ jobs:
             exit 1
           fi
 
-          # Three mistakes that are silent everywhere else. A column name that does not exist,
+          # Four mistakes that are silent everywhere else. A column name that does not exist,
           # which Dataverse answers with null rather than an error; a column read through
-          # trigger() instead of triggerOutputs(), which is always empty; and a column length in
-          # the README that no longer matches the table it is copied from. The first two leave a
-          # flow that runs green and delivers nothing.
+          # trigger() instead of triggerOutputs(), which is always empty; a renamed action that
+          # an expression still reaches for, so what it carried disappears from the message; and
+          # a column length in the README that no longer matches the table it is copied from.
           python3 - <<'MUTATE'
           import re
           import shutil
@@ -130,6 +130,7 @@ jobs:
               "typo": (flow, "body/ayonto_useremail", "body/ayonto_usermail"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
               "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
+              "outputs": (flow, '"Datensatzlink": {', '"Datensatzlink_": {'),
           }
           for name, (where, before, after) in cases.items():
               target = Path(f"/tmp/mutant-{name}")

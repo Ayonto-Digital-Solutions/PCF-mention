@@ -107,11 +107,17 @@ nachbauen — nur zuweisen, was in keine Lösung gehört.
 | Tabelle `ayonto_mention` samt Ansicht | Verbindung Dataverse |
 | Flow *Ayonto – Send Mention Notification* | Verbindung SendGrid (trägt den API-Key) |
 | Connection References für beide Connectoren | Wert der Absenderadresse |
-| Environment Variables für Absenderadresse und -name | verifizierter Absender bei SendGrid |
+| Environment Variables für Absender, Umgebungs-URL und App-ID | verifizierter Absender bei SendGrid |
 
 Der Flow löst auf **neue** Zeilen mit `ayonto_deliverystatus = New` aus, verschickt über SendGrid
 und schreibt `Sent` oder `Failed` in dieselbe Zeile zurück. Dass er nur auf neue Zeilen hört, ist
 die Bedingung dafür: die Rückschreibung ändert die Zeile, die ihn ausgelöst hat.
+
+Jede Benachrichtigung trägt einen Link auf den Datensatz, in dem erwähnt wurde. Er stammt aus
+`ayonto_recordurl`, das die Komponente schreibt; ist die Spalte leer — weil auf der Komponente
+keine Umgebungs-URL konfiguriert wurde —, baut der Flow den Link aus Umgebungs-URL, Tabelle und
+Zeilen-ID selbst. Liefert keine der beiden Quellen etwas, entfällt der Absatz, statt einen toten
+Link zu zeigen.
 
 Der API-Key steht ausschließlich in der SendGrid-Verbindung — nicht im Flow, nicht in einer
 Environment Variable, nicht in der Lösung, und damit auch in keiner Kopie davon. Eine

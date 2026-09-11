@@ -57,6 +57,8 @@
   ],
   "environmentVariables": [
     "ayonto_MentionSenderAddress",
-    "ayonto_MentionSenderName"
+    "ayonto_MentionSenderName",
+    "ayonto_MentionEnvironmentUrl",
+    "ayonto_MentionAppId"
   ]
 }
