@@ -279,6 +279,70 @@ export function splitMentions(
 	return segments;
 }
 
+/** A stretch of the text, from `start` up to but not including `end`. */
+export interface TextSpan {
+	readonly start: number;
+	readonly end: number;
+}
+
+/**
+ * Reads the positions of the mentions out of the segments the editor shows, so a keystroke can be
+ * aimed at a whole mention instead of at the single character in front of the caret.
+ */
+export function mentionSpans(segments: readonly MentionSegment[]): TextSpan[] {
+	const spans: TextSpan[] = [];
+	let at = 0;
+
+	for (const segment of segments) {
+		const end = at + segment.text.length;
+		if (segment.userId !== undefined) {
+			spans.push({ start: at, end });
+		}
+		at = end;
+	}
+
+	return spans;
+}
+
+/**
+ * What a Backspace or a Delete should take when the caret sits in a mention: the whole name
+ * instead of the one character in front of the caret. Returns null everywhere else, and the key
+ * then keeps its usual meaning.
+ *
+ * A mention is one thing to whoever reads it — "@Anna Berger" names a person, "@Anna Berge" names
+ * nobody. Taking a single letter out of it therefore does not leave half a mention, it leaves text
+ * that still looks like one while the person it stood for has already dropped out of the
+ * notification. Whoever starts deleting a name means the name.
+ *
+ * The two directions are the halves an ordinary text field works on: `backward` is Backspace and
+ * reaches the mention that ends at the caret, `forward` is Delete and reaches the one that starts
+ * there.
+ */
+export function mentionDeletionRange(
+	text: string,
+	caret: number,
+	direction: "backward" | "forward",
+	spans: readonly TextSpan[],
+): TextSpan | null {
+	const span = spans.find((candidate) =>
+		direction === "backward"
+			? caret > candidate.start && caret <= candidate.end
+			: caret >= candidate.start && caret < candidate.end,
+	);
+	if (span === undefined) {
+		return null;
+	}
+
+	// A mention standing in a sentence has a space on either side of it. Leaving both behind would
+	// put a double space where the name was, so the one behind the mention goes with it.
+	const end =
+		span.start > 0 && text[span.start - 1] === " " && text[span.end] === " "
+			? span.end + 1
+			: span.end;
+
+	return { start: span.start, end };
+}
+
 /** Escapes a value so it can be embedded in an OData string literal. */
 export function escapeODataLiteral(value: string): string {
 	return value.replace(/'/g, "''");

@@ -62,6 +62,28 @@ function type(textarea: HTMLTextAreaElement, value: string, caret = value.length
 	fireEvent.change(textarea, { target: { value, selectionStart: caret, selectionEnd: caret } });
 }
 
+/** Puts the caret where a click or an arrow key would leave it. */
+function caretAt(textarea: HTMLTextAreaElement, caret: number) {
+	textarea.selectionStart = caret;
+	textarea.selectionEnd = caret;
+}
+
+/**
+ * Presses a deleting key and stands in for the browser: a key that deletes takes the selection
+ * when there is one, and the character in front of the caret when there is not. The editor only
+ * aims the key — the deleting itself is the textarea's, and it is not simulated here.
+ */
+function pressDelete(textarea: HTMLTextAreaElement, key: "Backspace" | "Delete") {
+	fireEvent.keyDown(textarea, { key });
+	const from = textarea.selectionStart ?? 0;
+	const to = textarea.selectionEnd ?? 0;
+	if (from === to) {
+		return;
+	}
+	const value = `${textarea.value.slice(0, from)}${textarea.value.slice(to)}`;
+	fireEvent.change(textarea, { target: { value, selectionStart: from, selectionEnd: from } });
+}
+
 let lastProps: MentionEditorProps | undefined;
 
 afterEach(cleanup);
@@ -602,6 +624,111 @@ describe("MentionEditor", () => {
 
 		expect(onMention).not.toHaveBeenCalled();
 		expect(screen.getAllByRole("option")).toHaveLength(2);
+	});
+
+	it("takes the whole mention out when Backspace lands behind a name that was picked", async () => {
+		// Half a name mentions nobody. Rubbing a picked name out letter by letter leaves text that
+		// still reads like a mention, while the person it stood for has already dropped out of it.
+		const { textarea, onChange } = setup();
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(textarea.value).toBe("Bitte @Anna Berger ");
+
+		caretAt(textarea, 18);
+		pressDelete(textarea, "Backspace");
+
+		expect(textarea.value).toBe("Bitte ");
+		expect(onChange).toHaveBeenLastCalledWith("Bitte ");
+	});
+
+	it("takes the whole mention out when Backspace lands inside the name", async () => {
+		const { textarea } = setup();
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		// In the middle of "Berger".
+		caretAt(textarea, 15);
+		pressDelete(textarea, "Backspace");
+
+		expect(textarea.value).toBe("Bitte ");
+	});
+
+	it("takes the whole mention out when Delete stands in front of the name", async () => {
+		const { textarea } = setup();
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		caretAt(textarea, 6);
+		pressDelete(textarea, "Delete");
+
+		expect(textarea.value).toBe("Bitte ");
+	});
+
+	it("drops the notification together with the name it was meant for", async () => {
+		const onWrittenMentionsChange = vi.fn();
+		const { textarea } = setup({ onWrittenMentionsChange });
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		expect(onWrittenMentionsChange).toHaveBeenLastCalledWith(["u1"]);
+
+		caretAt(textarea, 18);
+		pressDelete(textarea, "Backspace");
+
+		expect(onWrittenMentionsChange).toHaveBeenLastCalledWith([]);
+	});
+
+	it("also takes out a mention that was already on the record when the form opened", async () => {
+		// A name picked in an earlier session is a mention just as much as one picked a moment ago.
+		const loadMentions = vi.fn().mockResolvedValue([{ name: "Anna Berger", userId: "u1" }]);
+		const { textarea, onChange } = setup({
+			value: "Bitte @Anna Berger prüfen",
+			loadMentions,
+		});
+		await waitFor(() => expect(loadMentions).toHaveBeenCalled());
+
+		caretAt(textarea, 18);
+		pressDelete(textarea, "Backspace");
+
+		await waitFor(() => expect(onChange).toHaveBeenLastCalledWith("Bitte prüfen"));
+	});
+
+	it("still deletes a single character outside a mention", async () => {
+		const { textarea, onChange } = setup();
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		onChange.mockClear();
+
+		// In the word in front of the mention: the key is left alone, so the caret stays put and
+		// the textarea removes the one character it always would.
+		caretAt(textarea, 5);
+		fireEvent.keyDown(textarea, { key: "Backspace" });
+
+		expect(textarea.selectionStart).toBe(5);
+		expect(textarea.selectionEnd).toBe(5);
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("leaves a selection that covers part of a mention to the textarea", async () => {
+		// A selection already says what is to go; only a bare caret needs to be read as a name.
+		const { textarea, onChange } = setup();
+		type(textarea, "Bitte @An");
+		await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+		fireEvent.keyDown(textarea, { key: "Enter" });
+		onChange.mockClear();
+
+		textarea.selectionStart = 12;
+		textarea.selectionEnd = 18;
+		fireEvent.keyDown(textarea, { key: "Backspace" });
+
+		// Untouched — not widened to the whole name.
+		expect(textarea.selectionStart).toBe(12);
+		expect(textarea.selectionEnd).toBe(18);
+		expect(onChange).not.toHaveBeenCalled();
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {
