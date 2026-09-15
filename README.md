@@ -21,7 +21,7 @@ jeweiligen README unter „Was sich geändert hat".
 | | Mention | GroupDetailList |
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
-| Bundle jetzt | 25 KiB | 14 KiB |
+| Bundle jetzt | 29 KiB | 14 KiB |
 | Tests | 205 | 85 |
 
 ## Voraussetzungen
