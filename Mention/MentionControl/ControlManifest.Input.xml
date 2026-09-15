@@ -156,6 +156,25 @@
               usage="input"
               required="false" />
 
+    <!--
+      Rückfallwert für die Mindesthöhe, in Zeilen. Gilt nur, wenn die Höhe des Feldes nicht am
+      Container messbar ist: Die im Formular eingestellte Feldhöhe steckt im rowspan der Zelle,
+      und dafür gibt es keine PCF-Schnittstelle. Das Component misst sie deshalb am Container
+      und nimmt diesen Wert, wenn das nicht gelingt.
+
+      required="false" mit Vorgabewert, und das ist keine Stilfrage: Eine neuere Version eines
+      Code-Components darf keine Pflichteigenschaft ergänzen und keine bestehende entfernen —
+      dafür wäre ein neuer Component-Name nötig. Bestehende Formulare laufen damit unverändert
+      weiter.
+    -->
+    <property name="minRows"
+              display-name-key="MinRows_Name"
+              description-key="MinRows_Desc"
+              of-type="Whole.None"
+              usage="input"
+              required="false"
+              default-value="3" />
+
     <type-group name="text">
       <type>Multiple</type>
       <type>SingleLine.Text</type>

@@ -9,6 +9,7 @@ import {
 	Text,
 	Textarea,
 	makeStyles,
+	mergeClasses,
 	shorthands,
 	tokens,
 	webLightTheme,
@@ -30,6 +31,7 @@ import {
 	type MentionTrigger,
 } from "../utils/mentionText";
 import type { LoggedMention } from "../services/MentionLogService";
+import { minHeight, readRowMetrics, watchHostHeight } from "../utils/hostHeight";
 
 /** Delay before an "@" query is sent to Dataverse, so typing does not cause one call per keystroke. */
 const SEARCH_DEBOUNCE_MS = 250;
@@ -59,6 +61,11 @@ export interface MentionEditorProps {
 	readonly label?: string;
 	/** Set when mentioning is unavailable; explains why, and keeps the picker closed. */
 	readonly notice?: string;
+	/**
+	 * How many rows the editor shows at least when the form gives the field no height of its own.
+	 * Already clamped by the caller.
+	 */
+	readonly minRows: number;
 	readonly theme?: Theme;
 	readonly strings: MentionEditorStrings;
 	readonly formatNumber: (value: number) => string;
@@ -100,6 +107,16 @@ const useStyles = makeStyles({
 		maxWidth: "100%",
 		minWidth: 0,
 		width: "100%",
+	},
+	// The height the form gives the field, or the row count when it gives none. Both the input
+	// and the view laid over it carry it: they take turns being visible, and a box that changes
+	// height on focus makes the whole form jump.
+	//
+	// The fallback is what the first paint uses, before anything has been measured. It is spelled
+	// as a calculation on the line-height token rather than a pixel count, so it holds up when the
+	// theme changes the type scale or the browser is zoomed.
+	minHeight: {
+		minHeight: `var(--ayonto-mention-min-height, calc(var(--ayonto-mention-min-rows, 3) * ${tokens.lineHeightBase300} + ${tokens.spacingVerticalSNudge} * 2))`,
 	},
 	field: {
 		position: "relative",
@@ -204,6 +221,45 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const hasMoreResults = answersCurrentQuery && results.hasMore;
 
 	const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+	const rootRef = React.useRef<HTMLDivElement | null>(null);
+	/** What the form asks for, in pixels; zero while it asks for nothing. */
+	const [formHeight, setFormHeight] = React.useState(0);
+	/** The resolved minimum, or null while a row cannot be turned into pixels. */
+	const [minHeightPx, setMinHeightPx] = React.useState<number | null>(null);
+
+	// Started once and left running. Restarting it would take the first reading again — and by
+	// then the editor has already grown into the box the form gave it, so the slack that reading
+	// looks for is gone and the form's height would read as none. Only a field that was masked
+	// and is not any more starts it later, because there was no editor to measure before.
+	React.useLayoutEffect(() => {
+		const root = rootRef.current;
+		if (!root) {
+			return undefined;
+		}
+		const watch = watchHostHeight(root, setFormHeight, () => {
+			const metrics = textareaRef.current
+				? readRowMetrics(textareaRef.current)
+				: null;
+			return metrics?.lineHeight ?? 0;
+		});
+		return () => watch.stop();
+	}, [props.masked]);
+
+	// Turned into pixels separately, because a row is worth a different number of them after a
+	// theme change — and that must not cost the measurement.
+	const { minRows, theme } = props;
+	React.useLayoutEffect(() => {
+		const metrics = textareaRef.current
+			? readRowMetrics(textareaRef.current)
+			: null;
+		setMinHeightPx(
+			metrics === null
+				? null
+				: Math.round(
+						minHeight(formHeight, minRows, metrics.lineHeight, metrics.chrome),
+					),
+		);
+	}, [formHeight, minRows, theme]);
 	/** Where this editor wrote a mention, so typing on past one does not look like a new query. */
 	const insertedMentions = React.useRef<InsertedMention[]>([]);
 	/**
@@ -664,6 +720,18 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	return (
 		<FluentProvider
 			className={styles.provider}
+			ref={rootRef}
+			// Both boxes below read their minimum from here. The row count is always set, so the
+			// stylesheet has something to fall back on before anything has been measured; the
+			// pixel value appears once the form's height and the line height are both known.
+			style={
+				{
+					"--ayonto-mention-min-rows": String(minRows),
+					...(minHeightPx === null
+						? {}
+						: { "--ayonto-mention-min-height": `${minHeightPx.toString()}px` }),
+				} as React.CSSProperties
+			}
 			theme={props.theme ?? webLightTheme}
 		>
 			<div className={styles.root}>
@@ -701,6 +769,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 							"aria-controls": isSuggestionListRendered
 								? LISTBOX_ID
 								: undefined,
+							className: styles.minHeight,
 							maxLength: props.maxLength,
 							onClick: handleCaretMove,
 							onKeyUp: handleCaretMove,
@@ -713,7 +782,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 						// Clicking anywhere but a link puts the focus into the textarea, which takes
 						// this view away again.
 						<div
-							className={styles.reading}
+							className={mergeClasses(styles.reading, styles.minHeight)}
 							onMouseDown={(event) => {
 								if (!(event.target as HTMLElement).closest("a, button")) {
 									event.preventDefault();

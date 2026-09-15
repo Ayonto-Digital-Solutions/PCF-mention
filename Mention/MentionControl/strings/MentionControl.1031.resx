@@ -285,4 +285,10 @@
   <data name="Default_LinkText" xml:space="preserve">
     <value>Datensatz öffnen</value>
   </data>
+  <data name="MinRows_Name" xml:space="preserve">
+    <value>Mindesthöhe in Zeilen</value>
+  </data>
+  <data name="MinRows_Desc" xml:space="preserve">
+    <value>Mindestanzahl sichtbarer Zeilen, wenn das Formular keine Feldhöhe vorgibt.</value>
+  </data>
 </root>

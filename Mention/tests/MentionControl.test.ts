@@ -17,6 +17,8 @@ interface ContextOptions {
 	entityId?: string;
 	/** What a model-driven host reports about the record the component sits on. */
 	contextInfo?: { entityId?: string; entityTypeName?: string };
+	/** The configured minimum height in rows, exactly as a maker could leave it. */
+	minRows?: number | null;
 }
 
 function makeContext(options: ContextOptions = {}) {
@@ -39,6 +41,7 @@ function makeContext(options: ContextOptions = {}) {
 			orgUrl: text(""),
 			appId: text(""),
 			mentionTable: text(""),
+			minRows: { raw: options.minRows === undefined ? 3 : options.minRows, type: "Whole.None" },
 		},
 		mode: {
 			isControlDisabled: options.disabled ?? false,
@@ -73,6 +76,7 @@ function propsOf(element: React.ReactElement) {
 		onEditingChange: (editing: boolean) => void;
 		onMention: (user: { id: string; name: string }) => Promise<void>;
 		onWrittenMentionsChange: (userIds: readonly string[]) => void;
+		minRows: number;
 	};
 }
 
@@ -84,6 +88,22 @@ function mount(options: ContextOptions = {}) {
 	const props = propsOf(control.updateView(context));
 	return { control, context, notifyOutputChanged, props };
 }
+
+describe("MentionControl minimum height", () => {
+	it("hands the configured row count to the editor", () => {
+		expect(mount({ minRows: 8 }).props.minRows).toBe(8);
+	});
+
+	it("falls back where the property is empty", () => {
+		// A number property nobody filled in arrives as null, and the editor needs a number.
+		expect(mount({ minRows: null }).props.minRows).toBe(3);
+	});
+
+	it("does not let a typed-in value break the form", () => {
+		expect(mount({ minRows: 0 }).props.minRows).toBe(1);
+		expect(mount({ minRows: 500 }).props.minRows).toBe(30);
+	});
+});
 
 describe("MentionControl value reconciliation", () => {
 	it("hands the column value to the editor", () => {
