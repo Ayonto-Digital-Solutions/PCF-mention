@@ -53,10 +53,16 @@ describe("minHeight", () => {
 		expect(minHeight(200, 3, lineHeight)).toBe(200);
 	});
 
-	it("uses the rows where the form asks for less", () => {
-		// A form cell smaller than the configured minimum does not get to shrink the editor
-		// below what somebody set it to.
-		expect(minHeight(40, 3, lineHeight)).toBe(60);
+	it("uses the form even where it asks for less than the rows", () => {
+		// A cell shorter than the configured row count is an instruction, not an accident. The
+		// row count is the fallback, not a floor under the form.
+		expect(minHeight(40, 3, lineHeight)).toBe(40);
+	});
+
+	it("obeys a cell that asks for a single row", () => {
+		// This is the case that tells a measurement from a fallback in a real form: a one-row
+		// cell and a cell with no height at all would otherwise render exactly alike.
+		expect(minHeight(lineHeight, 3, lineHeight)).toBe(lineHeight);
 	});
 
 	it("counts padding and border where the box does", () => {

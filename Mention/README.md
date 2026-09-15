@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 204 Tests
+npm test                              # 205 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -90,12 +90,15 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Ohne sie baut der Flow den Link selbst. |
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
-| `minRows` | nein | Mindesthöhe in Zeilen, **nur** als Rückfall: Gibt das Formular dem Feld eine Höhe, gilt die. Standard 3, geklemmt auf 1 bis 30. |
+| `minRows` | nein | **Rückfallwert** in Zeilen: gilt nur, wenn am Formular keine Feldhöhe messbar ist. Standard 3, geklemmt auf 1 bis 30. |
 
 **Die Höhe kommt aus dem Formular, nicht aus der Eigenschaft.** Was im Formular-Designer als
 Feldhöhe eingestellt wird, übernimmt das Component als **Mindesthöhe**: Vergrößern bleibt dem
-Anwender überlassen, unter die Vorgabe des Formulars geht es nicht mehr. `minRows` greift nur,
-wenn das Formular keine Höhe vorgibt — dann sind es so viele Zeilen wie dort eingetragen.
+Anwender überlassen, unter die Vorgabe des Formulars geht es nicht mehr.
+
+`minRows` ist dabei ein **Rückfallwert, keine Untergrenze**. Ist eine Feldhöhe messbar, gilt sie —
+auch wenn sie kleiner ist als `minRows`. Eine Zelle mit `rowspan="1"` verlangt ein einzeiliges Feld,
+und das ist eine Ansage, kein Versehen. Erst wenn gar nichts messbar ist, entscheidet `minRows`.
 
 Das ist keine Bequemlichkeit, sondern Notwendigkeit: Die eingestellte Feldhöhe steckt im
 `rowspan` der Zelle im Formular-XML, und **keine Schnittstelle des Component Frameworks liest sie
@@ -279,7 +282,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 204 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung und Höhe |
+| Keine Tests | 205 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung und Höhe |
 
 Behobene Fehler aus 1.0:
 
@@ -318,8 +321,8 @@ ein neuer Component-Name erforderlich. Bestehende Formulare müssen also neu kon
 * Die im Formular eingestellte **Feldhöhe lässt sich über keine Schnittstelle auslesen** — sie
   steht im `rowspan` der Zelle, und `context.mode.allocatedHeight` ist in modellgesteuerten Apps
   `-1`. Das Component misst sie deshalb am Kasten, in den der Host es gesetzt hat. Gibt der Host
-  keine Höhe vor, greift `minRows`. Eine Feldhöhe, die der Host dem Kasten nicht ansehen lässt,
-  bleibt damit unerkannt.
+  keine Höhe vor, greift `minRows` als Rückfall. Eine Feldhöhe, die der Host dem Kasten nicht
+  ansehen lässt, bleibt damit unerkannt — dann sieht das Feld aus, als wäre keine eingestellt.
 
 ## Aufbau
 

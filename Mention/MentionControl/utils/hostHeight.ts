@@ -1,6 +1,7 @@
 /**
  * How tall the editor has to be at minimum — the height the form gives the field, and what to
- * fall back on when it gives none.
+ * fall back on when it gives none. Where a height is measurable it wins, larger or smaller than
+ * the configured row count: the row count is the fallback, not a floor.
  *
  * The height a maker sets in the form designer lives in the `rowspan` attribute of the cell, and
  * no code component API reads it: `context.mode.allocatedHeight` is `-1` in a model-driven app,
@@ -113,8 +114,14 @@ export function nextGiven(
 }
 
 /**
- * The minimum height to put on the box, in pixels: what the form asks for, or the row count when
- * that is more — or all there is.
+ * The minimum height to put on the box, in pixels: what the form asks for, and the row count only
+ * where the form asks for nothing.
+ *
+ * The row count does **not** act as a floor under the form. A cell with `rowspan="1"` asks for a
+ * field shorter than three rows, and that is an instruction, not an accident — treating it as too
+ * small to obey would ignore the form exactly where it speaks most plainly. It would also make a
+ * one-row cell and a cell with no height at all render identically, so nobody could tell a
+ * measurement from a fallback by looking.
  *
  * The row count is turned into pixels here rather than written into the stylesheet as a number,
  * because a line is not a fixed height: it moves with the theme and with the browser's zoom. The
@@ -126,8 +133,7 @@ export function minHeight(
 	lineHeight: number,
 	chrome = 0,
 ): number {
-	const forRows = rows * lineHeight + chrome;
-	return Math.max(fromForm, forRows);
+	return fromForm > 0 ? fromForm : rows * lineHeight + chrome;
 }
 
 /** What one row costs on a given element, in pixels. */
