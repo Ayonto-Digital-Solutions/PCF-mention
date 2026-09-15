@@ -32,6 +32,7 @@ function setup(overrides: Partial<MentionEditorProps> = {}) {
 		value: "",
 		disabled: false,
 		masked: false,
+		minRows: 3,
 		strings: STRINGS,
 		formatNumber: (value) => String(value),
 		searchUsers,
@@ -82,6 +83,44 @@ function pressDelete(textarea: HTMLTextAreaElement, key: "Backspace" | "Delete")
 	}
 	const value = `${textarea.value.slice(0, from)}${textarea.value.slice(to)}`;
 	fireEvent.change(textarea, { target: { value, selectionStart: from, selectionEnd: from } });
+}
+
+/** The component's own root, where the height variables are published. */
+function rootOf(container: HTMLElement): HTMLElement {
+	return container.firstElementChild as HTMLElement;
+}
+
+/** The view laid over the textarea while the editor does not have the focus. */
+function readingOverlay(container: HTMLElement): HTMLElement {
+	const overlays = Array.from(container.querySelectorAll("div")).filter(
+		(node) => node.textContent === STRINGS.placeholder,
+	);
+	const overlay = overlays[overlays.length - 1];
+	if (!overlay) {
+		throw new Error("the reading overlay was not rendered");
+	}
+	return overlay;
+}
+
+function pixelMinimum(container: HTMLElement): number {
+	return Number.parseFloat(
+		rootOf(container).style.getPropertyValue("--ayonto-mention-min-height"),
+	);
+}
+
+/** Griffel writes its rules through the CSSOM, so they are not in any style tag's text. */
+function cssRules(): string[] {
+	const rules: string[] = [];
+	for (const sheet of Array.from(document.styleSheets)) {
+		try {
+			for (const rule of Array.from(sheet.cssRules)) {
+				rules.push(rule.cssText);
+			}
+		} catch {
+			// A sheet this harness will not open says nothing either way.
+		}
+	}
+	return rules;
 }
 
 let lastProps: MentionEditorProps | undefined;
@@ -729,6 +768,43 @@ describe("MentionEditor", () => {
 		expect(textarea.selectionStart).toBe(12);
 		expect(textarea.selectionEnd).toBe(18);
 		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("gives the textarea and the view over it the very same minimum height", () => {
+		// They take turns being visible. A minimum on only one of them, or a different one on
+		// each, makes the field change height the moment somebody clicks into it — and the whole
+		// form below it jumps. One shared class is what keeps them from drifting apart.
+		const { container, textarea } = setup();
+		const overlay = readingOverlay(container);
+
+		const shared = textarea.className
+			.split(" ")
+			.filter((name) => name && overlay.className.split(" ").includes(name));
+
+		const carriesMinimum = shared.filter((name) =>
+			cssRules().some((rule) => rule.startsWith(`.${name} `) && rule.includes("min-height")),
+		);
+		expect(carriesMinimum).toHaveLength(1);
+	});
+
+	it("publishes the configured row count for the stylesheet to fall back on", () => {
+		const { container } = setup({ minRows: 7 });
+		expect(rootOf(container).style.getPropertyValue("--ayonto-mention-min-rows")).toBe("7");
+	});
+
+	it("resolves the minimum from the row count when the host gives no height", () => {
+		// Every box measures zero in this harness, which is exactly the case the row count is
+		// there for. What the rows are worth is read off the live element, so the two only have
+		// to differ by the three rows between them.
+		const three = setup({ minRows: 3 });
+		const lineHeight = Number.parseFloat(getComputedStyle(three.textarea).lineHeight);
+		const atThree = pixelMinimum(three.container);
+		cleanup();
+
+		const atSix = pixelMinimum(setup({ minRows: 6 }).container);
+
+		expect(atThree).toBeGreaterThan(0);
+		expect(atSix - atThree).toBeCloseTo(3 * lineHeight, 5);
 	});
 
 	it("shows the remaining characters when the column has a limit", () => {

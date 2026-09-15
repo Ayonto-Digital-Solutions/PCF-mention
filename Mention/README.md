@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 177 Tests
+npm test                              # 204 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -90,6 +90,20 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Ohne sie baut der Flow den Link selbst. |
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
+| `minRows` | nein | Mindesthöhe in Zeilen, **nur** als Rückfall: Gibt das Formular dem Feld eine Höhe, gilt die. Standard 3, geklemmt auf 1 bis 30. |
+
+**Die Höhe kommt aus dem Formular, nicht aus der Eigenschaft.** Was im Formular-Designer als
+Feldhöhe eingestellt wird, übernimmt das Component als **Mindesthöhe**: Vergrößern bleibt dem
+Anwender überlassen, unter die Vorgabe des Formulars geht es nicht mehr. `minRows` greift nur,
+wenn das Formular keine Höhe vorgibt — dann sind es so viele Zeilen wie dort eingetragen.
+
+Das ist keine Bequemlichkeit, sondern Notwendigkeit: Die eingestellte Feldhöhe steckt im
+`rowspan` der Zelle im Formular-XML, und **keine Schnittstelle des Component Frameworks liest sie
+aus**. `context.mode.allocatedHeight` liefert in modellgesteuerten Apps `-1`, auch mit
+`trackContainerResize(true)` — einen Wert bekommen dort nur Canvas-Apps. Das Component misst
+deshalb den Kasten, in den der Host es gesetzt hat, und unterscheidet eine Änderung von außen von
+seinem eigenen Wachstum; ohne diese Unterscheidung würden beide sich gegenseitig hochschaukeln.
+Die Regeln dafür stehen in `utils/hostHeight.ts` und sind dort einzeln geprüft.
 
 **Den Datensatz muss man konfigurieren.** Ein Code-Component hat keinen Formularkontext, deshalb
 ist der dokumentierte Weg, ihm den Datensatz als Eigenschaft zu übergeben: `entityId` an die
@@ -265,7 +279,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 177 Tests über Control, Editor, Suche, Benachrichtigung und Terminierung |
+| Keine Tests | 204 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung und Höhe |
 
 Behobene Fehler aus 1.0:
 
@@ -301,6 +315,11 @@ ein neuer Component-Name erforderlich. Bestehende Formulare müssen also neu kon
   nichts vom Speichervorgang des Formulars — auch nicht davon, dass er abgebrochen wurde: Ein
   Formular, das innerhalb der Karenzzeit verworfen wird, schickt die Benachrichtigung trotzdem.
   Nur die Erwähnung aus dem Text zu löschen verhindert sie.
+* Die im Formular eingestellte **Feldhöhe lässt sich über keine Schnittstelle auslesen** — sie
+  steht im `rowspan` der Zelle, und `context.mode.allocatedHeight` ist in modellgesteuerten Apps
+  `-1`. Das Component misst sie deshalb am Kasten, in den der Host es gesetzt hat. Gibt der Host
+  keine Höhe vor, greift `minRows`. Eine Feldhöhe, die der Host dem Kasten nicht ansehen lässt,
+  bleibt damit unerkannt.
 
 ## Aufbau
 
@@ -316,6 +335,7 @@ Mention/
 │  ├─ services/NotificationScheduler.ts Karenzzeit und Entdopplung
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
 │  ├─ utils/availability.ts             Wann Erwähnen verfügbar ist
+│  ├─ utils/hostHeight.ts               Mindesthöhe: was das Formular vorgibt, was es nicht tut
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
