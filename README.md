@@ -117,6 +117,7 @@ deklarieren zudem `<external-service-usage enabled="false" />`.
 |---|---|
 | **[solution/README.md](solution/README.md)** | Den Flow anlegen, Schritt für Schritt, mit allen Ausdrücken zum Kopieren |
 | **[solution/external-mail-provider.md](solution/external-mail-provider.md)** | Versand über einen externen Dienst statt Dataverse — deutsch und englisch, ohne Anbieternamen |
+| **[solution/in-app-notification.md](solution/in-app-notification.md)** | Zusätzlich die Glocke in der App bedienen — mit formatiertem Text und klickbarem Link |
 | [solution/examples/](solution/examples) | die fertige Flow-Definition zum Nachschlagen; sie wird beim Bauen gegen die Tabelle geprüft und ist nicht Teil der Lösung |
 
 Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und

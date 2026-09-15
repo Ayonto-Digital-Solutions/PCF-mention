@@ -152,7 +152,7 @@ jobs:
             echo "== ${config}: ${zip}"
             SOLUTION_ROOT="${SOLUTION_DIR}" python3 .github/scripts/check-package.py "$zip" --expect-controls
             python3 .github/scripts/check-guide.py "$zip" \
-              solution/README.md solution/external-mail-provider.md --expect-controls
+              solution/README.md solution/external-mail-provider.md solution/in-app-notification.md --expect-controls
           done
 
       - name: Collect the artifacts
@@ -176,7 +176,7 @@ jobs:
           pip install --quiet markdown
           python3 .github/scripts/build-docs-pdf.py \
             "dist/Ayonto-Mention-Benachrichtigung_${version}.pdf" \
-            solution/README.md solution/external-mail-provider.md
+            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md
 
           # Every file that is meant to be published, named. A glob that quietly misses one is
           # how the documentation was built and then left behind on 2.3.1.

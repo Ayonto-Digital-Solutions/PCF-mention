@@ -69,11 +69,21 @@ def check_links(documents: dict[str, str]) -> None:
     link — it just lands at the top of the page. Whoever follows it ends up reading the wrong
     section, which is worse than no link at all.
     """
+    anchors = {
+        name: {slug(line.lstrip("#").strip()) for line in text.splitlines() if line.startswith("#")}
+        for name, text in documents.items()
+    }
     for name, text in documents.items():
-        anchors = {slug(line.lstrip("#").strip()) for line in text.splitlines() if line.startswith("#")}
         for target in sorted(set(re.findall(r"\]\(#([^)]+)\)", text))):
-            if target not in anchors:
+            if target not in anchors[name]:
                 wrong(f"{name} links to '#{target}', which is no heading in it")
+        # And the same across documents: the guides point at each other's sections, and renaming
+        # a heading in one of them leaves the link in the other looking perfectly fine.
+        for other, target in sorted(set(re.findall(r"\]\(([\w.-]+\.md)#([^)]+)\)", text))):
+            if other not in anchors:
+                continue
+            if target not in anchors[other]:
+                wrong(f"{name} links to '{other}#{target}', which is no heading in {other}")
 
 
 def check_translations(package: str) -> None:
@@ -172,6 +182,19 @@ def main() -> None:
                 f"the column table gives '{name}' the length {shown.strip() or '(none)'}, "
                 f"the package says {lengths.get(name) or '(none)'}"
             )
+
+    # --- a length claimed in prose -------------------------------------------
+    # The column table is one place a length is written down; a sentence is the other. "ayonto_
+    # message fasst 2000 Zeichen" is the reason a step in the guide truncates before sending, so
+    # a length that drifts there takes the reason with it and leaves an instruction nobody can
+    # follow. The phrasing is fixed on purpose, so it can be read back.
+    for document, text in documents.items():
+        for name, claimed in re.findall(r"`(ayonto_[a-z]+)` fasst \*{0,2}(\d+)\*{0,2}", text):
+            if claimed != lengths.get(name, "").strip():
+                wrong(
+                    f"{document} says '{name}' holds {claimed} characters, "
+                    f"the package says {lengths.get(name) or '(none)'}"
+                )
 
     if not has_control:
         report(package, len(rows), checked_control=False)
