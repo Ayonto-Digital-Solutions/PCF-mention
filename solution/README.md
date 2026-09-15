@@ -12,7 +12,9 @@ eine Hausentscheidung.
 Aktion `SendEmail` aus. Kein externer Connector, kein API-Schlüssel, nichts, was die Umgebung
 verlässt. Wo die Voraussetzung fehlt — serverseitige Synchronisierung mit einem freigegebenen
 Postfach — tritt ein Mail-Connector an die Stelle der beiden Dataverse-Aktionen; das steht in
-[external-mail-provider.md](external-mail-provider.md), deutsch und englisch.
+[external-mail-provider.md](external-mail-provider.md), deutsch und englisch. Wie derselbe Flow
+zusätzlich die **Glocke in der App** bedient, steht in
+[in-app-notification.md](in-app-notification.md).
 
 Die fertige Definition zum Nachschlagen liegt unter
 [`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird beim
@@ -467,6 +469,14 @@ Als Empfänger dient `ayonto_useremail`. Chat-Connectoren lösen eine Person üb
 auf — und in manchen Organisationen weicht die Mailadresse vom Anmeldenamen ab. Kommt die Mail an
 und die Chat-Nachricht nicht, ist das die erste Stelle zum Nachsehen.
 
+## Die Glocke in der App
+
+Zusätzlich zur Mail kann derselbe Flow eine **In-App-Benachrichtigung** zustellen — mit
+formatiertem Text und klickbarem Link. Das ist kein eigener Kanal und braucht keine zweite Zeile:
+drei Aktionen hinter `Als_gesendet_vermerken` genügen. Wie, steht in
+[in-app-notification.md](in-app-notification.md), samt der einen Stelle, an der dabei die meiste
+Zeit verloren geht.
+
 ## Testen
 
 1. **Speichern**, dann in der Lösung **Einschalten**.
@@ -498,6 +508,7 @@ und die Chat-Nachricht nicht, ist das die erste Stelle zum Nachsehen.
 | Linktext nur der Ersatztext | die optionale Bedingung greift nicht — `ayonto_recordtable` in Kleinschreibung prüfen |
 | HTML kommt als Klartext an | beim Anlegen der E-Mail landete der Body nicht in *Beschreibung* |
 | `SendEmail` scheitert mit einem Rechtefehler | das Verbindungskonto darf nicht im Namen eines anderen senden — siehe [Absender und Verbindungskonto](#absender-und-verbindungskonto-sind-zweierlei) |
+| Glocke bleibt leer, obwohl der Flow grün ist | In-App-Benachrichtigungen sind in der App nicht eingeschaltet — siehe [in-app-notification.md](in-app-notification.md#was-vorher-stimmen-muss) |
 | E-Mail bleibt Entwurf | Postfach nicht freigegeben oder nicht für den Versand aktiviert |
 | Zeile bleibt auf `New` | „Ausführen nach" falsch gesetzt, oder der Detailtext war länger als die Spalte |
 | Empfänger bekommt alles doppelt | zwei Flows auf denselben Kanal, oder `sendTeams` an ohne zweiten Flow |

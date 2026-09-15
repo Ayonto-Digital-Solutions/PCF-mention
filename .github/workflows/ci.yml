@@ -161,7 +161,7 @@ jobs:
         run: |
           pip install --quiet markdown
           python3 .github/scripts/build-docs-pdf.py /tmp/docs.pdf \
-            solution/README.md solution/external-mail-provider.md
+            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md
 
       - name: Pack it and check what came out
         run: |
@@ -190,7 +190,7 @@ jobs:
           # follows step by step. CI packs without the code components, so this reaches the
           # columns; the release checks the labels and the component values as well.
           python3 .github/scripts/check-guide.py "$zip" \
-            solution/README.md solution/external-mail-provider.md
+            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md
 
           # And prove that guard guards, the way it actually failed: pack a source whose view
           # the packer drops, then hold the real source against it. That is what shipped in 2.2.0.
