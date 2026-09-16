@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 230 Tests
+npm test                              # 233 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -317,7 +317,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 230 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung, Höhe und Spaltentyp |
+| Keine Tests | 233 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung, Höhe und Spaltentyp |
 
 Behobene Fehler aus 1.0:
 
