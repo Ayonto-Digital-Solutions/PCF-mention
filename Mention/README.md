@@ -127,6 +127,18 @@ sperren, wenn die Spalte völlig in Ordnung ist.
 [rte]: https://learn.microsoft.com/power-apps/maker/model-driven-apps/rich-text-editor-control
 [metadata]: https://learn.microsoft.com/power-apps/developer/component-framework/reference/metadata
 
+### Längenbegrenzung der Spalte
+
+Die maximale Länge der gebundenen Spalte wird eingehalten.
+
+* Eine Erwähnung, die nicht mehr hineinpasst, **wird nicht eingefügt**; stattdessen erscheint ein
+  Hinweis.
+* Der verbleibende Platz wird unter dem Feld angezeigt.
+* Bei einer einzeiligen Spalte mit knapper Länge begrenzt das die Zahl der möglichen Erwähnungen.
+  **Das ist beabsichtigt, kein Fehler.**
+* Ist keine Länge lesbar, entfallen Anzeige und Verweigerung. Die Plattform prüft beim Speichern
+  weiterhin selbst.
+
 **Die Höhe kommt aus dem Formular, nicht aus der Eigenschaft.** Was im Formular-Designer als
 Feldhöhe eingestellt wird, übernimmt das Component als **Mindesthöhe**: Vergrößern bleibt dem
 Anwender überlassen, unter die Vorgabe des Formulars geht es nicht mehr.
