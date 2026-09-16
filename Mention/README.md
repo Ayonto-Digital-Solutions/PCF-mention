@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 205 Tests
+npm test                              # 233 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -75,7 +75,7 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 
 | Eigenschaft | Pflicht | Bedeutung |
 |---|---|---|
-| `field` | ja | Die gebundene Textspalte. `SingleLine.Text`, `SingleLine.TextArea` oder `Multiple`. |
+| `field` | ja | Die gebundene Textspalte: `SingleLine.Text`, `SingleLine.TextArea` oder `Multiple` — siehe [Unterstützte Spaltentypen](#unterstützte-spaltentypen). Rich Text nicht. |
 | `entityId` | für den Datensatzbezug | **An die Primärschlüsselspalte der Tabelle binden** (z. B. `accountid`). |
 | `entityName` | für den Datensatzbezug | Logischer Tabellenname, z. B. `account`. Als statischer Wert setzbar oder an `entitylogicalname` gebunden. |
 | `sendEmail` | ja | `Ja` (Standard) schreibt je erwähnter Person eine Zeile für den Kanal `Email`, `Nein` nicht. |
@@ -90,7 +90,54 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Ohne sie baut der Flow den Link selbst. |
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
 | `appId` | nein | ID der modellgesteuerten App, in der der Link geöffnet werden soll. |
-| `minRows` | nein | **Rückfallwert** in Zeilen: gilt nur, wenn am Formular keine Feldhöhe messbar ist. Standard 3, geklemmt auf 1 bis 30. |
+| `minRows` | nein | **Rückfallwert** in Zeilen: gilt nur, wenn am Formular keine Feldhöhe messbar ist. Standard 3, geklemmt auf 1 bis 30. Ohne Wirkung auf einer einzeiligen Spalte. |
+
+### Unterstützte Spaltentypen
+
+Dataverse kennt [genau drei Textspaltentypen][text-columns], und das Component bindet an alle drei.
+Welcher es ist, meldet die Plattform als `type` am gebundenen Parameter — genau so geschrieben wie
+im Manifest. Danach richtet sich das Verhalten.
+
+| Spaltentyp im Portal | Typ im Manifest | Länge | Verhalten |
+|---|---|---|---|
+| **Text** | `SingleLine.Text` | bis 4.000 Zeichen | Einzeilig: Rückfallhöhe eine Zeile, `minRows` ohne Wirkung, keine Zeilenumbrüche im Wert |
+| **Textbereich** | `SingleLine.TextArea` | bis 4.000 Zeichen | Mehrzeilig: Höhe aus dem Formular, sonst `minRows` |
+| **Mehrzeiliger Text** | `Multiple` | bis 1.048.576 Zeichen | Mehrzeilig: Höhe aus dem Formular, sonst `minRows` |
+| **Rich Text** | — | — | **Nicht unterstützt** |
+
+Einzeilig heißt einzeilig: Eine `Text`-Spalte bekommt eine Zeile als Rückfallhöhe, `minRows` hat
+dort nichts zu entscheiden, und ein eingefügter Textblock verliert seine Zeilenumbrüche, statt
+Zeichen in eine Spalte zu schreiben, deren eigenes Steuerelement sie nie wieder anzeigt. Eine
+messbare Feldhöhe gilt auch hier — die Regel „das Formular gewinnt" kennt keine Ausnahme nach
+Spaltentyp.
+
+**Warum Rich Text nicht dazugehört.** Rich Text ist kein vierter Spaltentyp, sondern ein **Format**
+auf einer Textspalte, das vom [Rich-Text-Editor][rte] gelesen und geschrieben wird. Eine so
+formatierte Spalte enthält **HTML**, nicht Klartext. Dieses Component liest und schreibt Klartext:
+Es würde die Auszeichnung als sichtbare Zeichen anzeigen und beim Speichern zerstören — dasselbe
+Bild, das Microsoft für den umgekehrten Fehler beschreibt („Why do I see HTML in my text?").
+
+Das steht hier und nicht im Code, weil sich das Format **zur Laufzeit nicht feststellen lässt**.
+Die [Metadaten einer gebundenen Eigenschaft][metadata] sind `DisplayName`, `LogicalName`,
+`RequiredLevel`, `IsSecured`, `SourceType` und `Description` — kein Format ist darunter. Eine
+Prüfung auf ein undokumentiertes Feld wäre schlimmer als keine: Sie würde ein Formular auch dann
+sperren, wenn die Spalte völlig in Ordnung ist.
+
+[text-columns]: https://learn.microsoft.com/power-apps/maker/data-platform/types-of-fields#text-columns
+[rte]: https://learn.microsoft.com/power-apps/maker/model-driven-apps/rich-text-editor-control
+[metadata]: https://learn.microsoft.com/power-apps/developer/component-framework/reference/metadata
+
+### Längenbegrenzung der Spalte
+
+Die maximale Länge der gebundenen Spalte wird eingehalten.
+
+* Eine Erwähnung, die nicht mehr hineinpasst, **wird nicht eingefügt**; stattdessen erscheint ein
+  Hinweis.
+* Der verbleibende Platz wird unter dem Feld angezeigt.
+* Bei einer einzeiligen Spalte mit knapper Länge begrenzt das die Zahl der möglichen Erwähnungen.
+  **Das ist beabsichtigt, kein Fehler.**
+* Ist keine Länge lesbar, entfallen Anzeige und Verweigerung. Die Plattform prüft beim Speichern
+  weiterhin selbst.
 
 **Die Höhe kommt aus dem Formular, nicht aus der Eigenschaft.** Was im Formular-Designer als
 Feldhöhe eingestellt wird, übernimmt das Component als **Mindesthöhe**: Vergrößern bleibt dem
@@ -282,7 +329,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 205 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung und Höhe |
+| Keine Tests | 233 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung, Höhe und Spaltentyp |
 
 Behobene Fehler aus 1.0:
 
@@ -318,11 +365,21 @@ ein neuer Component-Name erforderlich. Bestehende Formulare müssen also neu kon
   nichts vom Speichervorgang des Formulars — auch nicht davon, dass er abgebrochen wurde: Ein
   Formular, das innerhalb der Karenzzeit verworfen wird, schickt die Benachrichtigung trotzdem.
   Nur die Erwähnung aus dem Text zu löschen verhindert sie.
+* Eine Spalte hat **je Client genau ein aktives Steuerelement**: Beim Hinzufügen wird für *Web*,
+  *Telefon* und *Tablet* einzeln gewählt, welches Steuerelement dort erscheint
+  ([Anleitung][add-control]). Dieses Component und der Rich-Text-Editor schließen sich damit
+  gegenseitig aus — auf derselben Spalte im selben Client kann nur eines von beiden laufen.
 * Die im Formular eingestellte **Feldhöhe lässt sich über keine Schnittstelle auslesen** — sie
   steht im `rowspan` der Zelle, und `context.mode.allocatedHeight` ist in modellgesteuerten Apps
   `-1`. Das Component misst sie deshalb am Kasten, in den der Host es gesetzt hat. Gibt der Host
   keine Höhe vor, greift `minRows` als Rückfall. Eine Feldhöhe, die der Host dem Kasten nicht
   ansehen lässt, bleibt damit unerkannt — dann sieht das Feld aus, als wäre keine eingestellt.
+* Der Test in einer echten Umgebung hat die Messung bestätigt, lief aber mit gleichzeitig
+  aktivierter Formulareinstellung **„Den gesamten verfügbaren vertikalen Platz nutzen"**. Dass die
+  Höhe ankommt, ist damit belegt; **welche der beiden Einstellungen sie erzeugt hat, unterscheidet
+  der Test nicht.**
+
+[add-control]: https://learn.microsoft.com/power-apps/developer/component-framework/add-custom-controls-to-a-field-or-entity
 
 ## Aufbau
 
@@ -339,6 +396,7 @@ Mention/
 │  ├─ utils/mentionText.ts              Reine Funktionen, vollständig getestet
 │  ├─ utils/availability.ts             Wann Erwähnen verfügbar ist
 │  ├─ utils/hostHeight.ts               Mindesthöhe: was das Formular vorgibt, was es nicht tut
+│  ├─ utils/columnType.ts               Welcher Textspaltentyp gebunden ist, und was daraus folgt
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
@@ -349,5 +407,7 @@ Mention/
    ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
    ├─ MentionLogService.test.ts         Zeileninhalt, Spaltenpräfix, Rücklesen
-   └─ MentionEditor.test.tsx            Editor-Verhalten
+   ├─ hostHeight.test.ts                Regeln der Mindesthöhe, ohne DOM
+   ├─ columnType.test.ts                Spaltentyp, Rückfallzeilen, Zeilenumbrüche
+   └─ MentionEditor.test.tsx            Editor-Verhalten, je Spaltentyp
 ```

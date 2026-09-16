@@ -1,8 +1,15 @@
 import * as React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "../MentionControl/components/MentionEditor";
 import type { UserSuggestion } from "../MentionControl/services/UserSearchService";
+import {
+	MULTIPLE,
+	SINGLE_LINE_TEXT,
+	SINGLE_LINE_TEXT_AREA,
+	fallbackRows,
+	isSingleLine,
+} from "../MentionControl/utils/columnType";
 
 const USERS: UserSuggestion[] = [
 	{ id: "u1", name: "Anna Berger", jobTitle: "Sales Manager" },
@@ -33,6 +40,7 @@ function setup(overrides: Partial<MentionEditorProps> = {}) {
 		disabled: false,
 		masked: false,
 		minRows: 3,
+		singleLine: false,
 		strings: STRINGS,
 		formatNumber: (value) => String(value),
 		searchUsers,
@@ -61,6 +69,36 @@ function setup(overrides: Partial<MentionEditorProps> = {}) {
 /** Types into the textarea and reports the caret, the way the browser would. */
 function type(textarea: HTMLTextAreaElement, value: string, caret = value.length) {
 	fireEvent.change(textarea, { target: { value, selectionStart: caret, selectionEnd: caret } });
+}
+
+/**
+ * Stands in for the browser's own insertion at the caret.
+ *
+ * Pasting, dropping and an IME finishing all put characters into the field without the component
+ * being asked first; what the component does get is the resulting value, as a change. That is the
+ * step modelled here, and it is what makes the three helpers below say something: a guard that
+ * only watched the keyboard would let every one of them through.
+ */
+function insertAtCaret(textarea: HTMLTextAreaElement, text: string) {
+	const from = textarea.selectionStart ?? textarea.value.length;
+	const to = textarea.selectionEnd ?? from;
+	const value = `${textarea.value.slice(0, from)}${text}${textarea.value.slice(to)}`;
+	const caret = from + text.length;
+	fireEvent.change(textarea, {
+		target: { value, selectionStart: caret, selectionEnd: caret },
+	});
+}
+
+/** Pastes from the clipboard: the paste event first, then the insertion the browser performs. */
+function paste(textarea: HTMLTextAreaElement, text: string) {
+	fireEvent.paste(textarea, { clipboardData: { getData: () => text } });
+	insertAtCaret(textarea, text);
+}
+
+/** Drops text onto the field: the drop event first, then the insertion. */
+function drop(textarea: HTMLTextAreaElement, text: string) {
+	fireEvent.drop(textarea, { dataTransfer: { getData: () => text } });
+	insertAtCaret(textarea, text);
 }
 
 /** Puts the caret where a click or an arrow key would leave it. */
@@ -823,5 +861,111 @@ describe("MentionEditor", () => {
 		type(textarea, "hi @An");
 		await waitFor(() => expect(searchUsers).toHaveBeenCalled());
 		expect(screen.queryByRole("option")).toBeNull();
+	});
+});
+
+describe("MentionEditor, by the column it is bound to", () => {
+	/** What the control derives from the type the platform reports, and hands to the editor. */
+	const boundTo = (columnType: string, minRows = 3) => ({
+		minRows: fallbackRows(columnType, minRows),
+		singleLine: isSingleLine(columnType),
+	});
+
+	/** Presses a key and reports whether the editor took it, the way the browser would decide. */
+	function press(textarea: HTMLTextAreaElement, key: string): boolean {
+		const event = createEvent.keyDown(textarea, { key });
+		fireEvent(textarea, event);
+		return event.defaultPrevented;
+	}
+
+	for (const columnType of [MULTIPLE, SINGLE_LINE_TEXT, SINGLE_LINE_TEXT_AREA]) {
+		it(`picks a mention and writes it into a ${columnType} column`, async () => {
+			const { textarea, onChange, onMention } = setup(boundTo(columnType));
+			type(textarea, "hi @An");
+			await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+
+			expect(press(textarea, "Enter")).toBe(true);
+
+			expect(onChange).toHaveBeenLastCalledWith("hi @Anna Berger ");
+			expect(onMention).toHaveBeenCalledWith(USERS[0]);
+		});
+	}
+
+	it("falls back on a single row for a single line column, whatever minRows says", () => {
+		const { container } = setup(boundTo(SINGLE_LINE_TEXT, 7));
+		expect(rootOf(container).style.getPropertyValue("--ayonto-mention-min-rows")).toBe("1");
+	});
+
+	for (const columnType of [MULTIPLE, SINGLE_LINE_TEXT_AREA]) {
+		it(`keeps the configured row count for a ${columnType} column`, () => {
+			const { container } = setup(boundTo(columnType, 7));
+			expect(rootOf(container).style.getPropertyValue("--ayonto-mention-min-rows")).toBe("7");
+		});
+	}
+
+	it("does not open a line in a single line column", () => {
+		const { textarea, onChange } = setup(boundTo(SINGLE_LINE_TEXT));
+		type(textarea, "one line");
+
+		expect(press(textarea, "Enter")).toBe(true);
+		expect(onChange).toHaveBeenLastCalledWith("one line");
+	});
+
+	for (const columnType of [MULTIPLE, SINGLE_LINE_TEXT_AREA]) {
+		it(`leaves Enter to the textarea in a ${columnType} column`, () => {
+			const { textarea } = setup(boundTo(columnType));
+			type(textarea, "first line");
+			expect(press(textarea, "Enter")).toBe(false);
+		});
+	}
+
+	it("flattens a block of text pasted into a single line column", () => {
+		// Typing cannot get a line break in, but pasting can — and a column whose own control is a
+		// one-line box would never show those characters again.
+		const { textarea, onChange } = setup(boundTo(SINGLE_LINE_TEXT));
+		type(textarea, "note: ");
+		paste(textarea, "first\r\nsecond\nthird");
+		expect(onChange).toHaveBeenLastCalledWith("note: first second third");
+	});
+
+	it("flattens text dropped into a single line column", () => {
+		// Dragging a paragraph out of a mail and onto the field is the same story as a paste, and
+		// it reaches the component the same way: as a value, with no key ever pressed.
+		const { textarea, onChange } = setup(boundTo(SINGLE_LINE_TEXT));
+		type(textarea, "note: ");
+		drop(textarea, "first\r\nsecond");
+		expect(onChange).toHaveBeenLastCalledWith("note: first second");
+	});
+
+	it("flattens what an IME commits into a single line column", () => {
+		// The Enter that finishes an IME candidate has to reach the field — swallowing it would
+		// stop the IME from committing at all. So the line break is not kept out at the keyboard
+		// here; what the IME commits is flattened on its way into the value.
+		const { textarea, onChange } = setup(boundTo(SINGLE_LINE_TEXT));
+		fireEvent.compositionStart(textarea);
+		const commit = createEvent.keyDown(textarea, { key: "Enter", isComposing: true });
+		fireEvent(textarea, commit);
+		expect(commit.defaultPrevented).toBe(false);
+
+		fireEvent.compositionEnd(textarea);
+		insertAtCaret(textarea, "一\n二");
+
+		expect(onChange).toHaveBeenLastCalledWith("一 二");
+	});
+
+	for (const columnType of [MULTIPLE, SINGLE_LINE_TEXT_AREA]) {
+		it(`keeps a pasted block of text whole in a ${columnType} column`, () => {
+			const { textarea, onChange } = setup(boundTo(columnType));
+			paste(textarea, "first\nsecond");
+			expect(onChange).toHaveBeenLastCalledWith("first\nsecond");
+		});
+	}
+
+	it("still finds a mention behind a flattened line break", async () => {
+		// The caret is reported against the text before flattening. If the editor took it as it
+		// came, a pasted block ending in a mention would look like a caret past the end.
+		const { textarea, searchUsers } = setup(boundTo(SINGLE_LINE_TEXT));
+		type(textarea, "note\r\n@An");
+		await waitFor(() => expect(searchUsers).toHaveBeenCalledWith("An"));
 	});
 });

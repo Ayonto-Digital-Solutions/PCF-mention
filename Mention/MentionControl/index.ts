@@ -15,6 +15,7 @@ import {
 	type UserSuggestion,
 } from "./services/UserSearchService";
 import { mentionBlocker } from "./utils/availability";
+import { fallbackRows, isSingleLine } from "./utils/columnType";
 import { clampRows } from "./utils/hostHeight";
 import { interpolate } from "./utils/format";
 import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
@@ -140,13 +141,25 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			value: this.value,
 			disabled: context.mode.isControlDisabled || field.security?.editable === false,
 			masked: field.security?.readable === false,
+			// The column's maximum length, taken straight off the bound property. The value itself
+			// is documented — `MaxLength` is on `AttributeMetadata`, marked for model-driven apps —
+			// but the `Metadata` page describing a bound property's `attributes` does not list it,
+			// so this is a shortcut to a documented value.
+			//
+			// `getEntityMetadata` is the fully documented route and is deliberately not added as a
+			// fallback: it costs an asynchronous call and hangs on `entityName`, an optional
+			// property that is often empty, while the shortcut holds in the field. The failure is
+			// benign either way — without a length only the guard goes away, and the platform still
+			// checks the value on save.
 			maxLength: field.attributes?.MaxLength,
 			label: context.mode.label,
 			notice: this.mentionNotice(),
 			// The height the form gives the field cannot be read through any API — it sits in the
 			// rowspan of the cell. The editor measures its own box for it and falls back on this
-			// many rows when that measurement says nothing.
-			minRows: clampRows(context.parameters.minRows.raw),
+			// many rows when that measurement says nothing. A single line column falls back on one
+			// row, whatever the property says.
+			minRows: fallbackRows(field.type, clampRows(context.parameters.minRows.raw)),
+			singleLine: isSingleLine(field.type),
 			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
 			strings: this.getStrings(),
 			formatNumber: this.formatNumber,

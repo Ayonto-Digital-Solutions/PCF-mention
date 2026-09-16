@@ -19,6 +19,8 @@ interface ContextOptions {
 	contextInfo?: { entityId?: string; entityTypeName?: string };
 	/** The configured minimum height in rows, exactly as a maker could leave it. */
 	minRows?: number | null;
+	/** The text column type the platform reports for the bound property. */
+	columnType?: string;
 }
 
 function makeContext(options: ContextOptions = {}) {
@@ -26,7 +28,11 @@ function makeContext(options: ContextOptions = {}) {
 
 	return {
 		parameters: {
-			field: { raw: options.value ?? "", type: "SingleLine.Text", attributes: { MaxLength: 100 } },
+			field: {
+				raw: options.value ?? "",
+				type: options.columnType ?? "Multiple",
+				attributes: { MaxLength: 100 },
+			},
 			entityId: text(options.entityId ?? ""),
 			entityName: text(options.entityName ?? ""),
 			sendEmail: { raw: options.sendEmail ?? "0", type: "Enum" },
@@ -77,6 +83,7 @@ function propsOf(element: React.ReactElement) {
 		onMention: (user: { id: string; name: string }) => Promise<void>;
 		onWrittenMentionsChange: (userIds: readonly string[]) => void;
 		minRows: number;
+		singleLine: boolean;
 	};
 }
 
@@ -102,6 +109,34 @@ describe("MentionControl minimum height", () => {
 	it("does not let a typed-in value break the form", () => {
 		expect(mount({ minRows: 0 }).props.minRows).toBe(1);
 		expect(mount({ minRows: 500 }).props.minRows).toBe(30);
+	});
+});
+
+describe("MentionControl and the column type", () => {
+	it("tells the editor a single line column is one, and gives it one row", () => {
+		// The row count is the fallback for a column that holds several lines. A column that holds
+		// one line has no use for it, so the property has no say there.
+		const { props } = mount({ columnType: "SingleLine.Text", minRows: 8 });
+		expect(props.singleLine).toBe(true);
+		expect(props.minRows).toBe(1);
+	});
+
+	it("leaves a text area column its configured row count", () => {
+		const { props } = mount({ columnType: "SingleLine.TextArea", minRows: 8 });
+		expect(props.singleLine).toBe(false);
+		expect(props.minRows).toBe(8);
+	});
+
+	it("leaves a multiline column its configured row count", () => {
+		const { props } = mount({ columnType: "Multiple", minRows: 8 });
+		expect(props.singleLine).toBe(false);
+		expect(props.minRows).toBe(8);
+	});
+
+	it("treats a type it was not told about as multi-line", () => {
+		const { props } = mount({ columnType: "", minRows: 8 });
+		expect(props.singleLine).toBe(false);
+		expect(props.minRows).toBe(8);
 	});
 });
 

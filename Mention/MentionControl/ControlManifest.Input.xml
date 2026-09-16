@@ -175,6 +175,23 @@
               required="false"
               default-value="3" />
 
+    <!--
+      Die Spaltentypen, an die das Component gebunden werden darf. Dataverse kennt genau drei
+      Textspaltentypen, und das sind sie: Text, Textbereich und mehrzeiliger Text.
+      https://learn.microsoft.com/power-apps/maker/data-platform/types-of-fields#text-columns
+
+      Rich Text gehört ausdrücklich nicht dazu. Rich Text ist kein eigener Spaltentyp, sondern ein
+      Format auf einer Textspalte, das vom Rich-Text-Editor gelesen und geschrieben wird; eine so
+      formatierte Spalte enthält HTML. Dieses Component liest und schreibt Klartext, und ob eine
+      Spalte so formatiert ist, lässt sich zur Laufzeit nicht feststellen — die Metadaten einer
+      gebundenen Eigenschaft nennen kein Format. Deshalb steht das in der Anleitung und nicht im
+      Code.
+      https://learn.microsoft.com/power-apps/maker/model-driven-apps/rich-text-editor-control
+      https://learn.microsoft.com/power-apps/developer/component-framework/reference/metadata
+
+      Einen Typ zu ergänzen ist unkritisch. Einen zu entfernen bricht jedes Formular, das ihn
+      bindet.
+    -->
     <type-group name="text">
       <type>Multiple</type>
       <type>SingleLine.Text</type>
