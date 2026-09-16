@@ -15,6 +15,7 @@ import {
 	type UserSuggestion,
 } from "./services/UserSearchService";
 import { mentionBlocker } from "./utils/availability";
+import { fallbackRows, isSingleLine } from "./utils/columnType";
 import { clampRows } from "./utils/hostHeight";
 import { interpolate } from "./utils/format";
 import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
@@ -145,8 +146,10 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			notice: this.mentionNotice(),
 			// The height the form gives the field cannot be read through any API — it sits in the
 			// rowspan of the cell. The editor measures its own box for it and falls back on this
-			// many rows when that measurement says nothing.
-			minRows: clampRows(context.parameters.minRows.raw),
+			// many rows when that measurement says nothing. A single line column falls back on one
+			// row, whatever the property says.
+			minRows: fallbackRows(field.type, clampRows(context.parameters.minRows.raw)),
+			singleLine: isSingleLine(field.type),
 			theme: context.fluentDesignLanguage?.tokenTheme as Theme | undefined,
 			strings: this.getStrings(),
 			formatNumber: this.formatNumber,

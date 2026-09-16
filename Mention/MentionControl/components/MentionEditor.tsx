@@ -31,6 +31,7 @@ import {
 	type MentionTrigger,
 } from "../utils/mentionText";
 import type { LoggedMention } from "../services/MentionLogService";
+import { withoutLineBreaks } from "../utils/columnType";
 import { minHeight, readRowMetrics, watchHostHeight } from "../utils/hostHeight";
 
 /** Delay before an "@" query is sent to Dataverse, so typing does not cause one call per keystroke. */
@@ -63,9 +64,14 @@ export interface MentionEditorProps {
 	readonly notice?: string;
 	/**
 	 * How many rows the editor shows at least when the form gives the field no height of its own.
-	 * Already clamped by the caller.
+	 * Already clamped by the caller, and already one row where the column holds one line.
 	 */
 	readonly minRows: number;
+	/**
+	 * Set when the bound column holds a single line of text. The editor then keeps line breaks out
+	 * of the value and does not offer to be dragged taller.
+	 */
+	readonly singleLine: boolean;
 	readonly theme?: Theme;
 	readonly strings: MentionEditorStrings;
 	readonly formatNumber: (value: number) => string;
@@ -185,8 +191,15 @@ const optionId = (index: number): string =>
 
 export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 	const styles = useStyles();
-	const { value, onChange, onEditingChange, onMention, searchUsers, strings } =
-		props;
+	const {
+		singleLine,
+		value,
+		onChange,
+		onEditingChange,
+		onMention,
+		searchUsers,
+		strings,
+	} = props;
 
 	const [text, setText] = React.useState(value);
 	const [trigger, setTrigger] = React.useState<MentionTrigger | null>(null);
@@ -479,11 +492,18 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			event: React.ChangeEvent<HTMLTextAreaElement>,
 			data: { value: string },
 		) => {
-			const caret = event.target.selectionStart ?? data.value.length;
-			commit(data.value);
-			syncTrigger(data.value, caret, true);
+			// Typing cannot put a line break into a single line column — Enter is stopped below —
+			// but pasting a block of text can, and so can a drop. Both arrive here as a new value,
+			// which is why this is the place that flattens it rather than the keyboard handler.
+			const next = singleLine ? withoutLineBreaks(data.value) : data.value;
+			const caret = Math.min(
+				event.target.selectionStart ?? next.length,
+				next.length,
+			);
+			commit(next);
+			syncTrigger(next, caret, true);
 		},
-		[commit, syncTrigger],
+		[commit, singleLine, syncTrigger],
 	);
 
 	// React derives onSelect from its own heuristics, so the caret is read from the plain events
@@ -607,6 +627,17 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 				}
 			}
 
+			// Enter picks the highlighted suggestion where there is one. Everywhere else it opens
+			// a new line, and a single line column has no place for one.
+			const picked =
+				trigger !== null
+					? (suggestions[activeIndex] as UserSuggestion | undefined)
+					: undefined;
+			if (singleLine && event.key === "Enter" && picked === undefined) {
+				event.preventDefault();
+				return;
+			}
+
 			if (!trigger) {
 				return;
 			}
@@ -627,14 +658,12 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 					}
 					break;
 				case "Enter":
-				case "Tab": {
-					const active = suggestions[activeIndex] as UserSuggestion | undefined;
-					if (active) {
+				case "Tab":
+					if (picked) {
 						event.preventDefault();
-						select(active);
+						select(picked);
 					}
 					break;
-				}
 				case "Escape":
 					event.preventDefault();
 					closeSuggestions();
@@ -648,6 +677,7 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 			closeSuggestions,
 			mentionSegments,
 			select,
+			singleLine,
 			suggestions,
 			text,
 			trigger,
@@ -754,7 +784,8 @@ export const MentionEditor: React.FC<MentionEditorProps> = (props) => {
 						}}
 						onKeyDown={handleKeyDown}
 						placeholder={strings.placeholder}
-						resize="vertical"
+						// Dragging a one-line field taller only makes room the column cannot fill.
+						resize={singleLine ? "none" : "vertical"}
 						textarea={{
 							// aria-autocomplete, aria-controls and aria-activedescendant are the
 							// attributes a textbox may carry. role="combobox"/aria-expanded would
