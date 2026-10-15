@@ -16,12 +16,20 @@ die Tabelle geprüft, gehört aber nicht zur Lösung. **Alles Tabellenspezifisch
 Zielanwendung**: die Leserolle, die Rechte auf die Zieltabellen und was nach der Freigabe noch
 passieren muss.
 
-> **Diese Anleitung ist noch nicht in einer echten Umgebung durchgelaufen.** Anders als die
+> **Diese Anleitung ist erst in Teilen in einer echten Umgebung gelaufen** — anders als die
 > Benachrichtigung in [README.md](README.md). Die Schritte sind gegen einen deutschsprachigen
 > Designer geschrieben, und der Bau prüft das Beispiel gegen die Tabelle — Spaltennamen, Namen der
-> Aktionen in Ausdrücken. Ob der Designer `RetrievePrincipalAccess` (Schritt 3) und `GrantAccess`
-> mit dynamisch gebildetem Ziel (Schritt 6) so annimmt, wie es hier steht, ist **nicht erprobt**.
-> Beide Stellen sind unten noch einmal markiert.
+> Aktionen in Ausdrücken.
+>
+> * **Erprobt** in einer Entwicklungsumgebung: *Zeile nach ID abrufen* liefert `@odata.id` als
+>   `<org>/api/data/v9.1/<set>(<id>)`, und `uriHost()` ergibt daraus die Umgebung; *Zeile nach ID
+>   abrufen* auf **Benutzer** mit `systemuserroles_association($select=roleid)` unter *Abfrage
+>   erweitern* liefert die Rollen der Person. Beides in Schritt 5.
+> * **Belegt nicht möglich:** `RetrievePrincipalAccess` über den Dataverse-Connector — siehe
+>   Schritt 3.
+> * **Nicht erprobt:** die Prüfung über HTTP (Schritt 3), *Zeilen verknüpfen* zum Zuweisen der
+>   Rolle (Schritt 5) und `GrantAccess` mit einem Ziel als Ausdruck (Schritt 6). Diese Stellen sind
+>   unten markiert. Wie die Prüfung endgültig läuft, ist noch offen.
 
 Platzhalter stehen in spitzen Klammern: `<zieltabelle>` ist der logische Name der Tabelle, auf
 deren Formular die Komponente sitzt, `<leserolle>` der Name der Sicherheitsrolle, die Ihre
@@ -54,9 +62,9 @@ Mention-Component  (grantAccess = Yes)
                Ohne_Leserolle            Bedingung → Skipped, Beenden
                Zugriff                   Bereich
             3    Ziel                    Verfassen
-                 Absender_pruefen        RetrievePrincipalAccess für den Ersteller
+                 Absender_pruefen        HTTP: RetrievePrincipalAccess für den Ersteller
                  Absender_darf_nicht_…   Bedingung → Skipped, Beenden
-                 Zugriff_pruefen         RetrievePrincipalAccess für die Person
+                 Zugriff_pruefen         HTTP: RetrievePrincipalAccess für die Person
             4    Hat_Lesezugriff         Verfassen
             5    Benutzer_abrufen        Zeile nach ID abrufen → Benutzer
                  Rolle_suchen            Zeilen auflisten → Sicherheitsrollen
@@ -127,6 +135,7 @@ auf `ayonto_mention` Anlegen und Lesen, sonst nichts; geben Sie Schreiben höchs
 | Leserolle mit Rechten auf die Zieltabellen | | ✔ |
 | Anschluss-Schritte der Zielanwendung | | ✔ |
 | Verbindung zu Dataverse | | beim Anlegen des Flows |
+| Verbindung *HTTP mit Microsoft Entra ID (vorautorisiert)* | | beim Anlegen des Flows |
 
 ## Voraussetzungen
 
@@ -305,19 +314,49 @@ addProperty(
 ```
 
 Ein Verweis auf den Datensatz, in dem erwähnt wurde: der Typ aus `ayonto_recordtable`, der Schlüssel
-`<tabelle>id`. Prüfung und Freigabe nehmen beide dieses Ziel. Zu Tabellen, deren Primärschlüssel
+`<tabelle>id`. Die Freigabe in Schritt 6 nimmt dieses Ziel. Zu Tabellen, deren Primärschlüssel
 anders heißt, siehe [Schritt 6](#6--freigabe).
 
-**Absender_pruefen** — dieselbe Aktion wie `Zugriff_pruefen` unten, auf dem ersten oder dem zweiten
-Weg, aber für den **Ersteller der Zeile** statt für die erwähnte Person. Alle Felder wie dort, bis
-auf die Zeilen-ID:
+**Die Prüfung läuft über HTTP, nicht über den Dataverse-Connector.**
+[`RetrievePrincipalAccess`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveprincipalaccess)
+ist in der Web-API eine **Funktion**, keine Aktion, und der Connector nimmt sie nicht an. In einer
+Entwicklungsumgebung belegt: weder als gebundene Aktion auf **Benutzer** — ohne und mit dem Präfix
+`Microsoft.Dynamics.CRM.`, beides `GetMetadataForBoundActionInput` → `BadRequest` — noch als
+ungebundene (`GetMetadataForUnboundActionInput` → `NotFound`). Schon das Speichern der Definition
+scheitert.
+
+> **Nicht erprobt.** Der Weg über HTTP ist noch nicht in einer echten Umgebung gelaufen. Wie die
+> Prüfung endgültig läuft, ist noch offen.
+
+Beide Prüfungen sind dieselbe Aktion — *HTTP mit Microsoft Entra ID (vorautorisiert) → **HTTP-Anforderung
+aufrufen*** — und unterscheiden sich nur darin, für wen sie fragen. Die Verbindung bekommt als
+Basis-Ressourcen-URL und als Ressourcen-URI jeweils `<org>`, die Adresse der Umgebung, so wie sie im
+Browser steht — etwa `https://contoso.crm4.dynamics.com` —, und meldet sich mit demselben Dienstkonto
+an wie die Dataverse-Verbindung.
 
 | Feld | Wert | Art |
 |---|---|---|
-| Zeilen-ID | `outputs('Mention_abrufen')?['body/_createdby_value']` | fx |
+| Methode | **GET** | Auswahl |
+| URL der Anforderung | Ausdruck unten | fx |
 
-Auf dem zweiten Weg steht `_createdby_value` entsprechend in der URL. Warum der Ersteller und nicht
-`ayonto_mentionedbyid`, steht unter [Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
+**Absender_pruefen** fragt für den **Ersteller der Zeile**:
+
+```
+concat(
+  '<org>/api/data/v9.2/systemusers(',
+  outputs('Mention_abrufen')?['body/_createdby_value'],
+  ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(',
+  outputs('Mention_abrufen')?['body/ayonto_recordid'],
+  ')''}'
+)
+```
+
+Warum der Ersteller und nicht `ayonto_mentionedbyid`, steht unter
+[Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
+
+`<entitysetname>` ist der Plural-Name der Zieltabelle — derselbe Name, den Aktionen wie *Zeile
+aktualisieren* wollen, so wie `ayonto_mentions` für die Mention-Tabelle. Bei mehreren Zieltabellen
+lässt er sich wie die Leserolle aus einer Zuordnung lesen.
 
 **Absender_darf_nicht_lesen** — *Steuerung → **Bedingung***
 
@@ -335,32 +374,7 @@ Im Zweig **Wenn ja** zwei Aktionen:
 *Beenden* hält den ganzen Lauf an, auch aus dem Bereich heraus: Es wird nichts zugewiesen, nichts
 freigegeben, und auch `Anschluss_Schritte` laufen nicht. Der Zweig *Wenn nein* bleibt leer.
 
-**Zugriff_pruefen** fragt Dataverse, welche Rechte die erwähnte Person auf genau diesen Datensatz
-hat ([`RetrievePrincipalAccess`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveprincipalaccess)).
-
-> **Nicht erprobt.** Dieser Schritt — `Absender_pruefen` wie `Zugriff_pruefen` — ist noch nicht in
-> einer echten Umgebung gelaufen. `RetrievePrincipalAccess` ist in der Web-API eine **Funktion**,
-> keine Aktion — ob der Designer sie unter den gebundenen Aktionen anbietet, ist genau das, was offen
-> ist. Bietet er sie nicht an, nehmen Sie für beide den zweiten Weg.
-
-**Erster Weg** — *Microsoft Dataverse → **Eine gebundene Aktion ausführen***
-
-| Feld | Wert | Art |
-|---|---|---|
-| Tabellenname | **Benutzer** | Auswahl |
-| Zeilen-ID | `outputs('Mention_abrufen')?['body/ayonto_userid']` | fx |
-| Aktionsname | `RetrievePrincipalAccess` | Auswahl |
-| `Target` | `outputs('Ziel')` | fx |
-
-**Zweiter Weg** — *HTTP mit Microsoft Entra ID (vorautorisiert) → **HTTP-Anforderung aufrufen***,
-falls der erste Weg die Funktion nicht anbietet. Die Verbindung bekommt als Basis-Ressourcen-URL und
-als Ressourcen-URI jeweils `<org>`, die Adresse der Umgebung, so wie sie im Browser steht — etwa
-`https://contoso.crm4.dynamics.com`.
-
-| Feld | Wert | Art |
-|---|---|---|
-| Methode | **GET** | Auswahl |
-| URL der Anforderung | Ausdruck unten | fx |
+**Zugriff_pruefen** stellt dieselbe Anfrage für die **erwähnte Person**:
 
 ```
 concat(
@@ -372,11 +386,7 @@ concat(
 )
 ```
 
-`<entitysetname>` ist der Plural-Name der Zieltabelle — derselbe Name, den Aktionen wie *Zeile
-aktualisieren* wollen, so wie `ayonto_mentions` für die Mention-Tabelle. Bei mehreren Zieltabellen
-lässt er sich wie die Leserolle aus einer Zuordnung lesen. Die Aktion heißt auch auf diesem Weg
-`Zugriff_pruefen`; beide Wege liefern `AccessRights` im Body, Schritt 4 bleibt gleich. Wer diesen
-Weg nimmt, braucht `Ziel` nur noch für die Freigabe.
+Beide liefern `AccessRights` im Body.
 
 ### 4 · Hat_Lesezugriff
 
@@ -401,7 +411,8 @@ weder Rolle noch Freigabe werden angefasst.
 | Spalten auswählen | `_businessunitid_value` | Klartext |
 | Abfrage erweitern | `systemuserroles_association($select=roleid)` | Klartext |
 
-Holt die Business Unit der Person und die Rollen, die sie schon hat.
+Holt die Business Unit der Person und die Rollen, die sie schon hat. **Erprobt:** Mit diesem
+*Abfrage erweitern* liefert die Aktion die Rollen der Person unter `systemuserroles_association`.
 
 **Rolle_suchen** — *Microsoft Dataverse → **Zeilen auflisten***
 
@@ -454,8 +465,12 @@ concat(
 ```
 
 Die Adresse der Umgebung kommt wie beim Link in der Benachrichtigung aus der abgerufenen Zeile —
-nirgends steht eine URL. Der Zweig *Wenn nein* bleibt leer: Hat die Person die Rolle schon, gibt es
-nichts zuzuweisen.
+nirgends steht eine URL. **Erprobt:** `Mention_abrufen` liefert `@odata.id` als
+`<org>/api/data/v9.1/<set>(<id>)`, und `uriHost()` ergibt daraus die Umgebung. Der Zweig *Wenn nein*
+bleibt leer: Hat die Person die Rolle schon, gibt es nichts zuzuweisen.
+
+> **Nicht erprobt.** *Zeilen verknüpfen* zum Zuweisen der Rolle ist noch nicht in einer echten
+> Umgebung gelaufen.
 
 ### 6 · Freigabe
 
@@ -629,17 +644,17 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 |---|---|
 | Flow läuft nicht an | Access Status der Zeile ist nicht `New` — `grantAccess` aus, oder *Record id* bzw. *Table name* leer; Filter oder *Spalten auswählen* falsch geschrieben; Flow ist aus |
 | Keine Zeile trägt `New` | das Formular ist nicht veröffentlicht, oder der Datensatz wurde nie gespeichert |
-| `RetrievePrincipalAccess` steht nicht in der Liste der Aktionen | den zweiten Weg in Schritt 3 nehmen |
-| Access Detail nennt `Zugriff_pruefen` | `Ziel` passt nicht zur Tabelle — Tabellenname oder Schlüssel; auf dem zweiten Weg auch der Plural-Name |
+| Speichern scheitert mit `GetMetadataForBoundActionInput` (`BadRequest`) oder `GetMetadataForUnboundActionInput` (`NotFound`) | `RetrievePrincipalAccess` steckt in einer Dataverse-Aktion — das nimmt der Connector nicht an; den HTTP-Weg aus Schritt 3 nehmen |
+| Access Detail nennt `Zugriff_pruefen` | die URL passt nicht — `<entitysetname>` falsch geschrieben, oder die HTTP-Verbindung zeigt auf eine andere Umgebung |
 | Access Detail nennt `Rolle_id` | die Leserolle steht in der Business Unit der Person nicht — Name in `Leserolle` gegen *Sicherheitsrollen* prüfen |
 | Access Detail nennt `Rolle_fehlt` oder `Freigabe_noetig`, aber keinen Grund | gescheitert ist die Aktion **in** der Bedingung; `result()` reicht nicht hinein — Laufhistorie öffnen |
 | `Rolle_zuweisen` scheitert mit einem Rechtefehler | das Verbindungskonto hat nicht alle Rechte der Rolle, die es zuweisen soll |
 | `Freigabe` scheitert mit einem Rechtefehler | dem Verbindungskonto fehlt *Freigeben* auf der Zieltabelle |
-| `Freigabe` findet den Datensatz nicht | abweichender Primärschlüssel — siehe Schritt 6 |
+| `Freigabe` findet den Datensatz nicht | `Ziel` passt nicht zur Tabelle — Tabellenname, oder abweichender Primärschlüssel, siehe Schritt 6 |
 | Status `Granted`, die Person sieht den Datensatz trotzdem nicht | die Leserolle hat kein Lese-Recht auf die Tabelle, oder sie ist der App nicht zugeordnet |
 | Status `Skipped` mit „keine Leserolle für …" | Tabelle fehlt in `Leserolle`, oder dort nicht klein geschrieben |
 | Status `Skipped` mit „erwähnende Person darf …" | wer die Zeile angelegt hat, darf den Datensatz nicht lesen — so gewollt; beim Neuprüfen zählt der ursprüngliche Ersteller |
-| Access Detail nennt `Absender_pruefen` | wie bei `Zugriff_pruefen` — `Ziel` passt nicht zur Tabelle |
+| Access Detail nennt `Absender_pruefen` | wie bei `Zugriff_pruefen` |
 | Zweite Rollenzuweisung derselben Person scheitert | *Grad der Parallelität* steht nicht auf 1 |
 | Zeile bleibt auf `New` | „Ausführen nach" an `Fehler_ermitteln` falsch gesetzt, oder der Flow war beim Markieren aus |
 | Benachrichtigungs-Flow verschickt eine Zeile mit Kanal `Access` | dessen Filter prüft `ayonto_channel` nicht — siehe [README.md](README.md#trigger) |

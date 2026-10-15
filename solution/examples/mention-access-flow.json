@@ -9,6 +9,15 @@
           "connectionReferenceLogicalName": "ayonto_sharedcommondataserviceforapps_mention"
         },
         "runtimeSource": "embedded"
+      },
+      "shared_webcontents": {
+        "api": {
+          "name": "shared_webcontents"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "ayonto_sharedwebcontents_mention"
+        },
+        "runtimeSource": "embedded"
       }
     },
     "definition": {
@@ -220,15 +229,13 @@
               },
               "inputs": {
                 "host": {
-                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
-                  "connectionName": "shared_commondataserviceforapps",
-                  "operationId": "PerformBoundAction"
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+                  "connectionName": "shared_webcontents",
+                  "operationId": "InvokeHttp"
                 },
                 "parameters": {
-                  "entityName": "systemusers",
-                  "recordId": "@outputs('Mention_abrufen')?['body/_createdby_value']",
-                  "actionName": "RetrievePrincipalAccess",
-                  "item/Target": "@outputs('Ziel')"
+                  "request/method": "GET",
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/_createdby_value'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')"
                 },
                 "authentication": "@parameters('$authentication')"
               }
@@ -302,15 +309,13 @@
               },
               "inputs": {
                 "host": {
-                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
-                  "connectionName": "shared_commondataserviceforapps",
-                  "operationId": "PerformBoundAction"
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+                  "connectionName": "shared_webcontents",
+                  "operationId": "InvokeHttp"
                 },
                 "parameters": {
-                  "entityName": "systemusers",
-                  "recordId": "@outputs('Mention_abrufen')?['body/ayonto_userid']",
-                  "actionName": "RetrievePrincipalAccess",
-                  "item/Target": "@outputs('Ziel')"
+                  "request/method": "GET",
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/ayonto_userid'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')"
                 },
                 "authentication": "@parameters('$authentication')"
               }
