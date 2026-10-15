@@ -4,7 +4,7 @@ Zwei Power Apps Component Framework (PCF) Code-Components für modellgesteuerte 
 
 | Ordner | Component | Zweck |
 |---|---|---|
-| [`Mention/`](Mention) | `Ayonto.MentionControl` | `@`-Erwähnung von Dataverse-Benutzern in einer Textspalte, benachrichtigt über eine Tabellenzeile und einen Flow |
+| [`Mention/`](Mention) | `Ayonto.MentionControl` | `@`-Erwähnung von Dataverse-Benutzern in einer Textspalte, benachrichtigt über eine Tabellenzeile und einen Flow; auf Wunsch bekommen Erwähnte Lesezugriff auf den Datensatz |
 | [`GroupDetailList/`](GroupDetailList) | `Ayonto.GroupDetailListControl` | Dataverse-Ansicht als gruppierbare, sortierbare Liste |
 
 Beide sind virtuelle React-Components auf Fluent UI v9. React und Fluent kommen als
@@ -22,7 +22,7 @@ jeweiligen README unter „Was sich geändert hat".
 |---|---|---|
 | Bundle vorher | 2417 KiB | 2689 KiB |
 | Bundle jetzt | 29 KiB | 14 KiB |
-| Tests | 233 | 85 |
+| Tests | 250 | 85 |
 
 ## Voraussetzungen
 
@@ -118,7 +118,8 @@ deklarieren zudem `<external-service-usage enabled="false" />`.
 | **[solution/README.md](solution/README.md)** | Den Flow anlegen, Schritt für Schritt, mit allen Ausdrücken zum Kopieren |
 | **[solution/external-mail-provider.md](solution/external-mail-provider.md)** | Versand über einen externen Dienst statt Dataverse — deutsch und englisch, ohne Anbieternamen |
 | **[solution/in-app-notification.md](solution/in-app-notification.md)** | Zusätzlich die Glocke in der App bedienen — mit formatiertem Text und klickbarem Link |
-| [solution/examples/](solution/examples) | die fertige Flow-Definition zum Nachschlagen; sie wird beim Bauen gegen die Tabelle geprüft und ist nicht Teil der Lösung |
+| **[solution/mention-access.md](solution/mention-access.md)** | Erwähnten, die den Datensatz sonst nicht lesen dürfen, Lesezugriff geben — mit `grantAccess` am Component und einem zweiten Flow |
+| [solution/examples/](solution/examples) | die fertigen Flow-Definitionen zum Nachschlagen; sie werden beim Bauen gegen die Tabelle geprüft und sind nicht Teil der Lösung |
 
 Die Komponente hat je Kanal — E-Mail und Teams — einen eigenen Schalter, Betreff, Text und
 Linkbeschriftung, und schreibt je eingeschaltetem Kanal eine Zeile. Eine Statusspalte kann nicht

@@ -282,6 +282,24 @@
   <data name="TeamsLinkText_Desc" xml:space="preserve">
     <value>Text of the link to the record in the chat message. Defaults to „Open record“.</value>
   </data>
+  <data name="GrantAccess_Name" xml:space="preserve">
+    <value>Grant read access</value>
+  </data>
+  <data name="GrantAccess_Desc" xml:space="preserve">
+    <value>Whether a flow is to give a mentioned user read access to the record. The component only marks the row; it checks and grants nothing itself.</value>
+  </data>
+  <data name="GrantAccess_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="GrantAccess_Yes_Desc" xml:space="preserve">
+    <value>Mark one row per mentioned user for the access flow.</value>
+  </data>
+  <data name="GrantAccess_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="GrantAccess_No_Desc" xml:space="preserve">
+    <value>Do not ask for read access.</value>
+  </data>
   <data name="Default_LinkText" xml:space="preserve">
     <value>Open record</value>
   </data>

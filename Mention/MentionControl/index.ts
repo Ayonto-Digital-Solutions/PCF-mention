@@ -3,6 +3,7 @@ import type { Theme } from "@fluentui/react-components";
 import type { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { MentionEditor, type MentionEditorProps, type MentionEditorStrings } from "./components/MentionEditor";
 import {
+	ACCESS_CHANNEL,
 	MentionLogService,
 	type LoggedMention,
 	type MentionChannel,
@@ -20,8 +21,8 @@ import { clampRows } from "./utils/hostHeight";
 import { interpolate } from "./utils/format";
 import { buildRecordUrl, normalizeGuid } from "./utils/mentionText";
 
-/** Value of a channel's choice property that switches it on. */
-const CHANNEL_ENABLED = "0";
+/** Value of a Yes/No choice property — a channel, or read access — that switches it on. */
+const SWITCHED_ON = "0";
 
 const DEFAULT_SUBJECT_KEY = "Notification_DefaultSubject";
 const DEFAULT_BODY_KEY = "Notification_DefaultBody";
@@ -242,6 +243,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 		const blocker = mentionBlocker({
 			isOffline: this.isOffline(),
 			notificationsEnabled: this.enabledChannels().length > 0,
+			accessRequested: this.accessRequested(),
 			entityNameConfigured: this.recordEntityName !== undefined,
 			hasRecordId: this.recordId.length > 0,
 		});
@@ -265,10 +267,7 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	}
 
 	private readonly onMention = async (user: UserSuggestion): Promise<void> => {
-		if (this.isDisposed || this.enabledChannels().length === 0) {
-			return;
-		}
-		if (this.mentionNotice() !== undefined) {
+		if (this.isDisposed || this.mentionNotice() !== undefined) {
 			return;
 		}
 
@@ -279,23 +278,29 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 
 		// Everything the mail needs is read now, while the context is current. The wait that
 		// follows only decides whether to send it.
-		await this.scheduler.schedule({
-			key: recipientId,
-			payload: this.buildRequests(user, recipientId),
-		});
+		const payload = this.buildRequests(user, recipientId);
+		if (payload.length === 0) {
+			return;
+		}
+		await this.scheduler.schedule({ key: recipientId, payload });
 	};
 
 	/** The channels the maker switched on, in the order their rows are written. */
 	private enabledChannels(): MentionChannel[] {
 		const parameters = this.context.parameters;
 		const channels: MentionChannel[] = [];
-		if (parameters.sendEmail.raw === CHANNEL_ENABLED) {
+		if (parameters.sendEmail.raw === SWITCHED_ON) {
 			channels.push("Email");
 		}
-		if (parameters.sendTeams.raw === CHANNEL_ENABLED) {
+		if (parameters.sendTeams.raw === SWITCHED_ON) {
 			channels.push("Teams");
 		}
 		return channels;
+	}
+
+	/** The maker asked for mentioned people to be given read access to the record. */
+	private accessRequested(): boolean {
+		return this.context.parameters.grantAccess.raw === SWITCHED_ON;
 	}
 
 	/**
@@ -304,6 +309,11 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 	 * Each carries its own subject, text and link label, because a chat message is read somewhere
 	 * else than a mail and rarely wants the same wording. Where a channel says nothing of its own,
 	 * the e-mail wording stands in — configuring the same text twice is the more common case.
+	 *
+	 * With read access asked for, exactly one row per person carries the mark for the access flow:
+	 * the first channel's, or — with no channel switched on — a row of its own on the Access
+	 * channel. One mark, so the flow checks the person once rather than once per channel. The mark
+	 * needs the record, the same as the link in a notification; without one nothing is marked.
 	 */
 	private buildRequests(user: UserSuggestion, recipientId: string): MentionRequest[] {
 		const parameters = this.context.parameters;
@@ -337,7 +347,19 @@ export class MentionControl implements ComponentFramework.ReactControl<IInputs, 
 			entityId,
 		};
 
-		return this.enabledChannels().map((channel) => ({ ...shared, channel, ...wording[channel] }));
+		const requests: MentionRequest[] = this.enabledChannels().map((channel) => ({
+			...shared,
+			channel,
+			...wording[channel],
+		}));
+
+		if (!this.accessRequested() || entityName === undefined || entityId === undefined) {
+			return requests;
+		}
+		const [first, ...rest] = requests;
+		return first === undefined
+			? [{ ...shared, channel: ACCESS_CHANNEL, requestAccess: true }]
+			: [{ ...first, requestAccess: true }, ...rest];
 	}
 
 	private resource(key: string): string {

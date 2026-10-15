@@ -14,7 +14,9 @@ verlässt. Wo die Voraussetzung fehlt — serverseitige Synchronisierung mit ein
 Postfach — tritt ein Mail-Connector an die Stelle der beiden Dataverse-Aktionen; das steht in
 [external-mail-provider.md](external-mail-provider.md), deutsch und englisch. Wie derselbe Flow
 zusätzlich die **Glocke in der App** bedient, steht in
-[in-app-notification.md](in-app-notification.md).
+[in-app-notification.md](in-app-notification.md). Wie Erwähnte, die den Datensatz sonst nicht
+lesen dürfen, **Lesezugriff** bekommen, steht in [mention-access.md](mention-access.md) — ein
+zweiter Flow derselben Art, mit eigenem Schalter am Component.
 
 Die fertige Definition zum Nachschlagen liegt unter
 [`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird beim
@@ -84,6 +86,10 @@ Filter: weniger zu bauen, weniger, was schiefgehen kann, und `ayonto_deliverysta
 Zeile genau eine Sache. Eine Spalte kann nicht gleichzeitig „die Mail kam an" und „die
 Chat-Nachricht nicht" heißen.
 
+**Zeilen mit dem Kanal `Access` gehören keinem Benachrichtigungs-Flow.** Ist `grantAccess` an und
+kein Kanal eingeschaltet, schreibt das Component je Person eine Zeile nur für den
+[Zugriffs-Flow](mention-access.md) — ohne Zustellstatus. Der Filter unten lässt sie liegen.
+
 ## Was mitgeliefert wird und was Sie bauen
 
 | | mitgeliefert | selbst zu bauen oder zu stellen |
@@ -91,6 +97,7 @@ Chat-Nachricht nicht" heißen.
 | Tabelle `ayonto_mention` samt Ansicht | ✔ | |
 | Code-Components Mention und GroupDetailList | ✔ | |
 | Benachrichtigungs-Flow | als Anleitung | Flow anlegen, siehe unten |
+| Zugriffs-Flow, nur mit `grantAccess` | als Anleitung | Flow und Leserolle, siehe [mention-access.md](mention-access.md) |
 | Verbindung zu Dataverse | | beim Anlegen des Flows |
 | Serverseitige Synchronisierung, freigegebenes Postfach | | ✔ |
 
@@ -563,12 +570,14 @@ selbst wird immer gebaut; in keiner Einstellung steht eine URL.
 | `ayonto_recordid` | Text | 64 | ID des Datensatzes |
 | `ayonto_recordname` | Text | 400 | Anzeigename des Datensatzes |
 | `ayonto_recordurl` | Text | 500 | fertiger Deep-Link, sofern die Komponente ihn kennt |
-| `ayonto_channel` | Text | 32 | **`Email` oder `Teams`** — welchen Weg diese Zeile meint |
+| `ayonto_channel` | Text | 32 | **`Email` oder `Teams`** — welchen Weg diese Zeile meint; `Access` für eine Zeile nur für den Zugriffs-Flow |
 | `ayonto_subject` | Text | 200 | Betreff |
 | `ayonto_message` | Mehrzeilig | 2000 | Nachrichtentext |
 | `ayonto_linktext` | Text | 100 | Beschriftung des Links |
 | `ayonto_deliverystatus` | Text | 64 | `New`, `Sent`, `Failed` |
 | `ayonto_deliverydetail` | Text | 500 | Fehlertext des Flows |
+| `ayonto_accessstatus` | Text | 64 | `New`, `Exists`, `Granted`, `Skipped`, `Failed` — nur mit `grantAccess`, siehe [mention-access.md](mention-access.md) |
+| `ayonto_accessdetail` | Text | 500 | Grund des Zugriffs-Flows bei `Skipped` oder `Failed` |
 
 Der Plural-Name der Tabelle ist `ayonto_mentions`. Aktionen wie *Zeile aktualisieren* wollen diesen
 Namen, der Trigger dagegen den logischen Namen `ayonto_mention` — eine Verwechslung, die sich im

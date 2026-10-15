@@ -1,5 +1,5 @@
 {
-  "comment": "What every packed solution has to carry. The notification flow is deliberately not in here: it is built by hand from solution/README.md, so that importing the solution asks for no connection at all.",
+  "comment": "What every packed solution has to carry. The notification flow and the access flow are deliberately not in here: they are built by hand from solution/README.md and solution/mention-access.md, so that importing the solution asks for no connection at all.",
   "uniqueName": "AyontoPcfControls",
   "publisher": {
     "uniqueName": "Ayonto",
@@ -23,7 +23,9 @@
         "ayonto_message",
         "ayonto_linktext",
         "ayonto_deliverystatus",
-        "ayonto_deliverydetail"
+        "ayonto_deliverydetail",
+        "ayonto_accessstatus",
+        "ayonto_accessdetail"
       ],
       "views": [
         "Active Mentions"

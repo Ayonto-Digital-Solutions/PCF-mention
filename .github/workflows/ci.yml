@@ -130,17 +130,25 @@ jobs:
           # trigger() instead of triggerOutputs(), which is always empty; a renamed action that
           # an expression still reaches for, so what it carried disappears from the message; and
           # a column length in the README that no longer matches the table it is copied from.
+          # The access example is held to the same three flow mistakes, and its two columns in
+          # the README to the same length check: a misspelled status column there is a row that
+          # stays on New and a person who never gets to read.
           python3 - <<'MUTATE'
           import re
           import shutil
           from pathlib import Path
 
           flow = "examples/mention-notification-flow.json"
+          access = "examples/mention-access-flow.json"
           cases = {
               "typo": (flow, "body/ayonto_userid", "body/ayonto_usrid"),
               "trigger": (flow, "triggerOutputs()?['body/ayonto_subject']", "trigger()?['body/ayonto_subject']"),
               "length": ("README.md", "| `ayonto_useremail` | Text | 200 |", "| `ayonto_useremail` | Text | 100 |"),
               "outputs": (flow, '"Record_Link": {', '"Record_Link_": {'),
+              "access-typo": (access, "item/ayonto_accessstatus", "item/ayonto_accesstatus"),
+              "access-trigger": (access, "triggerOutputs()?['body/ayonto_mentionid']", "trigger()?['body/ayonto_mentionid']"),
+              "access-length": ("README.md", "| `ayonto_accessdetail` | Text | 500 |", "| `ayonto_accessdetail` | Text | 50 |"),
+              "access-outputs": (access, '"Ziel": {', '"Ziel_": {'),
           }
           for name, (where, before, after) in cases.items():
               target = Path(f"/tmp/mutant-{name}")
@@ -161,7 +169,8 @@ jobs:
         run: |
           pip install --quiet markdown
           python3 .github/scripts/build-docs-pdf.py /tmp/docs.pdf \
-            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md
+            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md \
+            solution/mention-access.md
 
       - name: Pack it and check what came out
         run: |
@@ -190,7 +199,8 @@ jobs:
           # follows step by step. CI packs without the code components, so this reaches the
           # columns; the release checks the labels and the component values as well.
           python3 .github/scripts/check-guide.py "$zip" \
-            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md
+            solution/README.md solution/external-mail-provider.md solution/in-app-notification.md \
+            solution/mention-access.md
 
           # And prove that guard guards, the way it actually failed: pack a source whose view
           # the packer drops, then hold the real source against it. That is what shipped in 2.2.0.

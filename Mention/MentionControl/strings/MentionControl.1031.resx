@@ -282,6 +282,24 @@
   <data name="TeamsLinkText_Desc" xml:space="preserve">
     <value>Text des Links auf den Datensatz in der Chat-Nachricht. Standard ist „Datensatz öffnen“.</value>
   </data>
+  <data name="GrantAccess_Name" xml:space="preserve">
+    <value>Lesezugriff vergeben</value>
+  </data>
+  <data name="GrantAccess_Desc" xml:space="preserve">
+    <value>Legt fest, ob ein Flow einer erwähnten Person Lesezugriff auf den Datensatz geben soll. Das Component markiert nur die Zeile; es prüft und vergibt selbst nichts.</value>
+  </data>
+  <data name="GrantAccess_Yes" xml:space="preserve">
+    <value>Ja</value>
+  </data>
+  <data name="GrantAccess_Yes_Desc" xml:space="preserve">
+    <value>Je erwähnter Person eine Zeile für den Zugriffs-Flow markieren.</value>
+  </data>
+  <data name="GrantAccess_No" xml:space="preserve">
+    <value>Nein</value>
+  </data>
+  <data name="GrantAccess_No_Desc" xml:space="preserve">
+    <value>Keinen Lesezugriff anfordern.</value>
+  </data>
   <data name="Default_LinkText" xml:space="preserve">
     <value>Datensatz öffnen</value>
   </data>
