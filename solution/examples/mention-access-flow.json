@@ -235,7 +235,7 @@
                 },
                 "parameters": {
                   "request/method": "GET",
-                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/_createdby_value'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')"
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/_createdby_value'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=', uriComponent(concat('{''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')))"
                 },
                 "authentication": "@parameters('$authentication')"
               }
@@ -252,7 +252,7 @@
               },
               "expression": {
                 "equals": [
-                  "@contains(string(coalesce(body('Absender_pruefen')?['AccessRights'], '')), 'ReadAccess')",
+                  "@contains(body('Absender_pruefen')['AccessRights'], 'ReadAccess')",
                   false
                 ]
               },
@@ -315,7 +315,7 @@
                 },
                 "parameters": {
                   "request/method": "GET",
-                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/ayonto_userid'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')"
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/ayonto_userid'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=', uriComponent(concat('{''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')))"
                 },
                 "authentication": "@parameters('$authentication')"
               }
@@ -330,7 +330,7 @@
               "metadata": {
                 "operationMetadataId": "5a110000-0000-4000-8000-000000000008"
               },
-              "inputs": "@contains(string(coalesce(body('Zugriff_pruefen')?['AccessRights'], '')), 'ReadAccess')"
+              "inputs": "@contains(body('Zugriff_pruefen')['AccessRights'], 'ReadAccess')"
             },
             "Benutzer_abrufen": {
               "type": "OpenApiConnection",

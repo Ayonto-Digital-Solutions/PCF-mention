@@ -159,6 +159,14 @@ hat, und Freigeben verlangt das Recht *Freigeben* auf der Zieltabelle. Dazu Lese
 `ayonto_mention`. Nehmen Sie ein **Dienstkonto**, kein persönliches — die Gründe stehen unter
 [Unter welchem Konto der Flow läuft](README.md#unter-welchem-konto-der-flow-läuft).
 
+**HTTP mit Microsoft Entra ID in derselben Datengruppe wie Dataverse.** Die Prüfung in Schritt 3
+läuft über diesen Connector. Trennt die DLP-Richtlinie der Umgebung ihn von Dataverse, lässt sich der
+Flow nicht einschalten.
+
+**Höchstens 100 Aufrufe je 60 Sekunden je Verbindung.** Über diesen Connector macht der Flow zwei je
+Erwähnung, `Absender_pruefen` und `Zugriff_pruefen` — gut 50 Erwähnungen je Minute. Darüber drosselt
+der Connector; was nach den Wiederholungen der Aktion noch scheitert, steht als `Failed` in der Zeile.
+
 **Anwender: Anlegen und Lesen auf `ayonto_mention`, Schreiben höchstens auf Ebene Benutzer** — siehe
 [Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
 
@@ -345,9 +353,12 @@ an wie die Dataverse-Verbindung.
 concat(
   '<org>/api/data/v9.2/systemusers(',
   outputs('Mention_abrufen')?['body/_createdby_value'],
-  ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(',
-  outputs('Mention_abrufen')?['body/ayonto_recordid'],
-  ')''}'
+  ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=',
+  uriComponent(concat(
+    '{''@odata.id'':''<entitysetname>(',
+    outputs('Mention_abrufen')?['body/ayonto_recordid'],
+    ')''}'
+  ))
 )
 ```
 
@@ -358,11 +369,17 @@ Warum der Ersteller und nicht `ayonto_mentionedbyid`, steht unter
 aktualisieren* wollen, so wie `ayonto_mentions` für die Mention-Tabelle. Bei mehreren Zieltabellen
 lässt er sich wie die Leserolle aus einer Zuordnung lesen.
 
+**Der Wert hinter `@t=` ist mit `uriComponent()` kodiert**, denn er enthält Klammern,
+Anführungszeichen und Doppelpunkte. Belegt ist diese kodierte Form — abgesetzt in der
+Browser-Konsole, nicht über den Connector. Ob der Connector die URL selbst noch einmal kodiert, ist
+offen. Wenn ja, kommt der Wert doppelt kodiert an und die Anfrage scheitert; dann `uriComponent()`
+weglassen (siehe [Fehlersuche](#fehlersuche)).
+
 **Absender_darf_nicht_lesen** — *Steuerung → **Bedingung***
 
 | links (fx) | Operator | rechts |
 |---|---|---|
-| `contains(string(coalesce(body('Absender_pruefen')?['AccessRights'], '')), 'ReadAccess')` | ist gleich | `false` (fx) |
+| `contains(body('Absender_pruefen')['AccessRights'], 'ReadAccess')` | ist gleich | `false` (fx) |
 
 Im Zweig **Wenn ja** zwei Aktionen:
 
@@ -374,15 +391,28 @@ Im Zweig **Wenn ja** zwei Aktionen:
 *Beenden* hält den ganzen Lauf an, auch aus dem Bereich heraus: Es wird nichts zugewiesen, nichts
 freigegeben, und auch `Anschluss_Schritte` laufen nicht. Der Zweig *Wenn nein* bleibt leer.
 
+`AccessRights` steht hier **bewusst ohne `?` und ohne `coalesce`**, genau wie in Schritt 4 und aus
+demselben Grund wie bei `Rolle_id`. Kommt ein Body ohne `AccessRights` zurück, scheitert die
+Bedingung sichtbar mit ihrem Namen, statt still „darf nicht lesen" zu ergeben — sonst ginge jede
+Erwähnung auf `Skipped`.
+
+In dieser Bedingung stehen **zwei** Aktionen. Scheitert `Als_abgelehnt_vermerken`, sieht der
+Fehlerweg nur die Bedingung (siehe [Der Bereich Zugriff](#der-bereich-zugriff)), und die Zeile geht
+auf `Failed` statt auf `Skipped`. Zugewiesen oder freigegeben wird auch dann nichts: Alles danach
+läuft nur, wenn die Bedingung erfolgreich war.
+
 **Zugriff_pruefen** stellt dieselbe Anfrage für die **erwähnte Person**:
 
 ```
 concat(
   '<org>/api/data/v9.2/systemusers(',
   outputs('Mention_abrufen')?['body/ayonto_userid'],
-  ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t={''@odata.id'':''<entitysetname>(',
-  outputs('Mention_abrufen')?['body/ayonto_recordid'],
-  ')''}'
+  ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=',
+  uriComponent(concat(
+    '{''@odata.id'':''<entitysetname>(',
+    outputs('Mention_abrufen')?['body/ayonto_recordid'],
+    ')''}'
+  ))
 )
 ```
 
@@ -393,12 +423,16 @@ Beide liefern `AccessRights` im Body.
 *Datenübertragung → **Verfassen*** (fx)
 
 ```
-contains(string(coalesce(body('Zugriff_pruefen')?['AccessRights'], '')), 'ReadAccess')
+contains(body('Zugriff_pruefen')['AccessRights'], 'ReadAccess')
 ```
 
 `AccessRights` ist eine Liste von Namen, durch Komma getrennt, etwa `ReadAccess, WriteAccess`.
 Steht `ReadAccess` darin, darf die Person schon lesen: Die Zeile geht in Schritt 7 auf `Exists`, und
 weder Rolle noch Freigabe werden angefasst.
+
+**Bewusst ohne `?`, ohne `coalesce` und ohne `string()`.** Jedes davon machte aus einem
+unerwarteten Body still ein „darf nicht lesen": Die Person bekäme Rolle und Freigabe, obwohl sie
+womöglich längst lesen darf. So scheitert `Hat_Lesezugriff` sichtbar, wie `Rolle_id`.
 
 ### 5 · Rolle_zuweisen
 
@@ -647,7 +681,11 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 | Speichern scheitert mit `GetMetadataForBoundActionInput` (`BadRequest`) oder `GetMetadataForUnboundActionInput` (`NotFound`) | `RetrievePrincipalAccess` steckt in einer Dataverse-Aktion — das nimmt der Connector nicht an; den HTTP-Weg aus Schritt 3 nehmen |
 | Access Detail nennt `Zugriff_pruefen` | die URL passt nicht — `<entitysetname>` falsch geschrieben, oder die HTTP-Verbindung zeigt auf eine andere Umgebung |
 | Access Detail nennt `Rolle_id` | die Leserolle steht in der Business Unit der Person nicht — Name in `Leserolle` gegen *Sicherheitsrollen* prüfen |
-| Access Detail nennt `Rolle_fehlt` oder `Freigabe_noetig`, aber keinen Grund | gescheitert ist die Aktion **in** der Bedingung; `result()` reicht nicht hinein — Laufhistorie öffnen |
+| Access Detail nennt `Absender_darf_nicht_lesen`, `Rolle_fehlt` oder `Freigabe_noetig`, aber keinen Grund | gescheitert ist eine Aktion **in** der Bedingung — bei `Absender_darf_nicht_lesen` `Als_abgelehnt_vermerken`; `result()` reicht nicht hinein — Laufhistorie öffnen |
+| Access Detail nennt `Hat_Lesezugriff` oder `Absender_darf_nicht_lesen` mit „property 'AccessRights'" | die HTTP-Antwort trägt kein `AccessRights` — Body in der Laufhistorie ansehen; meist eine Fehlermeldung von Dataverse statt einer Antwort |
+| `Zugriff_pruefen` scheitert mit einem Syntaxfehler zum Parameter `@t` | der Connector kodiert die URL selbst noch einmal — `uriComponent()` in beiden URLs weglassen |
+| Flow lässt sich nicht einschalten, Hinweis auf eine Richtlinie | DLP trennt *HTTP mit Microsoft Entra ID* von Dataverse — beide müssen in derselben Datengruppe liegen |
+| `Absender_pruefen` oder `Zugriff_pruefen` scheitert mit `429` | mehr als 100 Aufrufe je 60 Sekunden auf der Verbindung — Erwähnungen in kurzer Folge; die Zeilen später wieder auf `New` setzen |
 | `Rolle_zuweisen` scheitert mit einem Rechtefehler | das Verbindungskonto hat nicht alle Rechte der Rolle, die es zuweisen soll |
 | `Freigabe` scheitert mit einem Rechtefehler | dem Verbindungskonto fehlt *Freigeben* auf der Zieltabelle |
 | `Freigabe` findet den Datensatz nicht | `Ziel` passt nicht zur Tabelle — Tabellenname, oder abweichender Primärschlüssel, siehe Schritt 6 |
