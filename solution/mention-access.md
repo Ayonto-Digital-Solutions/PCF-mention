@@ -21,15 +21,17 @@ passieren muss.
 > Designer geschrieben, und der Bau prüft das Beispiel gegen die Tabelle — Spaltennamen, Namen der
 > Aktionen in Ausdrücken.
 >
-> * **Erprobt** in einer Entwicklungsumgebung: *Zeile nach ID abrufen* liefert `@odata.id` als
->   `<org>/api/data/v9.1/<set>(<id>)`, und `uriHost()` ergibt daraus die Umgebung; *Zeile nach ID
->   abrufen* auf **Benutzer** mit `systemuserroles_association($select=roleid)` unter *Abfrage
->   erweitern* liefert die Rollen der Person. Beides in Schritt 5.
-> * **Belegt nicht möglich:** `RetrievePrincipalAccess` über den Dataverse-Connector — siehe
->   Schritt 3.
-> * **Nicht erprobt:** die Prüfung über HTTP (Schritt 3), *Zeilen verknüpfen* zum Zuweisen der
->   Rolle (Schritt 5) und `GrantAccess` mit einem Ziel als Ausdruck (Schritt 6). Diese Stellen sind
->   unten markiert. Wie die Prüfung endgültig läuft, ist noch offen.
+> * **Erprobt** in einer Entwicklungsumgebung:
+>   * Schritt 3: `Ziel` in der Form unten; beide Prüfungen über HTTP — `InvokeHttp`, GET, `@t` mit
+>     `uriComponent()` —, der Body kommt als JSON, `body('…')['AccessRights']` ist lesbar.
+>   * Schritt 5: *Zeile nach ID abrufen* liefert `@odata.id` als `<org>/api/data/v9.1/<set>(<id>)`,
+>     und `uriHost()` ergibt daraus die Umgebung; `Benutzer_abrufen` mit
+>     `systemuserroles_association($select=roleid)` liefert die Rollen der Person; `Rolle_suchen`
+>     und `Rolle_id` finden die Leserolle in ihrer Business Unit.
+> * **Belegt nicht möglich:** `RetrievePrincipalAccess` über den Dataverse-Connector, und `Ziel` mit
+>   `addProperty()` — beides in Schritt 3.
+> * **Nicht erprobt:** *Zeilen verknüpfen* zum Zuweisen der Rolle (Schritt 5) und `GrantAccess` mit
+>   dem Ziel aus `Ziel` (Schritt 6). Beide Stellen sind unten markiert.
 
 Platzhalter stehen in spitzen Klammern: `<zieltabelle>` ist der logische Name der Tabelle, auf
 deren Formular die Komponente sitzt, `<leserolle>` der Name der Sicherheitsrolle, die Ihre
@@ -146,6 +148,22 @@ direkter Zuweisung, wenn die Zielanwendung sie einem Team gibt. Die Rolle ist ke
 Freigabe gibt Zugriff auf genau einen Datensatz, aber sie ersetzt nicht das Grundrecht, die Tabelle
 überhaupt zu lesen. **Ohne dieses Grundrecht wirkt eine Freigabe nicht.** Ebene *Benutzer* reicht,
 weil die Person damit nur ihre eigenen und die ihr freigegebenen Datensätze sieht — nicht mehr.
+
+**Zwei Rechte gibt Dataverse einer neuen Rolle ungefragt mit.** Eine neu angelegte Sicherheitsrolle
+bekommt zusätzlich `prvCreateSharePointData` und `prvWriteSharePointData`. Für eine reine Leserolle
+nehmen Sie beide wieder heraus, etwa mit der an die Rolle gebundenen Aktion
+[`RemovePrivilegeRole`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/removeprivilegerole),
+einmal je Recht:
+
+```
+POST <org>/api/data/v9.2/roles(<roleid>)/Microsoft.Dynamics.CRM.RemovePrivilegeRole
+```
+
+```json
+{ "Privilege": { "@odata.type": "Microsoft.Dynamics.CRM.privilege", "privilegeid": "<privilegeid>" } }
+```
+
+Die `privilegeid` steht in der Tabelle der Rechte (`privileges`) unter dem Namen des Rechts.
 
 Sicherheitsrollen werden aus der Stamm-Business-Unit in jede untergeordnete übernommen, unter
 demselben Namen. Deshalb sucht der Flow die Rolle per Name in der Business Unit der Person.
@@ -310,20 +328,24 @@ nicht immer laufen dürfen.
 **Ziel** — *Datenübertragung → **Verfassen*** (fx)
 
 ```
-addProperty(
-  addProperty(
-    json('{}'),
-    '@odata.type',
-    concat('Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'])
-  ),
-  concat(outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id'),
-  outputs('Mention_abrufen')?['body/ayonto_recordid']
-)
+json(concat(
+  '{"@odata.type":"Microsoft.Dynamics.CRM.',
+  outputs('Mention_abrufen')?['body/ayonto_recordtable'],
+  '","',
+  outputs('Mention_abrufen')?['body/ayonto_recordtable'],
+  'id":"',
+  outputs('Mention_abrufen')?['body/ayonto_recordid'],
+  '"}'
+))
 ```
 
 Ein Verweis auf den Datensatz, in dem erwähnt wurde: der Typ aus `ayonto_recordtable`, der Schlüssel
 `<tabelle>id`. Die Freigabe in Schritt 6 nimmt dieses Ziel. Zu Tabellen, deren Primärschlüssel
 anders heißt, siehe [Schritt 6](#6--freigabe).
+
+**Erprobt** in genau dieser Form. **Nicht mit `addProperty()`:** Das lehnt `@odata.type` als
+Eigenschaftsnamen ab — `InvalidTemplate`, „invalid characters '.'". In 2.5.0 stand der Schritt so
+hier, und `Ziel` scheiterte zur Laufzeit.
 
 **Die Prüfung läuft über HTTP, nicht über den Dataverse-Connector.**
 [`RetrievePrincipalAccess`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveprincipalaccess)
@@ -333,8 +355,8 @@ Entwicklungsumgebung belegt: weder als gebundene Aktion auf **Benutzer** — ohn
 ungebundene (`GetMetadataForUnboundActionInput` → `NotFound`). Schon das Speichern der Definition
 scheitert.
 
-> **Nicht erprobt.** Der Weg über HTTP ist noch nicht in einer echten Umgebung gelaufen. Wie die
-> Prüfung endgültig läuft, ist noch offen.
+**Erprobt:** beide Prüfungen über HTTP — `InvokeHttp`, GET, `@t` mit `uriComponent()` kodiert. Der
+Body kommt als JSON zurück, und `body('…')['AccessRights']` ist lesbar.
 
 Beide Prüfungen sind dieselbe Aktion — *HTTP mit Microsoft Entra ID (vorautorisiert) → **HTTP-Anforderung
 aufrufen*** — und unterscheiden sich nur darin, für wen sie fragen. Die Verbindung bekommt als
@@ -370,10 +392,7 @@ aktualisieren* wollen, so wie `ayonto_mentions` für die Mention-Tabelle. Bei me
 lässt er sich wie die Leserolle aus einer Zuordnung lesen.
 
 **Der Wert hinter `@t=` ist mit `uriComponent()` kodiert**, denn er enthält Klammern,
-Anführungszeichen und Doppelpunkte. Belegt ist diese kodierte Form — abgesetzt in der
-Browser-Konsole, nicht über den Connector. Ob der Connector die URL selbst noch einmal kodiert, ist
-offen. Wenn ja, kommt der Wert doppelt kodiert an und die Anfrage scheitert; dann `uriComponent()`
-weglassen (siehe [Fehlersuche](#fehlersuche)).
+Anführungszeichen und Doppelpunkte. In dieser Form läuft die Anfrage über den Connector.
 
 **Absender_darf_nicht_lesen** — *Steuerung → **Bedingung***
 
@@ -427,7 +446,8 @@ contains(body('Zugriff_pruefen')['AccessRights'], 'ReadAccess')
 ```
 
 `AccessRights` ist eine Liste von Namen, durch Komma getrennt, etwa `ReadAccess, WriteAccess`.
-Steht `ReadAccess` darin, darf die Person schon lesen: Die Zeile geht in Schritt 7 auf `Exists`, und
+**Erprobt:** So liest der Ausdruck sie aus dem JSON-Body. Steht `ReadAccess` darin, darf die Person
+schon lesen: Die Zeile geht in Schritt 7 auf `Exists`, und
 weder Rolle noch Freigabe werden angefasst.
 
 **Bewusst ohne `?`, ohne `coalesce` und ohne `string()`.** Jedes davon machte aus einem
@@ -474,6 +494,9 @@ Vor `['roleid']` steht **bewusst kein `?`**. Findet `Rolle_suchen` die Rolle in 
 nicht, scheitert diese Aktion mit ihrem Namen in der Meldung, statt eine leere ID an die Zuweisung
 weiterzureichen. Das gilt auch, wenn die Person schon lesen darf: Ein Tippfehler in `Leserolle` soll
 beim ersten Lauf auffallen, nicht erst bei dem, der die Rolle braucht.
+
+**Erprobt:** `Rolle_suchen` findet die Rolle in der Business Unit der Person, und `Rolle_id` liefert
+ihre ID.
 
 **Rolle_fehlt** — *Steuerung → **Bedingung***, zwei Zeilen mit **Und**
 
@@ -543,15 +566,15 @@ json(concat(
 ))
 ```
 
-> **Nicht erprobt.** `GrantAccess` mit einem Ziel, das zur Laufzeit aus `ayonto_recordtable` und
-> `ayonto_recordid` gebildet wird, ist noch nicht in einer echten Umgebung gelaufen. Ob der Designer
-> das Feld *Target* als Ausdruck annimmt oder einen festen Tabellentyp erwartet, ist offen.
+> **Nicht erprobt.** `GrantAccess` mit dem Ziel aus `Ziel` ist noch nicht in einer echten Umgebung
+> gelaufen. `Ziel` selbst ist erprobt (Schritt 3); offen ist, ob der Designer das Feld *Target* als
+> Ausdruck annimmt oder einen festen Tabellentyp erwartet.
 
 **Tabellen mit abweichendem Primärschlüssel brauchen den Schlüssel von Hand.** `Ziel` nimmt
 `<tabelle>id` an. Das gilt für eigene Tabellen und die meisten Standardtabellen, aber nicht für
 alle — Aktivitätstabellen etwa heißen mit dem Schlüssel `activityid`. Für eine solche Tabelle steht
-in `Ziel` statt `concat(…, 'id')` der Name des Schlüssels in Anführungszeichen, oder er kommt wie
-die Leserolle aus einer Zuordnung.
+in `Ziel` an Stelle der zweiten Tabellenangabe samt `'id":"'` der Schlüssel als Text, etwa
+`'activityid":"'`, oder er kommt wie die Leserolle aus einer Zuordnung.
 
 ### 7 · Ergebnis_vermerken
 
@@ -683,7 +706,8 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 | Access Detail nennt `Rolle_id` | die Leserolle steht in der Business Unit der Person nicht — Name in `Leserolle` gegen *Sicherheitsrollen* prüfen |
 | Access Detail nennt `Absender_darf_nicht_lesen`, `Rolle_fehlt` oder `Freigabe_noetig`, aber keinen Grund | gescheitert ist eine Aktion **in** der Bedingung — bei `Absender_darf_nicht_lesen` `Als_abgelehnt_vermerken`; `result()` reicht nicht hinein — Laufhistorie öffnen |
 | Access Detail nennt `Hat_Lesezugriff` oder `Absender_darf_nicht_lesen` mit „property 'AccessRights'" | die HTTP-Antwort trägt kein `AccessRights` — Body in der Laufhistorie ansehen; meist eine Fehlermeldung von Dataverse statt einer Antwort |
-| `Zugriff_pruefen` scheitert mit einem Syntaxfehler zum Parameter `@t` | der Connector kodiert die URL selbst noch einmal — `uriComponent()` in beiden URLs weglassen |
+| `Ziel` scheitert mit `InvalidTemplate`, „invalid characters '.'" | `Ziel` steht noch mit `addProperty()` wie in 2.5.0 — durch die Form aus Schritt 3 ersetzen |
+| Die Leserolle erlaubt mehr als Lesen: SharePoint-Daten anlegen und schreiben | Dataverse hat beim Anlegen der Rolle zwei Rechte ergänzt — siehe [Voraussetzungen](#voraussetzungen) |
 | Flow lässt sich nicht einschalten, Hinweis auf eine Richtlinie | DLP trennt *HTTP mit Microsoft Entra ID* von Dataverse — beide müssen in derselben Datengruppe liegen |
 | `Absender_pruefen` oder `Zugriff_pruefen` scheitert mit `429` | mehr als 100 Aufrufe je 60 Sekunden auf der Verbindung — Erwähnungen in kurzer Folge; die Zeilen später wieder auf `New` setzen |
 | `Rolle_zuweisen` scheitert mit einem Rechtefehler | das Verbindungskonto hat nicht alle Rechte der Rolle, die es zuweisen soll |

@@ -215,7 +215,7 @@
               "metadata": {
                 "operationMetadataId": "5a110000-0000-4000-8000-000000000002"
               },
-              "inputs": "@addProperty(addProperty(json('{}'), '@odata.type', concat('Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'])), concat(outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id'), outputs('Mention_abrufen')?['body/ayonto_recordid'])"
+              "inputs": "@json(concat('{\"@odata.type\":\"Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'], '\",\"', outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id\":\"', outputs('Mention_abrufen')?['body/ayonto_recordid'], '\"}'))"
             },
             "Absender_pruefen": {
               "type": "OpenApiConnection",
