@@ -22,6 +22,18 @@ const STATUS_NEW = "New";
 export const CHANNELS = ["Email", "Teams"] as const;
 export type MentionChannel = (typeof CHANNELS)[number];
 
+/**
+ * The channel of a row that only asks for read access, written when no notification channel is
+ * switched on. It is deliberately not one of CHANNELS: such a row carries no delivery status and
+ * no wording, so no notification flow — they filter on channel and delivery status — picks it up.
+ */
+export const ACCESS_CHANNEL = "Access";
+export type MentionRowChannel = MentionChannel | typeof ACCESS_CHANNEL;
+
+function isNotificationChannel(channel: MentionRowChannel): channel is MentionChannel {
+	return (CHANNELS as readonly string[]).includes(channel);
+}
+
 /** Column lengths, so a long name or a long message is cut here rather than refused by Dataverse. */
 const LIMITS = {
 	name: 200,
@@ -35,15 +47,17 @@ const LIMITS = {
 	recordurl: 500,
 	subject: 200,
 	message: 2000,
+	accessstatus: 64,
 } as const;
 
 export interface MentionRequest {
 	readonly recipient: UserSuggestion;
 	readonly senderUserId: string;
-	/** Which way this one goes out. */
-	readonly channel: MentionChannel;
-	readonly subject: string;
-	readonly message: string;
+	/** Which way this one goes out, or Access for a row that only asks for read access. */
+	readonly channel: MentionRowChannel;
+	/** Only a notification channel carries wording; an Access row leaves it out. */
+	readonly subject?: string;
+	readonly message?: string;
 	/** What the link to the record is called in the notification. */
 	readonly linkText?: string;
 	readonly recordUrl?: string;
@@ -51,6 +65,12 @@ export interface MentionRequest {
 	readonly entityId?: string;
 	/** What the record is called, so a notification can name it without looking it up. */
 	readonly recordName?: string;
+	/**
+	 * Marks this row for the access flow, which checks whether the person can read the record and
+	 * grants it if not. Only one row per person carries the mark, so the flow runs once for them.
+	 * Without a record there is nothing to grant on, and the mark is left out.
+	 */
+	readonly requestAccess?: boolean;
 }
 
 /** One mention that was written on this record, as the table remembers it. */
@@ -95,6 +115,10 @@ export class MentionLogService {
 		if (recipient.length === 0) {
 			throw new MentionLogError("A mention needs somebody to notify.");
 		}
+		if (request.channel === ACCESS_CHANNEL && !this.grantsAccess(request)) {
+			// A row that notifies nobody and grants nothing is a row nothing will ever act on.
+			throw new MentionLogError("A row for read access needs a record to grant it on.");
+		}
 
 		await this.webAPI.createRecord(this.table, this.buildRow(request, recipient));
 	}
@@ -134,6 +158,15 @@ export class MentionLogService {
 		return `${this.prefix}${name}`;
 	}
 
+	/** Read access is granted on a record, so the mark only counts where the row names one. */
+	private grantsAccess(request: MentionRequest): boolean {
+		return (
+			request.requestAccess === true &&
+			normalizeGuid(request.entityId ?? "").length > 0 &&
+			(request.entityName ?? "").trim().length > 0
+		);
+	}
+
 	private buildRow(request: MentionRequest, recipient: string): ComponentFramework.WebApi.Entity {
 		const row: Record<string, string> = {};
 		const put = (name: string, value: string | undefined, max: number): void => {
@@ -154,10 +187,15 @@ export class MentionLogService {
 		put("recordname", request.recordName, LIMITS.recordname);
 		put("recordurl", request.recordUrl, LIMITS.recordurl);
 		put("channel", request.channel, LIMITS.channel);
-		put("subject", request.subject, LIMITS.subject);
-		put("message", request.message, LIMITS.message);
-		put("linktext", request.linkText, LIMITS.linktext);
-		put("deliverystatus", STATUS_NEW, LIMITS.id);
+		if (isNotificationChannel(request.channel)) {
+			put("subject", request.subject, LIMITS.subject);
+			put("message", request.message, LIMITS.message);
+			put("linktext", request.linkText, LIMITS.linktext);
+			put("deliverystatus", STATUS_NEW, LIMITS.id);
+		}
+		if (this.grantsAccess(request)) {
+			put("accessstatus", STATUS_NEW, LIMITS.accessstatus);
+		}
 
 		return row;
 	}

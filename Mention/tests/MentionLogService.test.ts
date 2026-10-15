@@ -104,6 +104,58 @@ describe("MentionLogService", () => {
 		expect(recorded[0].row.ayonto_subject).toHaveLength(200);
 	});
 
+	it("marks the row for the access flow when asked to", async () => {
+		const recorded: Recorded[] = [];
+		await new MentionLogService(makeWebApi(recorded)).write({ ...REQUEST, requestAccess: true });
+
+		expect(recorded[0].row).toMatchObject({ ayonto_deliverystatus: "New", ayonto_accessstatus: "New" });
+	});
+
+	it("writes no access status unless asked to", async () => {
+		const recorded: Recorded[] = [];
+		await new MentionLogService(makeWebApi(recorded)).write(REQUEST);
+
+		expect(recorded[0].row).not.toHaveProperty("ayonto_accessstatus");
+	});
+
+	it("leaves the mark out where the row names no record to grant on", async () => {
+		const recorded: Recorded[] = [];
+		await new MentionLogService(makeWebApi(recorded)).write({
+			...REQUEST,
+			entityId: undefined,
+			requestAccess: true,
+		});
+
+		expect(recorded[0].row).not.toHaveProperty("ayonto_accessstatus");
+		expect(recorded[0].row.ayonto_deliverystatus).toBe("New");
+	});
+
+	it("writes an Access row without delivery status or wording", async () => {
+		const recorded: Recorded[] = [];
+		await new MentionLogService(makeWebApi(recorded)).write({
+			...REQUEST,
+			channel: "Access",
+			requestAccess: true,
+		});
+
+		const row = recorded[0].row;
+		expect(row).toMatchObject({ ayonto_channel: "Access", ayonto_accessstatus: "New" });
+		for (const column of ["ayonto_deliverystatus", "ayonto_subject", "ayonto_message", "ayonto_linktext"]) {
+			expect(row).not.toHaveProperty(column);
+		}
+	});
+
+	it("refuses an Access row that has nothing to grant on", async () => {
+		const recorded: Recorded[] = [];
+		const service = new MentionLogService(makeWebApi(recorded));
+
+		await expect(
+			service.write({ ...REQUEST, channel: "Access", requestAccess: true, entityName: undefined })
+		).rejects.toThrow(/record to grant/i);
+		await expect(service.write({ ...REQUEST, channel: "Access" })).rejects.toThrow(/record to grant/i);
+		expect(recorded).toHaveLength(0);
+	});
+
 	it("reads back the mentions a record carries", async () => {
 		const service = new MentionLogService(
 			makeWebApi([], [

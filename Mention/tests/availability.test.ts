@@ -4,6 +4,7 @@ import { mentionBlocker, type MentionAvailability } from "../MentionControl/util
 const state = (over: Partial<MentionAvailability> = {}): MentionAvailability => ({
 	isOffline: false,
 	notificationsEnabled: true,
+	accessRequested: false,
 	entityNameConfigured: true,
 	hasRecordId: true,
 	...over,
@@ -39,5 +40,22 @@ describe("mentionBlocker", () => {
 
 	it("allows mentioning with notifications off and a saved record", () => {
 		expect(mentionBlocker(state({ notificationsEnabled: false }))).toBeUndefined();
+	});
+
+	it("blocks an unsaved record when only read access is asked for", () => {
+		// No channel, but a row for the access flow — and a record without an id has nothing to
+		// grant on.
+		expect(
+			mentionBlocker(state({ hasRecordId: false, notificationsEnabled: false, accessRequested: true }))
+		).toBe("unsaved-record");
+	});
+
+	it("does not block read access when the maker never bound the record properties", () => {
+		// No record to grant on, so nothing is marked; there is nothing to save first either.
+		expect(
+			mentionBlocker(
+				state({ hasRecordId: false, entityNameConfigured: false, notificationsEnabled: false, accessRequested: true })
+			)
+		).toBeUndefined();
 	});
 });

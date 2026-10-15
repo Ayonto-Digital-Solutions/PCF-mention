@@ -13,6 +13,86 @@
         <Description description="Notification log written by the Ayonto Mention code component. A cloud flow reads new rows and sends the notification." languagecode="1033" />
       </Descriptions>
       <attributes>
+        <attribute PhysicalName="ayonto_AccessDetail">
+          <Type>nvarchar</Type>
+          <Name>ayonto_accessdetail</Name>
+          <LogicalName>ayonto_accessdetail</LogicalName>
+          <RequiredLevel>none</RequiredLevel>
+          <DisplayMask>ValidForAdvancedFind|ValidForForm|ValidForGrid</DisplayMask>
+          <ImeMode>auto</ImeMode>
+          <ValidForUpdateApi>1</ValidForUpdateApi>
+          <ValidForReadApi>1</ValidForReadApi>
+          <ValidForCreateApi>1</ValidForCreateApi>
+          <IsCustomField>1</IsCustomField>
+          <IsAuditEnabled>1</IsAuditEnabled>
+          <IsSecured>0</IsSecured>
+          <IntroducedVersion>1.0.0.0</IntroducedVersion>
+          <IsCustomizable>1</IsCustomizable>
+          <IsRenameable>1</IsRenameable>
+          <CanModifySearchSettings>1</CanModifySearchSettings>
+          <CanModifyRequirementLevelSettings>1</CanModifyRequirementLevelSettings>
+          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
+          <SourceType>0</SourceType>
+          <IsGlobalFilterEnabled>0</IsGlobalFilterEnabled>
+          <IsSortableEnabled>0</IsSortableEnabled>
+          <CanModifyGlobalFilterSettings>1</CanModifyGlobalFilterSettings>
+          <CanModifyIsSortableSettings>1</CanModifyIsSortableSettings>
+          <IsDataSourceSecret>0</IsDataSourceSecret>
+          <AutoNumberFormat></AutoNumberFormat>
+          <IsSearchable>0</IsSearchable>
+          <IsFilterable>0</IsFilterable>
+          <IsRetrievable>0</IsRetrievable>
+          <IsLocalizable>0</IsLocalizable>
+          <Format>text</Format>
+          <MaxLength>500</MaxLength>
+          <Length>1000</Length>
+          <displaynames>
+            <displayname description="Access Detail" languagecode="1033" />
+          </displaynames>
+          <Descriptions>
+            <Description description="Reason written back by the access flow when it skipped the row or the grant failed." languagecode="1033" />
+          </Descriptions>
+        </attribute>
+        <attribute PhysicalName="ayonto_AccessStatus">
+          <Type>nvarchar</Type>
+          <Name>ayonto_accessstatus</Name>
+          <LogicalName>ayonto_accessstatus</LogicalName>
+          <RequiredLevel>none</RequiredLevel>
+          <DisplayMask>ValidForAdvancedFind|ValidForForm|ValidForGrid</DisplayMask>
+          <ImeMode>auto</ImeMode>
+          <ValidForUpdateApi>1</ValidForUpdateApi>
+          <ValidForReadApi>1</ValidForReadApi>
+          <ValidForCreateApi>1</ValidForCreateApi>
+          <IsCustomField>1</IsCustomField>
+          <IsAuditEnabled>1</IsAuditEnabled>
+          <IsSecured>0</IsSecured>
+          <IntroducedVersion>1.0.0.0</IntroducedVersion>
+          <IsCustomizable>1</IsCustomizable>
+          <IsRenameable>1</IsRenameable>
+          <CanModifySearchSettings>1</CanModifySearchSettings>
+          <CanModifyRequirementLevelSettings>1</CanModifyRequirementLevelSettings>
+          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
+          <SourceType>0</SourceType>
+          <IsGlobalFilterEnabled>0</IsGlobalFilterEnabled>
+          <IsSortableEnabled>0</IsSortableEnabled>
+          <CanModifyGlobalFilterSettings>1</CanModifyGlobalFilterSettings>
+          <CanModifyIsSortableSettings>1</CanModifyIsSortableSettings>
+          <IsDataSourceSecret>0</IsDataSourceSecret>
+          <AutoNumberFormat></AutoNumberFormat>
+          <IsSearchable>0</IsSearchable>
+          <IsFilterable>0</IsFilterable>
+          <IsRetrievable>0</IsRetrievable>
+          <IsLocalizable>0</IsLocalizable>
+          <Format>text</Format>
+          <MaxLength>64</MaxLength>
+          <Length>128</Length>
+          <displaynames>
+            <displayname description="Access Status" languagecode="1033" />
+          </displaynames>
+          <Descriptions>
+            <Description description="New when read access is to be checked; the access flow writes Exists, Granted, Skipped or Failed. Empty when the component was not asked to grant access." languagecode="1033" />
+          </Descriptions>
+        </attribute>
         <attribute PhysicalName="ayonto_DeliveryDetail">
           <Type>nvarchar</Type>
           <Name>ayonto_deliverydetail</Name>
@@ -1404,6 +1484,7 @@
             <cell name="ayonto_recordname" width="220" />
             <cell name="ayonto_channel" width="90" />
             <cell name="ayonto_deliverystatus" width="100" />
+            <cell name="ayonto_accessstatus" width="100" />
             <cell name="createdon" width="125" />
           </row>
         </grid>
@@ -1418,6 +1499,7 @@
             <attribute name="ayonto_recordname" />
             <attribute name="ayonto_channel" />
             <attribute name="ayonto_deliverystatus" />
+            <attribute name="ayonto_accessstatus" />
             <attribute name="createdon" />
             <order attribute="createdon" descending="true" />
             <filter type="and">

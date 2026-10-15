@@ -124,6 +124,28 @@
               required="false" />
 
     <!--
+      Lesezugriff für Erwähnte, aus bis zum Einschalten. Das Component prüft dafür keine Rechte und
+      ruft nichts zusätzlich auf: Es markiert je erwähnter Person genau eine Zeile mit
+      accessstatus = New, und ein Flow in der Zielumgebung prüft und vergibt. Ist kein Kanal
+      eingeschaltet, schreibt es dafür eine Zeile mit dem Kanal Access, die kein
+      Benachrichtigungs-Flow abholt.
+
+      Gleiche Form wie sendTeams — Yes ist 0, No ist 1 —, damit alle Schalter dieses Components
+      denselben Wert für „an" haben. required="false" mit Vorgabewert, weil eine neuere Version keine
+      Pflichteigenschaft ergänzen darf.
+    -->
+    <property name="grantAccess"
+              display-name-key="GrantAccess_Name"
+              description-key="GrantAccess_Desc"
+              of-type="Enum"
+              usage="input"
+              required="false"
+              default-value="1">
+      <value name="Yes" display-name-key="GrantAccess_Yes" description-key="GrantAccess_Yes_Desc">0</value>
+      <value name="No" display-name-key="GrantAccess_No" description-key="GrantAccess_No_Desc">1</value>
+    </property>
+
+    <!--
       Base URL of the environment, used to build the deep link to the record inside the
       notification e-mail. Accessing the browser Window object from a code component is not
       supported, so the URL cannot be derived at runtime and has to be configured.

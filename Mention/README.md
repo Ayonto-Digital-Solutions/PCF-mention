@@ -31,7 +31,7 @@ React und Fluent werden von der Plattform bereitgestellt und nicht mitgebündelt
 
 ```bash
 npm install
-npm test                              # 233 Tests
+npm test                              # 250 Tests
 npm run lint
 npm run typecheck
 npm run build                         # Debug-Build nach out/controls
@@ -86,6 +86,7 @@ Das Component wird auf einer Textspalte im Formular-Designer registriert.
 | `teamsSubject` | nein | Betreff der Chat-Nachricht. Leer = der E-Mail-Betreff. |
 | `teamsContent` | nein | Text der Chat-Nachricht. Leer = der E-Mail-Text. |
 | `teamsLinkText` | nein | Beschriftung des Links in der Chat-Nachricht. Leer = die der E-Mail. |
+| `grantAccess` | nein | `Ja` markiert je erwähnter Person eine Zeile für den Zugriffs-Flow — siehe [Zugriff für Erwähnte](#zugriff-für-erwähnte). Standard `Nein`. |
 | `senderUserId` | nein | GUID des absendenden Benutzers. Ohne Angabe der angemeldete Benutzer. |
 | `orgUrl` | nein | Umgebungs-URL, z. B. `https://contoso.crm4.dynamics.com`. Ohne sie baut der Flow den Link selbst. |
 | `mentionTable` | nein | Andere Tabelle für die Erwähnungen. Leer = die mitgelieferte `ayonto_mention`. |
@@ -235,10 +236,12 @@ Was in einer Zeile steht:
 | `ayonto_mentionedbyid` | wer erwähnt hat |
 | `ayonto_recordtable`, `ayonto_recordid`, `ayonto_recordname` | der Datensatz |
 | `ayonto_recordurl` | fertiger Deep-Link, sofern `orgUrl` gesetzt ist |
-| `ayonto_channel` | `Email` oder `Teams` — welchen Weg diese Zeile meint |
+| `ayonto_channel` | `Email` oder `Teams` — welchen Weg diese Zeile meint; `Access` für eine Zeile nur für den Zugriffs-Flow |
 | `ayonto_subject`, `ayonto_message`, `ayonto_linktext` | Betreff, Text und Linkbeschriftung dieses Kanals |
 | `ayonto_deliverystatus` | `New`, bis der Flow zurückschreibt |
 | `ayonto_deliverydetail` | Fehlertext des Flows |
+| `ayonto_accessstatus` | `New`, wenn der Zugriffs-Flow prüfen soll — nur mit `grantAccess`, und nur auf einer Zeile je Person |
+| `ayonto_accessdetail` | Grund des Zugriffs-Flows, wenn er übersprungen hat oder gescheitert ist |
 
 ### Klickbare Erwähnungen
 
@@ -283,6 +286,15 @@ Textstelle bleibt unangetastet: Wer etwas ausgewählt hat, hat damit bereits ges
 * Der **Flow** muss existieren: ohne ihn sammeln sich Zeilen mit `ayonto_deliverystatus = New`,
   und niemand wird benachrichtigt. Die Tabelle ist dann ein vollständiges Protokoll dessen, was
   hätte rausgehen sollen.
+* Für **`grantAccess`** sollten Anwender auf `ayonto_mention` nur **Anlegen und Lesen** haben,
+  Schreiben höchstens auf Ebene Benutzer: Der Zugriffs-Flow vertraut dem Ersteller einer Zeile, und
+  das hält nur, solange niemand fremde Zeilen ändern kann.
+* Für **`grantAccess`** braucht es zusätzlich den Zugriffs-Flow, eine **Leserolle** der
+  Zielanwendung (nur Lese-Rechte, Ebene Benutzer, Vererbung „Direct User (Basic) access level and
+  Team privileges") und ein Verbindungskonto, das Rollen zuweisen und Datensätze freigeben darf —
+  in der Regel ein Systemadministrator. Ohne den Flow bleiben die markierten Zeilen auf `New`, und
+  niemand bekommt Zugriff. Einzelheiten in
+  [solution/mention-access.md](../solution/mention-access.md#voraussetzungen).
 * Die Vorschlagsliste prüft **kein Postfach**. Sie zeigt aktivierte, interaktive Benutzer; ob
   deren Adresse gepflegt ist, entscheidet sich im Flow.
 
@@ -292,8 +304,9 @@ Das Component blendet die Vorschlagsliste aus und sagt im UI warum, wenn:
 
 * **keine Verbindung besteht** (`context.client.isOffline()` bzw. `isNetworkAvailable()`) — die
   Benutzersuche braucht Dataverse;
-* **der Datensatz noch nie gespeichert wurde** und Benachrichtigungen aktiv sind. Ohne
-  Datensatz-ID führt der Link in der Benachrichtigung ins Leere, und die Erwähnung selbst ist noch
+* **der Datensatz noch nie gespeichert wurde** und Benachrichtigungen aktiv sind oder
+  `grantAccess` an ist. Ohne Datensatz-ID führt der Link in der Benachrichtigung ins Leere, es gibt
+  keinen Datensatz, auf den Zugriff vergeben werden könnte, und die Erwähnung selbst ist noch
   nicht gespeichert. Das greift nur, wenn `entityName` gebunden ist — sind beide
   Datensatz-Eigenschaften leer, kann das Component den Fall nicht erkennen und benachrichtigt
   weiter. Das ist fast immer ein Konfigurationsfehler und keine Absicht: Es bedeutet, dass der
@@ -313,7 +326,59 @@ aus, die Liste kann dann nur kürzer ausfallen.
 Liefert die Suche mehr Treffer, als die Liste zeigt, weist ein Hinweis am Listenende darauf hin,
 dass die Suche eingegrenzt werden muss — statt stillschweigend abzuschneiden.
 
+## Zugriff für Erwähnte
+
+Mit `grantAccess = Ja` bekommt eine erwähnte Person, die den Datensatz sonst nicht lesen darf,
+**Lesezugriff** — ausschließlich Lesen. Das Component prüft dafür keine Rechte und ruft keine
+zusätzliche Schnittstelle auf; `external-service-usage` bleibt aus. Es markiert nur:
+
+* Je erwähnter Person trägt **genau eine** Zeile `ayonto_accessstatus = New` — die des ersten
+  eingeschalteten Kanals. Weitere Kanalzeilen derselben Person bleiben ohne Zugriffsstatus, damit
+  der Flow sie einmal prüft und nicht einmal je Kanal.
+* Ist **kein Kanal** eingeschaltet, schreibt das Component für die Person eine eigene Zeile mit
+  `ayonto_channel = Access`, ohne Zustellstatus, Betreff und Text. Die Benachrichtigungs-Flows
+  filtern auf Kanal und Zustellstatus und lassen sie liegen; `Access` gilt im Code nie als
+  Benachrichtigungskanal.
+* Es gelten dieselben Voraussetzungen wie für den Link in einer Benachrichtigung: **Ohne
+  Datensatz-ID und Tabellenname keine Markierung.** Auf einem nie gespeicherten Datensatz mit
+  gebundenem `entityName` bleibt die Vorschlagsliste zu, auch wenn nur `grantAccess` an ist.
+
+Prüfen und vergeben macht ein Flow in der Zielumgebung, wie bei der Benachrichtigung. Zuerst prüft
+er, ob der **Ersteller der Zeile** den Datensatz selbst lesen darf — eine Zeile lässt sich auch ohne
+Formular über die Web-API anlegen, und der Flow läuft mit Administratorrechten; ohne diese Prüfung
+könnte sich jeder Lesezugriff auf beliebige Datensätze verschaffen. Dann fragt er
+`RetrievePrincipalAccess` für die erwähnte Person ab, weist bei Bedarf die Leserolle der
+Zielanwendung zu, gibt den
+Datensatz mit `GrantAccess` zum Lesen frei und schreibt `Exists`, `Granted`, `Skipped` oder
+`Failed` zurück. Wie man ihn baut, steht in
+[solution/mention-access.md](../solution/mention-access.md); die fertige Definition liegt unter
+[`solution/examples/mention-access-flow.json`](../solution/examples/mention-access-flow.json).
+Die Leserolle, die Rechte auf die Zieltabellen und was nach der Freigabe noch geschehen muss,
+bringt die Zielanwendung mit — nichts davon ist Teil dieser Lösung.
+
+Mit `grantAccess = Nein`, dem Standard, verhält sich das Component genau wie vorher: Die beiden
+Spalten werden nicht geschrieben, bestehende Zeilen bleiben unberührt.
+
 ## Was sich geändert hat
+
+### 2.5.0 — Zugriff für Erwähnte
+
+* Neue Eigenschaft **`grantAccess`** (Auswahl `Ja`/`Nein`, Standard `Nein`, nicht erforderlich —
+  bestehende Formulare laufen unverändert weiter). Mit `Ja` markiert das Component je erwähnter
+  Person genau eine Zeile mit `ayonto_accessstatus = New`, ohne eingeschalteten Kanal in einer
+  eigenen Zeile mit dem Kanal `Access`. Siehe [Zugriff für Erwähnte](#zugriff-für-erwähnte).
+* Zwei neue Spalten in `ayonto_mention`: **`ayonto_accessstatus`** (64) und
+  **`ayonto_accessdetail`** (500); die Ansicht *Active Mentions* zeigt den Zugriffsstatus.
+* Neue Anleitung [solution/mention-access.md](../solution/mention-access.md) und Beispiel
+  [`solution/examples/mention-access-flow.json`](../solution/examples/mention-access-flow.json),
+  das der Bau gegen die Tabelle prüft. Der Flow gibt nur Datensätze weiter, die der Ersteller der
+  Zeile selbst lesen darf. Die Schritte mit `RetrievePrincipalAccess` und
+  `GrantAccess` sind noch **nicht in einer echten Umgebung erprobt**.
+* Das Component prüft weiterhin keine Rechte und ruft keine zusätzliche Schnittstelle auf;
+  `external-service-usage` bleibt aus. Ohne `grantAccess = Ja` schreibt es genau dieselben Zeilen
+  wie in 2.4.
+
+### 2.0.0 — die Neuimplementierung
 
 Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 
@@ -329,7 +394,7 @@ Der Stand von 2020 war nicht mehr lauffähig bzw. nicht mehr regelkonform:
 | Alle Benutzer beim Rendern laden | Serverseitige Suche pro `@`-Eingabe, entprellt |
 | `contentEditable` mit manueller Caret-Verwaltung | `<textarea>` mit ARIA-Combobox-Semantik und Tastaturbedienung |
 | Keine Lokalisierung | `resx` für 1033 (en) und 1031 (de) |
-| Keine Tests | 233 Tests über Control, Editor, Suche, Benachrichtigung, Terminierung, Höhe und Spaltentyp |
+| Keine Tests | 250 Tests über Control, Editor, Suche, Benachrichtigung, Zugriff, Terminierung, Höhe und Spaltentyp |
 
 Behobene Fehler aus 1.0:
 
@@ -341,7 +406,7 @@ Behobene Fehler aus 1.0:
 * Der Datensatz-Link enthielt `forceUCI=1` für den abgekündigten Legacy-Webclient.
 * Betreff und Text wurden ohne Escaping in den HTML-Body geschrieben.
 
-### Breaking Changes
+#### Breaking Changes
 
 Der eindeutige Name ist von `xyz.MentionControl` auf `Ayonto.MentionControl` gewechselt, und die
 Eigenschaft `emailFromUserGuid` heißt jetzt `senderUserId`. Ein Upgrade an Ort und Stelle ist nicht
@@ -400,13 +465,13 @@ Mention/
 │  ├─ utils/format.ts                   Platzhalter in lokalisierten Texten
 │  └─ strings/                          resx für 1033 und 1031
 └─ tests/
-   ├─ MentionControl.test.ts            Wert, Verfügbarkeit, Datensatzbezug, Identität
+   ├─ MentionControl.test.ts            Wert, Verfügbarkeit, Datensatzbezug, Identität, Zugriff
    ├─ mentionText.test.ts               Reine Funktionen
    ├─ availability.test.ts              Wahrheitstabelle der Verfügbarkeit
    ├─ NotificationScheduler.test.ts     Karenzzeit, Rücknahme, Entdopplung
    ├─ format.test.ts                    Platzhalter-Ersetzung
    ├─ UserSearchService.test.ts         OData-Abfrage und Filterung
-   ├─ MentionLogService.test.ts         Zeileninhalt, Spaltenpräfix, Rücklesen
+   ├─ MentionLogService.test.ts         Zeileninhalt, Spaltenpräfix, Zugriffsmarke, Rücklesen
    ├─ hostHeight.test.ts                Regeln der Mindesthöhe, ohne DOM
    ├─ columnType.test.ts                Spaltentyp, Rückfallzeilen, Zeilenumbrüche
    └─ MentionEditor.test.tsx            Editor-Verhalten, je Spaltentyp

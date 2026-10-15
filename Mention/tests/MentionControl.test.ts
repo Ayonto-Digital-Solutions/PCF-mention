@@ -12,6 +12,7 @@ interface ContextOptions {
 	offline?: boolean;
 	sendEmail?: "0" | "1";
 	sendTeams?: "0" | "1";
+	grantAccess?: "0" | "1";
 	wording?: Partial<Record<"emailSubject" | "emailLinkText" | "teamsSubject" | "teamsLinkText", string>>;
 	entityName?: string;
 	entityId?: string;
@@ -37,6 +38,7 @@ function makeContext(options: ContextOptions = {}) {
 			entityName: text(options.entityName ?? ""),
 			sendEmail: { raw: options.sendEmail ?? "0", type: "Enum" },
 			sendTeams: { raw: options.sendTeams ?? "1", type: "Enum" },
+			grantAccess: { raw: options.grantAccess ?? "1", type: "Enum" },
 			senderUserId: text(""),
 			emailSubject: text(options.wording?.emailSubject ?? ""),
 			emailContent: text(""),
@@ -496,5 +498,120 @@ describe("MentionControl mention identity", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+describe("MentionControl read access for mentioned people", () => {
+	const RECIPIENT = { id: "22222222-2222-2222-2222-222222222222", name: "Anna Berger" };
+	const RECORD = { entityName: "account", entityId: "33333333-3333-3333-3333-333333333333" };
+
+	/** Mentions Anna once, lets the grace period go by and hands back every row that was written. */
+	async function rowsWritten(options: ContextOptions): Promise<Record<string, string>[]> {
+		const { control, context, props } = mount(options);
+		const { createRecord } = context.webAPI as unknown as { createRecord: ReturnType<typeof vi.fn> };
+		createRecord.mockResolvedValue({ entityType: "ayonto_mention", id: "44444444-4444-4444-4444-444444444444" });
+
+		props.onChange("Danke @Anna Berger");
+		props.onWrittenMentionsChange([RECIPIENT.id]);
+		const pending = props.onMention(RECIPIENT);
+
+		control.destroy();
+		await pending;
+
+		return createRecord.mock.calls.map((call) => call[1] as Record<string, string>);
+	}
+
+	it("writes no access status while the switch is off", async () => {
+		// The default. Exactly the row it wrote before the switch existed.
+		const rows = await rowsWritten({ ...RECORD, sendTeams: "0" });
+
+		expect(rows).toHaveLength(2);
+		for (const row of rows) {
+			expect(row).not.toHaveProperty("ayonto_accessstatus");
+			expect(row).not.toHaveProperty("ayonto_accessdetail");
+		}
+	});
+
+	it("marks the one row of a single channel for the access flow", async () => {
+		const rows = await rowsWritten({ ...RECORD, grantAccess: "0" });
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			ayonto_channel: "Email",
+			ayonto_deliverystatus: "New",
+			ayonto_accessstatus: "New",
+		});
+	});
+
+	it("marks only the first channel's row when two are switched on", async () => {
+		// One mark per person, so the flow checks them once rather than once per channel.
+		const rows = await rowsWritten({ ...RECORD, sendTeams: "0", grantAccess: "0" });
+
+		expect(rows.map((row) => row.ayonto_channel)).toEqual(["Email", "Teams"]);
+		expect(rows.map((row) => row.ayonto_accessstatus)).toEqual(["New", undefined]);
+		// Both still go out as notifications.
+		expect(rows.map((row) => row.ayonto_deliverystatus)).toEqual(["New", "New"]);
+	});
+
+	it("takes the first channel that is on, whichever that is", async () => {
+		const rows = await rowsWritten({ ...RECORD, sendEmail: "1", sendTeams: "0", grantAccess: "0" });
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ ayonto_channel: "Teams", ayonto_accessstatus: "New" });
+	});
+
+	it("writes a row of its own on the Access channel when no channel is on", async () => {
+		// No delivery status and no wording, so no notification flow picks it up.
+		const rows = await rowsWritten({ ...RECORD, sendEmail: "1", sendTeams: "1", grantAccess: "0" });
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			ayonto_channel: "Access",
+			ayonto_accessstatus: "New",
+			ayonto_userid: RECIPIENT.id,
+			ayonto_recordtable: "account",
+			ayonto_recordid: RECORD.entityId,
+		});
+		expect(rows[0]).not.toHaveProperty("ayonto_deliverystatus");
+		expect(rows[0]).not.toHaveProperty("ayonto_subject");
+		expect(rows[0]).not.toHaveProperty("ayonto_message");
+		expect(rows[0]).not.toHaveProperty("ayonto_linktext");
+	});
+
+	it("writes nothing at all with every switch off", async () => {
+		expect(await rowsWritten({ ...RECORD, sendEmail: "1", sendTeams: "1" })).toEqual([]);
+	});
+
+	it("says to save first, and writes nothing, on a record without an id", async () => {
+		// Read access alone holds mentioning back the same way a notification does.
+		const options: ContextOptions = { entityName: "account", entityId: "", sendEmail: "1", grantAccess: "0" };
+		expect(mount(options).props.notice).toBe("Editor_UnsavedRecordNotice");
+		expect(await rowsWritten(options)).toEqual([]);
+	});
+
+	it("marks nothing without a record, and still notifies", async () => {
+		// Neither record property configured: the mail goes out without a link, as before, but
+		// there is no record to grant access on.
+		const rows = await rowsWritten({ grantAccess: "0" });
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ ayonto_channel: "Email", ayonto_deliverystatus: "New" });
+		expect(rows[0]).not.toHaveProperty("ayonto_accessstatus");
+	});
+
+	it("writes no Access row without a record", async () => {
+		expect(await rowsWritten({ sendEmail: "1", grantAccess: "0" })).toEqual([]);
+	});
+
+	it("takes the record from the host for the mark as well", async () => {
+		const rows = await rowsWritten({
+			contextInfo: { entityId: "55555555-5555-5555-5555-555555555555", entityTypeName: "account" },
+			grantAccess: "0",
+		});
+
+		expect(rows[0]).toMatchObject({
+			ayonto_recordid: "55555555-5555-5555-5555-555555555555",
+			ayonto_accessstatus: "New",
+		});
 	});
 });

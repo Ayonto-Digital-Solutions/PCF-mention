@@ -39,6 +39,7 @@ LABELS = {
     "Send Teams message": "SendTeams_Name",
     "Subject": "EmailSubject_Name",
     "Link label (e-mail)": "EmailLinkText_Name",
+    "Grant read access": "GrantAccess_Name",
 }
 
 problems: list[str] = []
@@ -220,11 +221,13 @@ def main() -> None:
             wrong(f"the documentation calls it '{promised}', the designer shows '{shown.get(key)}'")
 
     # --- the values the flow is built around ----------------------------------
-    for value in ("Email", "Teams", "New"):
+    # "Access" is the channel of a row that only asks for read access; the access flow does not
+    # filter on it, but the guide tells the notification flows to leave it alone by name.
+    for value in ("Email", "Teams", "New", "Access"):
         if f'"{value}"' not in bundle and f"'{value}'" not in bundle:
             wrong(f"the component does not write '{value}', which the flow filters on")
 
-    for name, wanted, means in (("sendEmail", "0", "on"), ("sendTeams", "1", "off")):
+    for name, wanted, means in (("sendEmail", "0", "on"), ("sendTeams", "1", "off"), ("grantAccess", "1", "off")):
         if properties[name].get("default-value") != wanted:
             wrong(f"the documentation says {name} ships {means}, the manifest says otherwise")
 

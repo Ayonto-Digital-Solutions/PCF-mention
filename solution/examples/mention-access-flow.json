@@ -1,0 +1,594 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_commondataserviceforapps": {
+        "api": {
+          "name": "shared_commondataserviceforapps"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "ayonto_sharedcommondataserviceforapps_mention"
+        },
+        "runtimeSource": "embedded"
+      },
+      "shared_webcontents": {
+        "api": {
+          "name": "shared_webcontents"
+        },
+        "connection": {
+          "connectionReferenceLogicalName": "ayonto_sharedwebcontents_mention"
+        },
+        "runtimeSource": "embedded"
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        }
+      },
+      "triggers": {
+        "Wenn_eine_Erwaehnung_Zugriff_braucht": {
+          "type": "OpenApiConnectionWebhook",
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000001"
+          },
+          "runtimeConfiguration": {
+            "concurrency": {
+              "runs": 1
+            }
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "SubscribeWebhookTrigger"
+            },
+            "parameters": {
+              "subscriptionRequest/message": 4,
+              "subscriptionRequest/entityname": "ayonto_mention",
+              "subscriptionRequest/scope": 4,
+              "subscriptionRequest/filteringattributes": "ayonto_accessstatus",
+              "subscriptionRequest/filterexpression": "ayonto_accessstatus eq 'New'"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Mention_abrufen": {
+          "type": "OpenApiConnection",
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000011"
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "GetItem"
+            },
+            "parameters": {
+              "entityName": "ayonto_mentions",
+              "recordId": "@triggerOutputs()?['body/ayonto_mentionid']"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Nicht_mehr_offen": {
+          "type": "If",
+          "runAfter": {
+            "Mention_abrufen": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000013"
+          },
+          "expression": {
+            "not": {
+              "equals": [
+                "@outputs('Mention_abrufen')?['body/ayonto_accessstatus']",
+                "New"
+              ]
+            }
+          },
+          "actions": {
+            "Erledigt_beenden": {
+              "type": "Terminate",
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000012"
+              },
+              "inputs": {
+                "runStatus": "Succeeded"
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          }
+        },
+        "Leserolle": {
+          "type": "Compose",
+          "runAfter": {
+            "Nicht_mehr_offen": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000014"
+          },
+          "inputs": {
+            "<zieltabelle>": "<leserolle>"
+          }
+        },
+        "Rollenname": {
+          "type": "Compose",
+          "runAfter": {
+            "Leserolle": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000015"
+          },
+          "inputs": "@coalesce(outputs('Leserolle')?[coalesce(outputs('Mention_abrufen')?['body/ayonto_recordtable'], '')], '')"
+        },
+        "Ohne_Leserolle": {
+          "type": "If",
+          "runAfter": {
+            "Rollenname": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000018"
+          },
+          "expression": {
+            "equals": [
+              "@empty(outputs('Rollenname'))",
+              true
+            ]
+          },
+          "actions": {
+            "Als_uebersprungen_vermerken": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000016"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "UpdateOnlyRecord"
+                },
+                "parameters": {
+                  "entityName": "ayonto_mentions",
+                  "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+                  "item/ayonto_accessstatus": "Skipped",
+                  "item/ayonto_accessdetail": "@concat('keine Leserolle für ', outputs('Mention_abrufen')?['body/ayonto_recordtable'])"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Uebersprungen_beenden": {
+              "type": "Terminate",
+              "runAfter": {
+                "Als_uebersprungen_vermerken": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000017"
+              },
+              "inputs": {
+                "runStatus": "Succeeded"
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          }
+        },
+        "Zugriff": {
+          "type": "Scope",
+          "runAfter": {
+            "Ohne_Leserolle": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000019"
+          },
+          "actions": {
+            "Ziel": {
+              "type": "Compose",
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000002"
+              },
+              "inputs": "@addProperty(addProperty(json('{}'), '@odata.type', concat('Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'])), concat(outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id'), outputs('Mention_abrufen')?['body/ayonto_recordid'])"
+            },
+            "Absender_pruefen": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Ziel": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000003"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+                  "connectionName": "shared_webcontents",
+                  "operationId": "InvokeHttp"
+                },
+                "parameters": {
+                  "request/method": "GET",
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/_createdby_value'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=', uriComponent(concat('{''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')))"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Absender_darf_nicht_lesen": {
+              "type": "If",
+              "runAfter": {
+                "Absender_pruefen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000006"
+              },
+              "expression": {
+                "equals": [
+                  "@contains(body('Absender_pruefen')['AccessRights'], 'ReadAccess')",
+                  false
+                ]
+              },
+              "actions": {
+                "Als_abgelehnt_vermerken": {
+                  "type": "OpenApiConnection",
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-000000000004"
+                  },
+                  "inputs": {
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                      "connectionName": "shared_commondataserviceforapps",
+                      "operationId": "UpdateOnlyRecord"
+                    },
+                    "parameters": {
+                      "entityName": "ayonto_mentions",
+                      "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+                      "item/ayonto_accessstatus": "Skipped",
+                      "item/ayonto_accessdetail": "erwähnende Person darf den Datensatz selbst nicht lesen"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                },
+                "Abgelehnt_beenden": {
+                  "type": "Terminate",
+                  "runAfter": {
+                    "Als_abgelehnt_vermerken": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-000000000005"
+                  },
+                  "inputs": {
+                    "runStatus": "Succeeded"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Zugriff_pruefen": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Absender_darf_nicht_lesen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000007"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents",
+                  "connectionName": "shared_webcontents",
+                  "operationId": "InvokeHttp"
+                },
+                "parameters": {
+                  "request/method": "GET",
+                  "request/url": "@concat('<org>/api/data/v9.2/systemusers(', outputs('Mention_abrufen')?['body/ayonto_userid'], ')/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@t)?@t=', uriComponent(concat('{''@odata.id'':''<entitysetname>(', outputs('Mention_abrufen')?['body/ayonto_recordid'], ')''}')))"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Hat_Lesezugriff": {
+              "type": "Compose",
+              "runAfter": {
+                "Zugriff_pruefen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000008"
+              },
+              "inputs": "@contains(body('Zugriff_pruefen')['AccessRights'], 'ReadAccess')"
+            },
+            "Benutzer_abrufen": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Hat_Lesezugriff": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000009"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "GetItem"
+                },
+                "parameters": {
+                  "entityName": "systemusers",
+                  "recordId": "@outputs('Mention_abrufen')?['body/ayonto_userid']",
+                  "$select": "_businessunitid_value",
+                  "$expand": "systemuserroles_association($select=roleid)"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Rolle_suchen": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Benutzer_abrufen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000a"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "ListRecords"
+                },
+                "parameters": {
+                  "entityName": "roles",
+                  "$select": "roleid",
+                  "$filter": "@concat('name eq ''', outputs('Rollenname'), ''' and _businessunitid_value eq ', outputs('Benutzer_abrufen')?['body/_businessunitid_value'])",
+                  "$top": 1
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Rolle_id": {
+              "type": "Compose",
+              "runAfter": {
+                "Rolle_suchen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000b"
+              },
+              "inputs": "@first(body('Rolle_suchen')?['value'])['roleid']"
+            },
+            "Rolle_fehlt": {
+              "type": "If",
+              "runAfter": {
+                "Rolle_id": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000d"
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@outputs('Hat_Lesezugriff')",
+                      false
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@contains(string(outputs('Benutzer_abrufen')?['body/systemuserroles_association']), outputs('Rolle_id'))",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Rolle_zuweisen": {
+                  "type": "OpenApiConnection",
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-00000000000c"
+                  },
+                  "inputs": {
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                      "connectionName": "shared_commondataserviceforapps",
+                      "operationId": "AssociateEntities"
+                    },
+                    "parameters": {
+                      "entityName": "systemusers",
+                      "recordId": "@outputs('Mention_abrufen')?['body/ayonto_userid']",
+                      "associationEntityRelationship": "systemuserroles_association",
+                      "item/@odata.id": "@concat('https://', uriHost(outputs('Mention_abrufen')?['body/@odata.id']), '/api/data/v9.2/roles(', outputs('Rolle_id'), ')')"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Freigabe_noetig": {
+              "type": "If",
+              "runAfter": {
+                "Rolle_fehlt": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000f"
+              },
+              "expression": {
+                "equals": [
+                  "@outputs('Hat_Lesezugriff')",
+                  false
+                ]
+              },
+              "actions": {
+                "Freigabe": {
+                  "type": "OpenApiConnection",
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-00000000000e"
+                  },
+                  "inputs": {
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                      "connectionName": "shared_commondataserviceforapps",
+                      "operationId": "PerformUnboundAction"
+                    },
+                    "parameters": {
+                      "actionName": "GrantAccess",
+                      "item/Target": "@outputs('Ziel')",
+                      "item/PrincipalAccess": {
+                        "Principal": {
+                          "@@odata.type": "Microsoft.Dynamics.CRM.systemuser",
+                          "systemuserid": "@outputs('Mention_abrufen')?['body/ayonto_userid']"
+                        },
+                        "AccessMask": "ReadAccess"
+                      }
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Ergebnis_vermerken": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Freigabe_noetig": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000010"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "UpdateOnlyRecord"
+                },
+                "parameters": {
+                  "entityName": "ayonto_mentions",
+                  "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+                  "item/ayonto_accessstatus": "@if(outputs('Hat_Lesezugriff'), 'Exists', 'Granted')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          }
+        },
+        "Anschluss_Schritte": {
+          "type": "Scope",
+          "runAfter": {
+            "Zugriff": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001a"
+          },
+          "actions": {}
+        },
+        "Fehler_ermitteln": {
+          "type": "Query",
+          "runAfter": {
+            "Zugriff": [
+              "Failed",
+              "TimedOut"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001b"
+          },
+          "inputs": {
+            "from": "@result('Zugriff')",
+            "where": "@equals(item()?['status'], 'Failed')"
+          }
+        },
+        "Fehlertext": {
+          "type": "Compose",
+          "runAfter": {
+            "Fehler_ermitteln": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001c"
+          },
+          "inputs": "@concat(coalesce(first(body('Fehler_ermitteln'))?['name'], ''), ': ', string(first(body('Fehler_ermitteln'))?['error']))"
+        },
+        "Als_fehlgeschlagen_vermerken": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Fehlertext": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001d"
+          },
+          "inputs": {
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "UpdateOnlyRecord"
+            },
+            "parameters": {
+              "entityName": "ayonto_mentions",
+              "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+              "item/ayonto_accessstatus": "Failed",
+              "item/ayonto_accessdetail": "@substring(outputs('Fehlertext'), 0, min(480, length(outputs('Fehlertext'))))"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}
