@@ -286,6 +286,9 @@ Textstelle bleibt unangetastet: Wer etwas ausgewählt hat, hat damit bereits ges
 * Der **Flow** muss existieren: ohne ihn sammeln sich Zeilen mit `ayonto_deliverystatus = New`,
   und niemand wird benachrichtigt. Die Tabelle ist dann ein vollständiges Protokoll dessen, was
   hätte rausgehen sollen.
+* Für **`grantAccess`** sollten Anwender auf `ayonto_mention` nur **Anlegen und Lesen** haben,
+  Schreiben höchstens auf Ebene Benutzer: Der Zugriffs-Flow vertraut dem Ersteller einer Zeile, und
+  das hält nur, solange niemand fremde Zeilen ändern kann.
 * Für **`grantAccess`** braucht es zusätzlich den Zugriffs-Flow, eine **Leserolle** der
   Zielanwendung (nur Lese-Rechte, Ebene Benutzer, Vererbung „Direct User (Basic) access level and
   Team privileges") und ein Verbindungskonto, das Rollen zuweisen und Datensätze freigeben darf —
@@ -340,8 +343,12 @@ zusätzliche Schnittstelle auf; `external-service-usage` bleibt aus. Es markiert
   Datensatz-ID und Tabellenname keine Markierung.** Auf einem nie gespeicherten Datensatz mit
   gebundenem `entityName` bleibt die Vorschlagsliste zu, auch wenn nur `grantAccess` an ist.
 
-Prüfen und vergeben macht ein Flow in der Zielumgebung, wie bei der Benachrichtigung: Er fragt
-`RetrievePrincipalAccess` ab, weist bei Bedarf die Leserolle der Zielanwendung zu, gibt den
+Prüfen und vergeben macht ein Flow in der Zielumgebung, wie bei der Benachrichtigung. Zuerst prüft
+er, ob der **Ersteller der Zeile** den Datensatz selbst lesen darf — eine Zeile lässt sich auch ohne
+Formular über die Web-API anlegen, und der Flow läuft mit Administratorrechten; ohne diese Prüfung
+könnte sich jeder Lesezugriff auf beliebige Datensätze verschaffen. Dann fragt er
+`RetrievePrincipalAccess` für die erwähnte Person ab, weist bei Bedarf die Leserolle der
+Zielanwendung zu, gibt den
 Datensatz mit `GrantAccess` zum Lesen frei und schreibt `Exists`, `Granted`, `Skipped` oder
 `Failed` zurück. Wie man ihn baut, steht in
 [solution/mention-access.md](../solution/mention-access.md); die fertige Definition liegt unter
@@ -364,7 +371,8 @@ Spalten werden nicht geschrieben, bestehende Zeilen bleiben unberührt.
   **`ayonto_accessdetail`** (500); die Ansicht *Active Mentions* zeigt den Zugriffsstatus.
 * Neue Anleitung [solution/mention-access.md](../solution/mention-access.md) und Beispiel
   [`solution/examples/mention-access-flow.json`](../solution/examples/mention-access-flow.json),
-  das der Bau gegen die Tabelle prüft. Die Schritte mit `RetrievePrincipalAccess` und
+  das der Bau gegen die Tabelle prüft. Der Flow gibt nur Datensätze weiter, die der Ersteller der
+  Zeile selbst lesen darf. Die Schritte mit `RetrievePrincipalAccess` und
   `GrantAccess` sind noch **nicht in einer echten Umgebung erprobt**.
 * Das Component prüft weiterhin keine Rechte und ruft keine zusätzliche Schnittstelle auf;
   `external-service-usage` bleibt aus. Ohne `grantAccess = Ja` schreibt es genau dieselben Zeilen

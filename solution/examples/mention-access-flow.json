@@ -57,7 +57,7 @@
           "type": "OpenApiConnection",
           "runAfter": {},
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-00000000000d"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000011"
           },
           "inputs": {
             "host": {
@@ -80,7 +80,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-00000000000f"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000013"
           },
           "expression": {
             "not": {
@@ -95,7 +95,7 @@
               "type": "Terminate",
               "runAfter": {},
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-00000000000e"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000012"
               },
               "inputs": {
                 "runStatus": "Succeeded"
@@ -114,7 +114,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000010"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000014"
           },
           "inputs": {
             "<zieltabelle>": "<leserolle>"
@@ -128,7 +128,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000011"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000015"
           },
           "inputs": "@coalesce(outputs('Leserolle')?[coalesce(outputs('Mention_abrufen')?['body/ayonto_recordtable'], '')], '')"
         },
@@ -140,7 +140,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000014"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000018"
           },
           "expression": {
             "equals": [
@@ -153,7 +153,7 @@
               "type": "OpenApiConnection",
               "runAfter": {},
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000012"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000016"
               },
               "inputs": {
                 "host": {
@@ -178,7 +178,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000013"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000017"
               },
               "inputs": {
                 "runStatus": "Succeeded"
@@ -197,7 +197,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000015"
+            "operationMetadataId": "5a110000-0000-4000-8000-000000000019"
           },
           "actions": {
             "Ziel": {
@@ -208,7 +208,7 @@
               },
               "inputs": "@addProperty(addProperty(json('{}'), '@odata.type', concat('Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'])), concat(outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id'), outputs('Mention_abrufen')?['body/ayonto_recordid'])"
             },
-            "Zugriff_pruefen": {
+            "Absender_pruefen": {
               "type": "OpenApiConnection",
               "runAfter": {
                 "Ziel": [
@@ -217,6 +217,88 @@
               },
               "metadata": {
                 "operationMetadataId": "5a110000-0000-4000-8000-000000000003"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "PerformBoundAction"
+                },
+                "parameters": {
+                  "entityName": "systemusers",
+                  "recordId": "@outputs('Mention_abrufen')?['body/_createdby_value']",
+                  "actionName": "RetrievePrincipalAccess",
+                  "item/Target": "@outputs('Ziel')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Absender_darf_nicht_lesen": {
+              "type": "If",
+              "runAfter": {
+                "Absender_pruefen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000006"
+              },
+              "expression": {
+                "equals": [
+                  "@contains(string(coalesce(body('Absender_pruefen')?['AccessRights'], '')), 'ReadAccess')",
+                  false
+                ]
+              },
+              "actions": {
+                "Als_abgelehnt_vermerken": {
+                  "type": "OpenApiConnection",
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-000000000004"
+                  },
+                  "inputs": {
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                      "connectionName": "shared_commondataserviceforapps",
+                      "operationId": "UpdateOnlyRecord"
+                    },
+                    "parameters": {
+                      "entityName": "ayonto_mentions",
+                      "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+                      "item/ayonto_accessstatus": "Skipped",
+                      "item/ayonto_accessdetail": "erwähnende Person darf den Datensatz selbst nicht lesen"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                },
+                "Abgelehnt_beenden": {
+                  "type": "Terminate",
+                  "runAfter": {
+                    "Als_abgelehnt_vermerken": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "5a110000-0000-4000-8000-000000000005"
+                  },
+                  "inputs": {
+                    "runStatus": "Succeeded"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Zugriff_pruefen": {
+              "type": "OpenApiConnection",
+              "runAfter": {
+                "Absender_darf_nicht_lesen": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000007"
               },
               "inputs": {
                 "host": {
@@ -241,7 +323,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000004"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000008"
               },
               "inputs": "@contains(string(coalesce(body('Zugriff_pruefen')?['AccessRights'], '')), 'ReadAccess')"
             },
@@ -253,7 +335,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000005"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000009"
               },
               "inputs": {
                 "host": {
@@ -278,7 +360,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000006"
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000a"
               },
               "inputs": {
                 "host": {
@@ -303,7 +385,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000007"
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000b"
               },
               "inputs": "@first(body('Rolle_suchen')?['value'])['roleid']"
             },
@@ -315,7 +397,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-000000000009"
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000d"
               },
               "expression": {
                 "and": [
@@ -338,7 +420,7 @@
                   "type": "OpenApiConnection",
                   "runAfter": {},
                   "metadata": {
-                    "operationMetadataId": "5a110000-0000-4000-8000-000000000008"
+                    "operationMetadataId": "5a110000-0000-4000-8000-00000000000c"
                   },
                   "inputs": {
                     "host": {
@@ -368,7 +450,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-00000000000b"
+                "operationMetadataId": "5a110000-0000-4000-8000-00000000000f"
               },
               "expression": {
                 "equals": [
@@ -381,7 +463,7 @@
                   "type": "OpenApiConnection",
                   "runAfter": {},
                   "metadata": {
-                    "operationMetadataId": "5a110000-0000-4000-8000-00000000000a"
+                    "operationMetadataId": "5a110000-0000-4000-8000-00000000000e"
                   },
                   "inputs": {
                     "host": {
@@ -416,7 +498,7 @@
                 ]
               },
               "metadata": {
-                "operationMetadataId": "5a110000-0000-4000-8000-00000000000c"
+                "operationMetadataId": "5a110000-0000-4000-8000-000000000010"
               },
               "inputs": {
                 "host": {
@@ -442,7 +524,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000016"
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001a"
           },
           "actions": {}
         },
@@ -455,7 +537,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000017"
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001b"
           },
           "inputs": {
             "from": "@result('Zugriff')",
@@ -470,7 +552,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000018"
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001c"
           },
           "inputs": "@concat(coalesce(first(body('Fehler_ermitteln'))?['name'], ''), ': ', string(first(body('Fehler_ermitteln'))?['error']))"
         },
@@ -482,7 +564,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "5a110000-0000-4000-8000-000000000019"
+            "operationMetadataId": "5a110000-0000-4000-8000-00000000001d"
           },
           "inputs": {
             "host": {

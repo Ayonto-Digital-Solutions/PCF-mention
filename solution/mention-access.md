@@ -4,7 +4,9 @@ Wer per `@` erwähnt wird, den Datensatz aber nicht lesen darf, bekommt Lesezugr
 **ausschließlich Lesen**. Prüfen und vergeben macht ein Flow in Ihrer Umgebung, so wie die
 Benachrichtigung aus [README.md](README.md). Das Component prüft dafür keine Rechte und ruft nichts
 zusätzlich auf: Es markiert je erwähnter Person genau eine Zeile in `ayonto_mention` mit
-`ayonto_accessstatus = New`, und der Flow schreibt zurück, was daraus wurde.
+`ayonto_accessstatus = New`, und der Flow schreibt zurück, was daraus wurde. Weitergegeben wird nur,
+was die erwähnende Person **selbst lesen darf** — siehe
+[Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
 
 Die Lösung bringt den allgemeinen Teil mit: die beiden Spalten `ayonto_accessstatus` und
 `ayonto_accessdetail`, den Schalter `grantAccess` am Component, diese Anleitung und die fertige
@@ -52,7 +54,9 @@ Mention-Component  (grantAccess = Yes)
                Ohne_Leserolle            Bedingung → Skipped, Beenden
                Zugriff                   Bereich
             3    Ziel                    Verfassen
-                 Zugriff_pruefen         RetrievePrincipalAccess
+                 Absender_pruefen        RetrievePrincipalAccess für den Ersteller
+                 Absender_darf_nicht_…   Bedingung → Skipped, Beenden
+                 Zugriff_pruefen         RetrievePrincipalAccess für die Person
             4    Hat_Lesezugriff         Verfassen
             5    Benutzer_abrufen        Zeile nach ID abrufen → Benutzer
                  Rolle_suchen            Zeilen auflisten → Sicherheitsrollen
@@ -87,8 +91,31 @@ werden muss.
 | `New` | Zugriff ist zu prüfen | Component, oder Ihre Zielanwendung zum Neuprüfen |
 | `Exists` | die Person durfte den Datensatz schon lesen | Flow |
 | `Granted` | Leserolle zugewiesen, soweit nötig, und Datensatz zum Lesen freigegeben | Flow |
-| `Skipped` | für diese Tabelle ist keine Leserolle hinterlegt | Flow |
+| `Skipped` | für diese Tabelle ist keine Leserolle hinterlegt, oder wer die Zeile angelegt hat, darf den Datensatz selbst nicht lesen | Flow |
 | `Failed` | ein Schritt ist gescheitert, der Grund steht in *Access Detail* | Flow |
+
+## Wer Zugriff auslösen kann
+
+Der Flow läuft unter einem Konto, das Rollen zuweisen und jeden Datensatz freigeben darf. Die Zeile,
+nach der er sich richtet, legt dagegen jeder Anwender an, der erwähnen kann — dafür braucht er das
+Anlegerecht auf `ayonto_mention`, und anlegen lässt sich eine Zeile auch ohne Formular, direkt über
+die Web-API. Glaubte der Flow der Zeile einfach, könnte jeder sich selbst oder anderen Lesezugriff
+auf beliebige Datensätze der zugeordneten Tabellen verschaffen.
+
+Deshalb prüft der Flow **vor allem anderen**, ob der **Ersteller der Zeile** den Datensatz selbst
+lesen darf (Schritt 3, `Absender_pruefen`). Den Ersteller setzt Dataverse selbst
+(`_createdby_value`); `ayonto_mentionedbyid` dagegen schreibt das Component, und genauso gut jeder
+andere, der die Zeile anlegt — darauf verlässt sich der Flow nicht. Darf der Ersteller nicht lesen,
+geht die Zeile auf `Skipped`, und es wird nichts zugewiesen und nichts freigegeben.
+
+**Was das bedeutet:** Wer einen Datensatz lesen darf, kann ihn durch eine Erwähnung anderen zum
+Lesen geben — auch ohne das Recht *Freigeben*. Das ist der Zweck der Funktion. Soll nur
+weitergeben dürfen, wer auch freigeben darf, prüft `Absender_darf_nicht_lesen` statt auf
+`ReadAccess` auf `ShareAccess`.
+
+Die Prüfung hält nur, solange Anwender **fremde** Zeilen nicht ändern können. Das Component braucht
+auf `ayonto_mention` Anlegen und Lesen, sonst nichts; geben Sie Schreiben höchstens auf Ebene
+*Benutzer*.
 
 ## Was mitgeliefert wird und was Sie bauen
 
@@ -122,6 +149,9 @@ Systemadministrator. Dataverse lässt nur Rollen zuweisen, deren Rechte das zuwe
 hat, und Freigeben verlangt das Recht *Freigeben* auf der Zieltabelle. Dazu Lesen und Schreiben auf
 `ayonto_mention`. Nehmen Sie ein **Dienstkonto**, kein persönliches — die Gründe stehen unter
 [Unter welchem Konto der Flow läuft](README.md#unter-welchem-konto-der-flow-läuft).
+
+**Anwender: Anlegen und Lesen auf `ayonto_mention`, Schreiben höchstens auf Ebene Benutzer** — siehe
+[Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
 
 ## Schritt 1 — Die Komponente am Formular
 
@@ -255,8 +285,8 @@ kommen die Schritte 3 bis 7, **untereinander auf der ersten Ebene**, jede nach d
 `result('Zugriff')`, und das liefert „only from the first-level actions in the scoped action"
 ([`result()`](https://learn.microsoft.com/azure/logic-apps/workflow-definition-language-functions-reference#result)).
 Scheitert eine Aktion **innerhalb** einer Bedingung, sieht der Fehlerweg nur die Bedingung mit einer
-allgemeinen Meldung, nicht den Grund. Deshalb steht in den beiden Bedingungen unten jeweils nur die
-eine Aktion, die nicht immer laufen darf.
+allgemeinen Meldung, nicht den Grund. Deshalb stehen in den Bedingungen unten nur die Aktionen, die
+nicht immer laufen dürfen.
 
 ### 3 · Zugriff_pruefen
 
@@ -278,13 +308,40 @@ Ein Verweis auf den Datensatz, in dem erwähnt wurde: der Typ aus `ayonto_record
 `<tabelle>id`. Prüfung und Freigabe nehmen beide dieses Ziel. Zu Tabellen, deren Primärschlüssel
 anders heißt, siehe [Schritt 6](#6--freigabe).
 
+**Absender_pruefen** — dieselbe Aktion wie `Zugriff_pruefen` unten, auf dem ersten oder dem zweiten
+Weg, aber für den **Ersteller der Zeile** statt für die erwähnte Person. Alle Felder wie dort, bis
+auf die Zeilen-ID:
+
+| Feld | Wert | Art |
+|---|---|---|
+| Zeilen-ID | `outputs('Mention_abrufen')?['body/_createdby_value']` | fx |
+
+Auf dem zweiten Weg steht `_createdby_value` entsprechend in der URL. Warum der Ersteller und nicht
+`ayonto_mentionedbyid`, steht unter [Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
+
+**Absender_darf_nicht_lesen** — *Steuerung → **Bedingung***
+
+| links (fx) | Operator | rechts |
+|---|---|---|
+| `contains(string(coalesce(body('Absender_pruefen')?['AccessRights'], '')), 'ReadAccess')` | ist gleich | `false` (fx) |
+
+Im Zweig **Wenn ja** zwei Aktionen:
+
+1. **Als_abgelehnt_vermerken** — *Microsoft Dataverse → **Zeile aktualisieren***: Tabellenname,
+   Zeilen-ID und Access Status (`Skipped`) wie bei `Als_uebersprungen_vermerken`, Access Detail
+   `erwähnende Person darf den Datensatz selbst nicht lesen` (Klartext).
+2. **Abgelehnt_beenden** — *Steuerung → **Beenden***, Status **Erfolgreich**.
+
+*Beenden* hält den ganzen Lauf an, auch aus dem Bereich heraus: Es wird nichts zugewiesen, nichts
+freigegeben, und auch `Anschluss_Schritte` laufen nicht. Der Zweig *Wenn nein* bleibt leer.
+
 **Zugriff_pruefen** fragt Dataverse, welche Rechte die erwähnte Person auf genau diesen Datensatz
 hat ([`RetrievePrincipalAccess`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveprincipalaccess)).
 
-> **Nicht erprobt.** Dieser Schritt ist noch nicht in einer echten Umgebung gelaufen.
-> `RetrievePrincipalAccess` ist in der Web-API eine **Funktion**, keine Aktion — ob der Designer sie
-> unter den gebundenen Aktionen anbietet, ist genau das, was offen ist. Bietet er sie nicht an,
-> nehmen Sie den zweiten Weg.
+> **Nicht erprobt.** Dieser Schritt — `Absender_pruefen` wie `Zugriff_pruefen` — ist noch nicht in
+> einer echten Umgebung gelaufen. `RetrievePrincipalAccess` ist in der Web-API eine **Funktion**,
+> keine Aktion — ob der Designer sie unter den gebundenen Aktionen anbietet, ist genau das, was offen
+> ist. Bietet er sie nicht an, nehmen Sie für beide den zweiten Weg.
 
 **Erster Weg** — *Microsoft Dataverse → **Eine gebundene Aktion ausführen***
 
@@ -533,7 +590,8 @@ dafür nicht ausgelöst. Wer erwähnt war, kann den Datensatz weiter lesen.
 andere Freigaben am Datensatz weg, setzt sie bei Erwähnten danach `ayonto_accessstatus` **einer**
 ihrer Zeilen wieder auf `New` — zum Beispiel mit *Zeilen auflisten* auf **Mentions**, gefiltert auf
 `ayonto_recordid eq '<datensatz-id>' and ayonto_userid eq '<benutzer-id>'`, Zeilenanzahl `1`, und
-*Zeile aktualisieren* mit Access Status `New`. Der Flow prüft dann neu und vergibt, was fehlt. Die
+*Zeile aktualisieren* mit Access Status `New`. Der Flow prüft dann neu und vergibt, was fehlt —
+und prüft dabei auch wieder, ob der ursprüngliche Ersteller der Zeile den Datensatz lesen darf. Die
 Benachrichtigungs-Flows reagieren darauf nicht: Sie lösen nur beim Anlegen aus.
 
 **Eine neue Erwähnung prüft neu.** Wer im selben Datensatz später wieder erwähnt wird, bekommt eine
@@ -548,7 +606,8 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 2. **Trockentest:** Tabelle *Mention* → *Daten* → *Neue Zeile*: User Id = Benutzer-ID einer
    Testperson, die den Datensatz nicht lesen darf, Record Table = `<zieltabelle>`, Record Id =
    GUID dieses Datensatzes, Channel = `Access`, Access Status = `New`. Ohne Delivery Status holt
-   kein Benachrichtigungs-Flow die Zeile ab.
+   kein Benachrichtigungs-Flow die Zeile ab. Anlegen muss die Zeile jemand, der den Datensatz selbst
+   lesen darf — sonst greift [Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann).
 3. Laufhistorie: **Zugriff_pruefen** liefert `AccessRights` ohne `ReadAccess`, **Rolle_zuweisen**
    läuft beim ersten Mal, **Freigabe** ist erfolgreich.
 4. Zeile erneut öffnen: Access Status steht auf `Granted`.
@@ -557,7 +616,11 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
    `Freigabe` sind übersprungen.
 7. Eine Zeile mit einer Tabelle, die in `Leserolle` fehlt: Access Status `Skipped`, Access Detail
    „keine Leserolle für …".
-8. **Echttest:** im Formular `@` tippen und eine Person wählen. Die Komponente wartet **fünf
+8. **Gegenprobe:** Als Testperson selbst eine Zeile wie in Punkt 2 anlegen, mit der eigenen
+   Benutzer-ID — etwa über *Daten* in der Tabelle, sofern die Testperson die Tabelle sieht. Access
+   Status geht auf `Skipped`, Access Detail „erwähnende Person darf den Datensatz selbst nicht
+   lesen", und die Testperson hat danach weder Rolle noch Freigabe.
+9. **Echttest:** im Formular `@` tippen und eine Person wählen. Die Komponente wartet **fünf
    Sekunden**, bevor sie schreibt. Genau eine Zeile dieser Person trägt Access Status `New`.
 
 ## Fehlersuche
@@ -575,6 +638,8 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 | `Freigabe` findet den Datensatz nicht | abweichender Primärschlüssel — siehe Schritt 6 |
 | Status `Granted`, die Person sieht den Datensatz trotzdem nicht | die Leserolle hat kein Lese-Recht auf die Tabelle, oder sie ist der App nicht zugeordnet |
 | Status `Skipped` mit „keine Leserolle für …" | Tabelle fehlt in `Leserolle`, oder dort nicht klein geschrieben |
+| Status `Skipped` mit „erwähnende Person darf …" | wer die Zeile angelegt hat, darf den Datensatz nicht lesen — so gewollt; beim Neuprüfen zählt der ursprüngliche Ersteller |
+| Access Detail nennt `Absender_pruefen` | wie bei `Zugriff_pruefen` — `Ziel` passt nicht zur Tabelle |
 | Zweite Rollenzuweisung derselben Person scheitert | *Grad der Parallelität* steht nicht auf 1 |
 | Zeile bleibt auf `New` | „Ausführen nach" an `Fehler_ermitteln` falsch gesetzt, oder der Flow war beim Markieren aus |
 | Benachrichtigungs-Flow verschickt eine Zeile mit Kanal `Access` | dessen Filter prüft `ayonto_channel` nicht — siehe [README.md](README.md#trigger) |

@@ -16,7 +16,8 @@ Postfach — tritt ein Mail-Connector an die Stelle der beiden Dataverse-Aktione
 zusätzlich die **Glocke in der App** bedient, steht in
 [in-app-notification.md](in-app-notification.md). Wie Erwähnte, die den Datensatz sonst nicht
 lesen dürfen, **Lesezugriff** bekommen, steht in [mention-access.md](mention-access.md) — ein
-zweiter Flow derselben Art, mit eigenem Schalter am Component.
+zweiter Flow derselben Art, mit eigenem Schalter am Component. Er gibt nur weiter, was der Ersteller
+der Zeile selbst lesen darf.
 
 Die fertige Definition zum Nachschlagen liegt unter
 [`examples/mention-notification-flow.json`](examples/mention-notification-flow.json). Sie wird beim
