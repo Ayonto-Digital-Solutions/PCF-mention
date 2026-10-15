@@ -62,6 +62,7 @@ Mention-Component  (grantAccess = Yes)
             2  Leserolle                 Verfassen: Tabelle → Rolle
                Rollenname                Verfassen
                Ohne_Leserolle            Bedingung → Skipped, Beenden
+               Datensatz_id_ungueltig    Bedingung → Skipped, Beenden
                Zugriff                   Bereich
             3    Ziel                    Verfassen
                  Absender_pruefen        HTTP: RetrievePrincipalAccess für den Ersteller
@@ -101,7 +102,7 @@ werden muss.
 | `New` | Zugriff ist zu prüfen | Component, oder Ihre Zielanwendung zum Neuprüfen |
 | `Exists` | die Person durfte den Datensatz schon lesen | Flow |
 | `Granted` | Leserolle zugewiesen, soweit nötig, und Datensatz zum Lesen freigegeben | Flow |
-| `Skipped` | für diese Tabelle ist keine Leserolle hinterlegt, oder wer die Zeile angelegt hat, darf den Datensatz selbst nicht lesen | Flow |
+| `Skipped` | für diese Tabelle ist keine Leserolle hinterlegt, die Datensatz-ID ist ungültig, oder wer die Zeile angelegt hat, darf den Datensatz selbst nicht lesen | Flow |
 | `Failed` | ein Schritt ist gescheitert, der Grund steht in *Access Detail* | Flow |
 
 ## Wer Zugriff auslösen kann
@@ -122,6 +123,14 @@ geht die Zeile auf `Skipped`, und es wird nichts zugewiesen und nichts freigegeb
 Lesen geben — auch ohne das Recht *Freigeben*. Das ist der Zweck der Funktion. Soll nur
 weitergeben dürfen, wer auch freigeben darf, prüft `Absender_darf_nicht_lesen` statt auf
 `ReadAccess` auf `ShareAccess`.
+
+**Auch Tabelle und Datensatz-ID stehen in der Zeile**, und auch ihnen glaubt der Flow nicht
+einfach. `ayonto_recordtable` muss genau ein Eintrag der Zuordnung in `Leserolle` sein, sonst geht
+die Zeile auf `Skipped`. `ayonto_recordid` muss aussehen wie eine GUID: genau 36 Zeichen, kein `"`
+und kein `=` ([Die Datensatz-ID prüfen](#die-datensatz-id-prüfen)). Der Grund: `Ziel` entsteht als
+Text. Eine ID mit `"` könnte das Objekt umbauen, eine mit `=` die Prüfung über einen alternativen
+Schlüssel auf einen anderen Datensatz lenken als die Freigabe. Beides ginge nur mit einem Wert, der
+länger ist als eine GUID.
 
 Die Prüfung hält nur, solange Anwender **fremde** Zeilen nicht ändern können. Das Component braucht
 auf `ayonto_mention` Anlegen und Lesen, sonst nichts; geben Sie Schreiben höchstens auf Ebene
@@ -311,9 +320,35 @@ Im Zweig **Wenn ja** zwei Aktionen:
 
 Der Zweig *Wenn nein* bleibt leer.
 
+### Die Datensatz-ID prüfen
+
+**Datensatz_id_ungueltig** — *Steuerung → **Bedingung***, unterhalb von `Ohne_Leserolle`, drei Zeilen
+mit **Oder**
+
+| Zeile | links (fx) | Operator | rechts |
+|---|---|---|---|
+| 1 | `length(coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], ''))` | ist nicht gleich | `36` (fx) |
+| 2 | `coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], '')` | enthält | `"` (Klartext) |
+| 3 | `coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], '')` | enthält | `=` (Klartext) |
+
+Im Zweig **Wenn ja** zwei Aktionen:
+
+1. **Als_ungueltig_vermerken** — *Microsoft Dataverse → **Zeile aktualisieren***: Tabellenname,
+   Zeilen-ID und Access Status (`Skipped`) wie bei `Als_uebersprungen_vermerken`, Access Detail
+   `ungültige Datensatz-ID` (Klartext).
+2. **Ungueltig_beenden** — *Steuerung → **Beenden***, Status **Erfolgreich**.
+
+Der Zweig *Wenn nein* bleibt leer.
+
+Eine GUID hat 36 Zeichen, und das Component schreibt sie immer so. Alles andere stammt von einer
+Zeile, die von Hand oder über die Web-API angelegt wurde, und erreicht weder `Ziel` noch die
+Prüfung. Warum, steht unter [Wer Zugriff auslösen kann](#wer-zugriff-auslösen-kann). Hier steht
+`coalesce` mit Absicht: Eine leere ID macht die Bedingung nur strenger, sie geht dann auf
+`Skipped`.
+
 ### Der Bereich Zugriff
 
-*Steuerung → **Bereich*** — Name exakt `Zugriff`, unterhalb von `Ohne_Leserolle`. In den Bereich
+*Steuerung → **Bereich*** — Name exakt `Zugriff`, unterhalb von `Datensatz_id_ungueltig`. In den Bereich
 kommen die Schritte 3 bis 7, **untereinander auf der ersten Ebene**, jede nach der vorigen.
 
 **Warum die Leseaktionen nicht in die Bedingungen wandern.** Den Fehlertext holt am Ende
@@ -687,7 +722,8 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 6. Dieselbe Zeile wieder auf `New` setzen: Der Lauf endet mit `Exists`, `Rolle_zuweisen` und
    `Freigabe` sind übersprungen.
 7. Eine Zeile mit einer Tabelle, die in `Leserolle` fehlt: Access Status `Skipped`, Access Detail
-   „keine Leserolle für …".
+   „keine Leserolle für …". Ebenso eine Zeile, deren Record Id keine GUID ist, etwa `123`: Access
+   Status `Skipped`, Access Detail „ungültige Datensatz-ID".
 8. **Gegenprobe:** Als Testperson selbst eine Zeile wie in Punkt 2 anlegen, mit der eigenen
    Benutzer-ID — etwa über *Daten* in der Tabelle, sofern die Testperson die Tabelle sieht. Access
    Status geht auf `Skipped`, Access Detail „erwähnende Person darf den Datensatz selbst nicht
@@ -715,6 +751,7 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 | `Freigabe` findet den Datensatz nicht | `Ziel` passt nicht zur Tabelle — Tabellenname, oder abweichender Primärschlüssel, siehe Schritt 6 |
 | Status `Granted`, die Person sieht den Datensatz trotzdem nicht | die Leserolle hat kein Lese-Recht auf die Tabelle, oder sie ist der App nicht zugeordnet |
 | Status `Skipped` mit „keine Leserolle für …" | Tabelle fehlt in `Leserolle`, oder dort nicht klein geschrieben |
+| Status `Skipped` mit „ungültige Datensatz-ID" | `ayonto_recordid` ist keine GUID — *Record id* an die falsche Spalte gebunden, oder die Zeile wurde von Hand angelegt |
 | Status `Skipped` mit „erwähnende Person darf …" | wer die Zeile angelegt hat, darf den Datensatz nicht lesen — so gewollt; beim Neuprüfen zählt der ursprüngliche Ersteller |
 | Access Detail nennt `Absender_pruefen` | wie bei `Zugriff_pruefen` |
 | Zweite Rollenzuweisung derselben Person scheitert | *Grad der Parallelität* steht nicht auf 1 |
