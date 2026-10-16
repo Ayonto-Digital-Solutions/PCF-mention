@@ -198,10 +198,85 @@
             "actions": {}
           }
         },
+        "Datensatz_id_ungueltig": {
+          "type": "If",
+          "runAfter": {
+            "Ohne_Leserolle": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5a110000-0000-4000-8000-0000000003eb"
+          },
+          "expression": {
+            "or": [
+              {
+                "not": {
+                  "equals": [
+                    "@length(coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], ''))",
+                    36
+                  ]
+                }
+              },
+              {
+                "contains": [
+                  "@coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], '')",
+                  "\""
+                ]
+              },
+              {
+                "contains": [
+                  "@coalesce(outputs('Mention_abrufen')?['body/ayonto_recordid'], '')",
+                  "="
+                ]
+              }
+            ]
+          },
+          "actions": {
+            "Als_ungueltig_vermerken": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-0000000003e9"
+              },
+              "inputs": {
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+                  "connectionName": "shared_commondataserviceforapps",
+                  "operationId": "UpdateOnlyRecord"
+                },
+                "parameters": {
+                  "entityName": "ayonto_mentions",
+                  "recordId": "@outputs('Mention_abrufen')?['body/ayonto_mentionid']",
+                  "item/ayonto_accessstatus": "Skipped",
+                  "item/ayonto_accessdetail": "ungültige Datensatz-ID"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Ungueltig_beenden": {
+              "type": "Terminate",
+              "runAfter": {
+                "Als_ungueltig_vermerken": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a110000-0000-4000-8000-0000000003ea"
+              },
+              "inputs": {
+                "runStatus": "Succeeded"
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          }
+        },
         "Zugriff": {
           "type": "Scope",
           "runAfter": {
-            "Ohne_Leserolle": [
+            "Datensatz_id_ungueltig": [
               "Succeeded"
             ]
           },
@@ -215,7 +290,7 @@
               "metadata": {
                 "operationMetadataId": "5a110000-0000-4000-8000-000000000002"
               },
-              "inputs": "@addProperty(addProperty(json('{}'), '@odata.type', concat('Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'])), concat(outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id'), outputs('Mention_abrufen')?['body/ayonto_recordid'])"
+              "inputs": "@json(concat('{\"@odata.type\":\"Microsoft.Dynamics.CRM.', outputs('Mention_abrufen')?['body/ayonto_recordtable'], '\",\"', outputs('Mention_abrufen')?['body/ayonto_recordtable'], 'id\":\"', outputs('Mention_abrufen')?['body/ayonto_recordid'], '\"}'))"
             },
             "Absender_pruefen": {
               "type": "OpenApiConnection",

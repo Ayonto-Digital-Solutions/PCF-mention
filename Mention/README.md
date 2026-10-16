@@ -361,6 +361,24 @@ Spalten werden nicht geschrieben, bestehende Zeilen bleiben unberührt.
 
 ## Was sich geändert hat
 
+### 2.5.1 — Korrektur der Zugriffs-Anleitung
+
+Nur Anleitung und Beispiel, das Component ist unverändert.
+
+* **Fehler aus 2.5.0 behoben:** Die Aktion `Ziel` im Zugriffs-Flow scheiterte zur Laufzeit.
+  `addProperty()` lehnt `@odata.type` als Eigenschaftsnamen ab. Anleitung und Beispiel bilden das
+  Ziel jetzt mit `json(concat(…))`, in einer echten Umgebung erprobt.
+* **Jetzt erprobt:** beide Prüfungen über HTTP mit Microsoft Entra ID, die Antwort als JSON, das
+  Auslesen von `AccessRights`, und das Suchen der Leserolle in der Business Unit der Person. Noch
+  nicht erprobt sind die Rollenzuweisung und `GrantAccess`.
+* **Abgesichert:** `Ziel` entsteht als Text. Der Flow nimmt deshalb nur eine Datensatz-ID, die wie
+  eine GUID aussieht: 36 Zeichen, kein `"`, kein `=`. Sonst geht die Zeile auf `Skipped`. So kann
+  ein präparierter Wert in einer von Hand angelegten Zeile die Freigabe nicht auf einen anderen
+  Datensatz lenken als den geprüften.
+* **Neue Voraussetzung:** Dataverse gibt einer neu angelegten Rolle zusätzlich zwei Rechte für
+  SharePoint-Daten. Für eine reine Leserolle müssen sie wieder heraus; wie, steht in
+  [solution/mention-access.md](../solution/mention-access.md#voraussetzungen).
+
 ### 2.5.0 — Zugriff für Erwähnte
 
 * Neue Eigenschaft **`grantAccess`** (Auswahl `Ja`/`Nein`, Standard `Nein`, nicht erforderlich —
