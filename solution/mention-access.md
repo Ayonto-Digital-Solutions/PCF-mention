@@ -21,17 +21,19 @@ passieren muss.
 > Designer geschrieben, und der Bau prüft das Beispiel gegen die Tabelle — Spaltennamen, Namen der
 > Aktionen in Ausdrücken.
 >
-> * **Erprobt** in einer Entwicklungsumgebung:
->   * Schritt 3: `Ziel` in der Form unten; beide Prüfungen über HTTP — `InvokeHttp`, GET, `@t` mit
->     `uriComponent()` —, der Body kommt als JSON, `body('…')['AccessRights']` ist lesbar.
->   * Schritt 5: *Zeile nach ID abrufen* liefert `@odata.id` als `<org>/api/data/v9.1/<set>(<id>)`,
->     und `uriHost()` ergibt daraus die Umgebung; `Benutzer_abrufen` mit
+> * **Erprobt** in einer echten Umgebung:
+>   * Schritt 3: `Ziel` in der Form unten; beide Prüfungen über HTTP mit Microsoft Entra ID
+>     (vorautorisiert) — `InvokeHttp`, GET, `@t` mit `uriComponent()` —, der Body kommt als JSON,
+>     `body('…')['AccessRights']` ist lesbar.
+>   * Schritt 5: *Zeile nach ID abrufen* liefert `@odata.id` als
+>     `<org>/api/data/v9.1/ayonto_mentions(<id>)`; `Benutzer_abrufen` mit
 >     `systemuserroles_association($select=roleid)` liefert die Rollen der Person; `Rolle_suchen`
 >     und `Rolle_id` finden die Leserolle in ihrer Business Unit.
 > * **Belegt nicht möglich:** `RetrievePrincipalAccess` über den Dataverse-Connector, und `Ziel` mit
->   `addProperty()` — beides in Schritt 3.
-> * **Nicht erprobt:** *Zeilen verknüpfen* zum Zuweisen der Rolle (Schritt 5) und `GrantAccess` mit
->   dem Ziel aus `Ziel` (Schritt 6). Beide Stellen sind unten markiert.
+>   `addProperty()` — beides in Schritt 3. Außerdem *Zeilen verknüpfen* mit einer Adresse auf
+>   fester `v9.2`, wie sie bis 2.5.1 in Schritt 5 stand.
+> * **Nicht erprobt:** *Zeilen verknüpfen* mit der Adresse aus Schritt 5, wie sie jetzt dort steht,
+>   und `GrantAccess` mit dem Ziel aus `Ziel` (Schritt 6). Beide Stellen sind unten markiert.
 
 Platzhalter stehen in spitzen Klammern: `<zieltabelle>` ist der logische Name der Tabelle, auf
 deren Formular die Komponente sitzt, `<leserolle>` der Name der Sicherheitsrolle, die Ihre
@@ -159,8 +161,11 @@ Freigabe gibt Zugriff auf genau einen Datensatz, aber sie ersetzt nicht das Grun
 weil die Person damit nur ihre eigenen und die ihr freigegebenen Datensätze sieht — nicht mehr.
 
 **Zwei Rechte gibt Dataverse einer neuen Rolle ungefragt mit.** Eine neu angelegte Sicherheitsrolle
-bekommt zusätzlich `prvCreateSharePointData` und `prvWriteSharePointData`. Für eine reine Leserolle
-nehmen Sie beide wieder heraus, etwa mit der an die Rolle gebundenen Aktion
+bekommt zusätzlich `prvCreateSharePointData` und `prvWriteSharePointData` — auch dann, wenn sie erst
+mit dem Import einer Lösung in die Umgebung kommt, und auch, wenn die Lösung sie ohne diese Rechte
+mitbringt. Prüfen Sie die Rechte der Leserolle deshalb nach jedem Anlegen und nach jedem Import, der
+sie neu anlegt. Für eine reine Leserolle nehmen Sie beide wieder heraus, etwa mit der an die Rolle
+gebundenen Aktion
 [`RemovePrivilegeRole`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/removeprivilegerole),
 einmal je Recht:
 
@@ -189,6 +194,14 @@ hat, und Freigeben verlangt das Recht *Freigeben* auf der Zieltabelle. Dazu Lese
 **HTTP mit Microsoft Entra ID in derselben Datengruppe wie Dataverse.** Die Prüfung in Schritt 3
 läuft über diesen Connector. Trennt die DLP-Richtlinie der Umgebung ihn von Dataverse, lässt sich der
 Flow nicht einschalten.
+
+**Beim Import eine neue Verbindung für HTTP mit Microsoft Entra ID anlegen.** Kommt der Flow mit
+einer Lösung in eine Umgebung, fragt der Import nach einer Verbindung für *HTTP mit Microsoft Entra
+ID (vorautorisiert)*. Legen Sie dort eine **neue** an — Basis-Ressourcen-URL und Ressourcen-URI
+jeweils die Adresse dieser Umgebung, `<org>` — und wählen Sie keine vorhandene. Die Verbindung ist
+an ihre Basis-Ressourcen-URL gebunden; passt die nicht zur URL der Anforderung, scheitert schon
+`Absender_pruefen` mit HTTP 400. Der Body kommt Base64-kodiert und lautet entschlüsselt
+„BaseResourceUri (…) must be a base of the full url (…)".
 
 **Höchstens 100 Aufrufe je 60 Sekunden je Verbindung.** Über diesen Connector macht der Flow zwei je
 Erwähnung, `Absender_pruefen` und `Zugriff_pruefen` — gut 50 Erwähnungen je Minute. Darüber drosselt
@@ -551,18 +564,30 @@ Im Zweig **Wenn ja**: **Rolle_zuweisen** — *Microsoft Dataverse → **Zeilen v
 
 ```
 concat(
-  'https://', uriHost(outputs('Mention_abrufen')?['body/@odata.id']),
-  '/api/data/v9.2/roles(', outputs('Rolle_id'), ')'
+  first(split(outputs('Mention_abrufen')?['body/@odata.id'], 'ayonto_mentions(')),
+  'roles(', outputs('Rolle_id'), ')'
 )
 ```
 
-Die Adresse der Umgebung kommt wie beim Link in der Benachrichtigung aus der abgerufenen Zeile —
-nirgends steht eine URL. **Erprobt:** `Mention_abrufen` liefert `@odata.id` als
-`<org>/api/data/v9.1/<set>(<id>)`, und `uriHost()` ergibt daraus die Umgebung. Der Zweig *Wenn nein*
-bleibt leer: Hat die Person die Rolle schon, gibt es nichts zuzuweisen.
+**Die Adresse entsteht aus `@odata.id`, nicht aus einer festen Version.** *Zeilen verknüpfen* nimmt
+in *Verknüpfen mit* nur eine Adresse auf seiner eigenen API-Version an. Eine Adresse auf fester
+`v9.2`, wie sie bis 2.5.1 hier stand, lehnt der Connector ab — HTTP 400, Code `0x80060888`:
 
-> **Nicht erprobt.** *Zeilen verknüpfen* zum Zuweisen der Rolle ist noch nicht in einer echten
-> Umgebung gelaufen.
+```
+The URI '<org>/api/data/v9.2/roles(<id>)' is not valid because it is not based on
+'<org>/api/data/v9.1/'.
+```
+
+`Mention_abrufen` liefert `@odata.id` dagegen schon auf der Version des Connectors —
+**erprobt** als `<org>/api/data/v9.1/ayonto_mentions(<id>)`. Der Ausdruck nimmt davon alles vor
+`ayonto_mentions(` und hängt `roles(<id>)` an. So folgt die Adresse immer der Version des
+Connectors, und nirgends steht eine Version oder eine URL. Der Zweig *Wenn nein* bleibt leer: Hat
+die Person die Rolle schon, gibt es nichts zuzuweisen.
+
+> **Nicht erprobt.** *Zeilen verknüpfen* mit der Adresse in dieser Form ist noch nicht in einer
+> echten Umgebung gelaufen. Erprobt sind bis hierher die beiden HTTP-Prüfungen und `Ziel` aus
+> Schritt 3 sowie `Benutzer_abrufen`, `Rolle_suchen` und `Rolle_id`. Belegt ist, dass *Zeilen
+> verknüpfen* mit fester `v9.2` scheitert, mit dem Fehler oben.
 
 ### 6 · Freigabe
 
@@ -746,6 +771,8 @@ neue markierte Zeile. Darf die Person schon lesen, endet der Lauf mit `Exists`.
 | Die Leserolle erlaubt mehr als Lesen: SharePoint-Daten anlegen und schreiben | Dataverse hat beim Anlegen der Rolle zwei Rechte ergänzt — siehe [Voraussetzungen](#voraussetzungen) |
 | Flow lässt sich nicht einschalten, Hinweis auf eine Richtlinie | DLP trennt *HTTP mit Microsoft Entra ID* von Dataverse — beide müssen in derselben Datengruppe liegen |
 | `Absender_pruefen` oder `Zugriff_pruefen` scheitert mit `429` | mehr als 100 Aufrufe je 60 Sekunden auf der Verbindung — Erwähnungen in kurzer Folge; die Zeilen später wieder auf `New` setzen |
+| `Absender_pruefen` oder `Zugriff_pruefen` scheitert mit HTTP 400, entschlüsselter Body „BaseResourceUri (…) must be a base of the full url (…)" | die HTTP-Verbindung ist eine vorhandene mit anderer Basis-Ressourcen-URL — eine neue anlegen, siehe [Voraussetzungen](#voraussetzungen) |
+| `Rolle_zuweisen` scheitert mit HTTP 400, `0x80060888`, „… is not based on '…/api/data/v9.1/'" | *Verknüpfen mit* baut die Adresse mit fester API-Version, etwa `v9.2` wie bis 2.5.1 — durch den Ausdruck aus Schritt 5 ersetzen |
 | `Rolle_zuweisen` scheitert mit einem Rechtefehler | das Verbindungskonto hat nicht alle Rechte der Rolle, die es zuweisen soll |
 | `Freigabe` scheitert mit einem Rechtefehler | dem Verbindungskonto fehlt *Freigeben* auf der Zieltabelle |
 | `Freigabe` findet den Datensatz nicht | `Ziel` passt nicht zur Tabelle — Tabellenname, oder abweichender Primärschlüssel, siehe Schritt 6 |

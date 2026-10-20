@@ -361,6 +361,26 @@ Spalten werden nicht geschrieben, bestehende Zeilen bleiben unberührt.
 
 ## Was sich geändert hat
 
+### 2.5.2 — Korrektur der Rollenzuweisung
+
+Nur Anleitung und Beispiel, das Component ist unverändert.
+
+* **Fehler aus 2.5.0 behoben:** `Rolle_zuweisen` (*Zeilen verknüpfen*) scheiterte zur Laufzeit mit
+  HTTP 400, Code `0x80060888`: „The URI '…/api/data/v9.2/roles(…)' is not valid because it is not
+  based on '…/api/data/v9.1/'." Der Connector nimmt in *Verknüpfen mit* nur eine Adresse auf seiner
+  eigenen API-Version an. Anleitung und Beispiel bilden sie jetzt aus `@odata.id` von
+  `Mention_abrufen`, ohne feste Version und ohne `<org>`:
+  `concat(first(split(outputs('Mention_abrufen')?['body/@odata.id'], 'ayonto_mentions(')), 'roles(', outputs('Rolle_id'), ')')`.
+* **Abgesichert:** Der Bau lehnt im Beispiel eine Rollenzuweisung ab, deren Adresse eine feste
+  API-Version trägt.
+* **Zwei neue Hinweise aus dem Echtbetrieb** in
+  [solution/mention-access.md](../solution/mention-access.md#voraussetzungen): Beim Import für *HTTP
+  mit Microsoft Entra ID* eine neue Verbindung anlegen, keine vorhandene wählen. Und die zwei Rechte
+  für SharePoint-Daten bekommt eine Leserolle auch dann, wenn sie mit dem Import einer Lösung
+  entsteht — danach prüfen und entfernen.
+* **Stand der Erprobung:** Die Prüfungen über HTTP und `Ziel` sind in einer echten Umgebung
+  gelaufen. Noch nicht erprobt sind die Rollenzuweisung in der neuen Form und `GrantAccess`.
+
 ### 2.5.1 — Korrektur der Zugriffs-Anleitung
 
 Nur Anleitung und Beispiel, das Component ist unverändert.
