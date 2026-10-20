@@ -47,7 +47,7 @@ def check_flow(
 ) -> None:
     """Holds a flow definition against the tables, references and variables around it.
 
-    Every mistake refused here is one the platform answers with silence rather than an error:
+    Nearly every mistake refused here is one the platform answers with silence rather than an error:
     a column that does not exist reads as null, a table name that does not exist makes a trigger
     that never fires, and a connection reference the solution does not carry is only noticed by
     whoever imports it.
@@ -92,12 +92,14 @@ def check_flow(
     # nothing wrong; at run time the expression resolves to null and the value it was meant to
     # carry — here, the link to the record — quietly disappears from the message.
     named: set[str] = set()
+    every: list[tuple[str, dict]] = []
 
     def collect(actions: dict) -> None:
         for action_name, action in actions.items():
             named.add(action_name)
             if not isinstance(action, dict):
                 continue
+            every.append((action_name, action))
             # A scope holds its actions directly; a condition holds them under else as well, and a
             # switch under each case and under default. An action that lives only in a branch is
             # still an action other expressions may name.
@@ -114,6 +116,23 @@ def check_flow(
             fail(
                 f"the flow '{name}' reads {referenced!r}, which is no action in it — "
                 "the expression resolves to null and whatever it carried is silently gone"
+            )
+
+    # "Zeilen verknüpfen" takes the row to link as an address, and the connector accepts only one
+    # on its own API version: an address built on v9.2 is refused with 0x80060888, "is not based
+    # on '…/api/data/v9.1/'". Unlike the rest this is not silent, but it only shows at run time,
+    # on a run that has to assign the role — so the first to notice is someone who was mentioned
+    # and still cannot read. An @odata.id the connector returned carries its version already.
+    for action_name, action in every:
+        inputs = action.get("inputs")
+        if not isinstance(inputs, dict) or (inputs.get("host") or {}).get("operationId") != "AssociateEntities":
+            continue
+        address = str((inputs.get("parameters") or {}).get("item/@odata.id", ""))
+        if re.search(r"/api/data/v\d", address):
+            fail(
+                f"the flow '{name}' builds the address '{action_name}' links to with a fixed API "
+                "version — the connector refuses any but its own (0x80060888); take it from an "
+                "@odata.id the connector returned"
             )
 
     # An example flow is not part of the solution, so nothing in the solution declares what it

@@ -512,7 +512,7 @@
                       "entityName": "systemusers",
                       "recordId": "@outputs('Mention_abrufen')?['body/ayonto_userid']",
                       "associationEntityRelationship": "systemuserroles_association",
-                      "item/@odata.id": "@concat('https://', uriHost(outputs('Mention_abrufen')?['body/@odata.id']), '/api/data/v9.2/roles(', outputs('Rolle_id'), ')')"
+                      "item/@odata.id": "@concat(first(split(outputs('Mention_abrufen')?['body/@odata.id'], 'ayonto_mentions(')), 'roles(', outputs('Rolle_id'), ')')"
                     },
                     "authentication": "@parameters('$authentication')"
                   }

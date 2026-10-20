@@ -132,7 +132,9 @@ jobs:
           # a column length in the README that no longer matches the table it is copied from.
           # The access example is held to the same three flow mistakes, and its two columns in
           # the README to the same length check: a misspelled status column there is a row that
-          # stays on New and a person who never gets to read.
+          # stays on New and a person who never gets to read. And the access example must not link
+          # the role through an address on a fixed API version — exactly what shipped in 2.5.0 and
+          # 2.5.1, and what the connector refused with 0x80060888 in a real environment.
           python3 - <<'MUTATE'
           import re
           import shutil
@@ -149,6 +151,11 @@ jobs:
               "access-trigger": (access, "triggerOutputs()?['body/ayonto_mentionid']", "trigger()?['body/ayonto_mentionid']"),
               "access-length": ("README.md", "| `ayonto_accessdetail` | Text | 500 |", "| `ayonto_accessdetail` | Text | 50 |"),
               "access-outputs": (access, '"Ziel": {', '"Ziel_": {'),
+              "access-version": (
+                  access,
+                  "first(split(outputs('Mention_abrufen')?['body/@odata.id'], 'ayonto_mentions(')), 'roles('",
+                  "'https://', uriHost(outputs('Mention_abrufen')?['body/@odata.id']), '/api/data/v9.2/roles('",
+              ),
           }
           for name, (where, before, after) in cases.items():
               target = Path(f"/tmp/mutant-{name}")
